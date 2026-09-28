@@ -1,0 +1,36 @@
+{
+	"name": "vinitoprs",
+	"private": true,
+	"version": "0.0.0",
+	"type": "module",
+	"scripts": {
+		"dev": "vite",
+		"build": "tsc -b && vite build",
+		"lint": "biome check",
+		"preview": "vite preview",
+		"type-check": "tsc -b",
+		"test:run": "vitest run"
+	},
+	"dependencies": {
+		"@react-pdf/renderer": "^4.9.0",
+		"@supabase/supabase-js": "^2.117.2",
+		"dexie": "^4.4.6",
+		"react": "^19.2.8",
+		"react-dom": "^19.2.8",
+		"zod": "^4.6.5"
+	},
+	"devDependencies": {
+		"@biomejs/biome": "^2.5.14",
+		"@types/node": "^24.13.3",
+		"@types/react": "^19.2.18",
+		"@types/react-dom": "^19.2.7",
+		"@vitejs/plugin-react": "^6.1.1",
+		"autoprefixer": "^10.6.1",
+		"fake-indexeddb": "^6.2.5",
+		"postcss": "^8.5.28",
+		"tailwindcss": "^4.3.3",
+		"typescript": "~6.0.2",
+		"vite": "^8.3.0",
+		"vitest": "^5.0.2"
+	}
+}
