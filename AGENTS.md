@@ -14,8 +14,8 @@ Ao implementar uma nova funcionalidade, o agente deve seguir estritamente o pipe
 2. **Lógica Pura & Testes Unitários:** Escrever a função pura de negócio e os testes no Vitest cobrindo cenários nominais e casos de borda.
 3. **Persistência Local (Dexie):** Implementar o repositório Dexie correspondente e validar com testes automatizados utilizando `fake-indexeddb`.
 4. **Interface e Integração:** Desenvolver o componente React consumindo o hook do repositório, garantindo conformidade com o design token (variáveis HSL do tema).
-5. **Autovalidação:** Executar no terminal:
-   ```bash
-   pnpm biome check --write && pnpm type-check && pnpm test:run
-   ```
-   Se houver falha, ler o relatório de saída e corrigir o código antes de reportar a conclusão da tarefa.
+5. **Autovalidação:** NENHUMA tarefa deve ser dada como concluída sem a execução prévia do comando de validação.
+   Ao finalizar qualquer implementação ou refatoração, execute obrigatoriamente no terminal:
+   `pnpm validate`
+   Se o comando retornar código de saída diferente de 0 (erros de lint, tipagem do TypeScript ou testes quebrados), analise os logs do terminal, corrija o código autonomamente e repita a execução até que todos os checks passem com sucesso.
+   Não declare a tarefa finalizada nem entregue a resposta final até que o comando retorne sucesso pleno.
