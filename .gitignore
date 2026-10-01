@@ -23,3 +23,21 @@ dist-ssr
 *.sln
 *.sw?
 .env
+
+# Vitest e Relatórios de Teste
+coverage/
+.vitest/
+
+# Supabase
+supabase/.temp/
+.supabase/
+
+# TypeScript Cache
+*.tsbuildinfo
+
+# Vite cache
+.vite/
+
+# Blindagem total de variáveis (Evita vazamento de senhas)
+.env.*
+!.env.example
