@@ -34,7 +34,9 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
      v (N)                                                               v (N)
    Pedido (1) ------------------------< (N) ItemPedido >------------------+
      |
-     +--- (N) >--- (1) Cliente
+     +--- (N) >--- (1) Cliente (1) ----< (N) ClienteEndereco
+     |                   |     (1) ----< (N) ClienteContato
+     |                   +---- (1) ---- (1) ClienteMetrica
      |
      +--- (1) >--- (N) FaturamentoParcial (Notas Fiscais emitidas pela fábrica)
      |
@@ -63,17 +65,35 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `tenant_id: UUID` (FK)
 * `cnpj_cpf: text`
 * `razao_social: text`
-* `nome_fantasia: text`
-* `contato_comprador: text`
-* `telefone_whatsapp: text`
-* `endereco_completo: text`
-* `latitude: double precision (nullable)`
-* `longitude: double precision (nullable)`
-* `frequencia_recompra_dias_estimada: integer` (Default: 30)
-* `data_ultima_compra: date (nullable)`
+* `nome_fantasia: text (nullable)`
+* `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
+
+#### `clientes_enderecos`
+* `id: UUID` (PK)
+* `cliente_id: UUID` (FK)
+* `tipo_endereco: text` (`'PRINCIPAL' | 'ENTREGA' | 'COBRANCA'`)
+* `endereco_completo: text`
+* `latitude: double precision (nullable)`
+* `longitude: double precision (nullable)`
+
+#### `clientes_contatos`
+* `id: UUID` (PK)
+* `cliente_id: UUID` (FK)
+* `nome: text`
+* `papel: text (nullable)` (`'COMPRADOR' | 'FINANCEIRO' | 'DIRETORIA'`)
+* `telefone_whatsapp: text`
+* `email: text (nullable)`
+
+#### `clientes_metricas`
+* `cliente_id: UUID` (PK/FK)
+* `tenant_id: UUID`
+* `data_ultima_compra: date (nullable)`
+* `frequencia_recompra_dias: integer` (Default: 30)
+* `curva_abc: text (nullable)` (`'A' | 'B' | 'C'`)
+* `ticket_medio_centavos: integer`
 
 #### `produtos`
 * `id: UUID` (PK)
@@ -117,6 +137,8 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `cliente_id: UUID` (FK)
 * `representada_id: UUID` (FK)
 * `tabela_id: UUID` (FK)
+* `endereco_entrega_id: UUID (nullable)`
+* `contato_id: UUID (nullable)`
 * `data_emissao: timestamptz`
 * `condicao_pagamento: text`
 * `tipo_frete: text` (`'CIF' | 'FOB'`)
