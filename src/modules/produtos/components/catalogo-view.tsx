@@ -55,17 +55,17 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 									</span>
 								</div>
 								<div className="mt-3 pt-3 border-t border-slate-100 text-sm text-slate-500 grid grid-cols-2 gap-2">
-									<div className="flex flex-col">
+									<div className="flex flex-col gap-1">
 										<span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-											Unidade
+											Unidade:
 										</span>
 										<span className="text-slate-700">
 											{produto.unidade_medida}
 										</span>
 									</div>
 									<div className="flex flex-col">
-										<span className="text-xs font-medium text-slate-400 uppercase tracking-wider">
-											Múltiplo
+										<span className="text-xs font-medium text-slate-400 uppercase tracking-wider mb-1">
+											Múltiplo:
 										</span>
 										<span className="text-slate-700">
 											{produto.multiplo_embalagem}
