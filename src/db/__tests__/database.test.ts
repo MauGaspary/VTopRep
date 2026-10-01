@@ -1,13 +1,15 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { ClienteSchema } from "../../modules/clientes/domain/cliente.schema";
+import { ClienteContatoSchema } from "../../modules/clientes/domain/cliente-contato.schema";
 import { db } from "../database";
 
 describe("AppDatabase", () => {
 	beforeEach(async () => {
 		await db.clientes.clear();
+		await db.clientes_contatos.clear();
 	});
 
-	it("should persist and retrieve a Cliente correctly with isolated tenant_id", async () => {
+	it("should persist and retrieve a Cliente correctly with isolated tenant_id and optional fields omitted", async () => {
 		const tenantId = crypto.randomUUID();
 		const clienteId = crypto.randomUUID();
 
@@ -16,14 +18,8 @@ describe("AppDatabase", () => {
 			tenant_id: tenantId,
 			cnpj_cpf: "12345678901234",
 			razao_social: "Empresa Teste LTDA",
-			nome_fantasia: "Empresa Teste",
-			contato_comprador: "João",
-			telefone_whatsapp: "11999999999",
-			endereco_completo: "Rua Teste, 123",
-			latitude: null,
-			longitude: null,
-			frequencia_recompra_dias_estimada: 30,
-			data_ultima_compra: null,
+			// omitted nome_fantasia
+			ativo: true,
 			created_at: new Date().toISOString(),
 			updated_at: new Date().toISOString(),
 			deleted_at: null,
@@ -37,6 +33,21 @@ describe("AppDatabase", () => {
 		const retrieved = await db.clientes.get(validCliente.id);
 		expect(retrieved).toEqual(validCliente);
 		expect(retrieved?.tenant_id).toBe(tenantId);
+		expect(retrieved?.nome_fantasia).toBeUndefined();
+	});
+
+	it("should accept ClienteContato without optional fields", () => {
+		const contatoData = {
+			id: crypto.randomUUID(),
+			cliente_id: crypto.randomUUID(),
+			nome: "Teste Contato",
+			telefone_whatsapp: "51999999999",
+			// omitted papel and email
+		};
+
+		const valid = ClienteContatoSchema.parse(contatoData);
+		expect(valid.papel).toBeUndefined();
+		expect(valid.email).toBeUndefined();
 	});
 
 	it("should reject invalid Cliente according to Zod schema", () => {
@@ -46,13 +57,6 @@ describe("AppDatabase", () => {
 			// missing cnpj_cpf (this makes it fail validation)
 			razao_social: "Empresa Teste LTDA",
 			nome_fantasia: "Empresa Teste",
-			contato_comprador: "João",
-			telefone_whatsapp: "11999999999",
-			endereco_completo: "Rua Teste, 123",
-			latitude: null,
-			longitude: null,
-			frequencia_recompra_dias_estimada: -10, // Invalid: should be positive
-			data_ultima_compra: null,
 			created_at: new Date().toISOString(),
 			updated_at: new Date().toISOString(),
 			deleted_at: null,
