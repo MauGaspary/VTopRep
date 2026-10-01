@@ -10,14 +10,14 @@ Este documento mapeia as 4 fases de implementação do PRD em tarefas granulares
 - [x] Estabelecer script unificado de validação (`pnpm validate`).
 
 ### 1.2. Modelagem de Domínio e Banco Local
-- [ ] **Schemas Universais (Zod):** Criar esquemas para Clientes, Produtos, Pedidos e Outbox com `tenant_id` e cálculos estritos em centavos.
-- [ ] **Instância Dexie.js:** Configurar `src/db/database.ts` mapeando as tabelas e índices de busca (ex: SKU, descrição).
-- [ ] **Testes de Persistência:** Escrever testes garantindo o funcionamento do Dexie e a rejeição de schemas inválidos.
+- [x] **Schemas Universais (Zod):** Criar esquemas para Clientes, Produtos, Pedidos e Outbox com `tenant_id` e cálculos estritos em centavos.
+- [x] **Instância Dexie.js:** Configurar `src/db/database.ts` mapeando as tabelas e índices de busca (ex: SKU, descrição).
+- [x] **Testes de Persistência:** Escrever testes garantindo o funcionamento do Dexie e a rejeição de schemas inválidos.
 
 ### 1.3. Catálogo Rápido Offline
-- [ ] **Repositório de Produtos:** Implementar interface e adaptador Dexie para busca instantânea de produtos.
-- [ ] **UI do Catálogo:** Desenvolver componente visual com listagem e filtro de busca por nome/SKU.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Repositório de Produtos:** Implementar interface e adaptador Dexie para busca instantânea de produtos.
+- [x] **UI do Catálogo:** Desenvolver componente visual com listagem e filtro de busca por nome/SKU.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.4. Carrinho e Emissão de Pedidos
 - [ ] **Regras de Negócio (Puras):** Criar funções de cálculo de subtotais e totais garantindo precisão com números inteiros (centavos).
