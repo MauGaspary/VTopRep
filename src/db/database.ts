@@ -23,7 +23,7 @@ export class AppDatabase extends Dexie {
 	outbox!: Table<OutboxMutation, string>;
 
 	constructor() {
-		super("VinitopRS_Database");
+		super("VTop_Rep_DB");
 
 		this.version(1).stores({
 			clientes: "id, tenant_id, [tenant_id+cnpj_cpf], [tenant_id+deleted_at]",

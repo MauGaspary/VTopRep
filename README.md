@@ -1,4 +1,4 @@
-# VinitopRS - Sistema de Representação Comercial
+# VTop Rep - Sistema de Representação Comercial
 
 Um sistema robusto para gestão de representação comercial, construído com foco em resiliência offline, arquitetura limpa e testes automatizados.
 
