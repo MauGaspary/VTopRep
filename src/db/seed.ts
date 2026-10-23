@@ -5,6 +5,8 @@ import type { ClienteEndereco } from "../modules/clientes/domain/cliente-enderec
 import type { ItemPreco } from "../modules/produtos/domain/item-preco.schema";
 import type { Produto } from "../modules/produtos/domain/produto.schema";
 import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
+import type { Representada } from "../modules/representadas/domain/representada.schema";
+import { calcularDigitosVerificadoresCnpj } from "../shared/domain/cnpj";
 import type { AppDatabase } from "./database";
 
 export async function seedDatabase(db: AppDatabase, tenantId: string) {
@@ -17,12 +19,40 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 		db.produtos.clear(),
 		db.tabelas_preco.clear(),
 		db.itens_preco.clear(),
+		db.representadas.clear(),
 	]);
 
-	// Gerar 2 Representadas (apenas os UUIDs, já que não temos a tabela mapeada localmente no Dexie)
-	const representada1Id = faker.string.uuid();
-	const representada2Id = faker.string.uuid();
-	const representadasIds = [representada1Id, representada2Id];
+	// Gerar 2 Representadas
+	const baseCnpj1 = "112223330001";
+	const baseCnpj2 = "223334440001";
+	const rep1: Representada = {
+		id: faker.string.uuid(),
+		tenant_id: tenantId,
+		razao_social: `${faker.company.name()} Indústria e Comércio Ltda`,
+		nome_fantasia: faker.company.name(),
+		cnpj: `${baseCnpj1}${calcularDigitosVerificadoresCnpj(baseCnpj1)}`,
+		percentual_comissao_padrao: 500, // 5,00%
+		valor_pedido_minimo_centavos: 150000, // R$ 1.500,00
+		regras_frete_padrao: "CIF",
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
+		deleted_at: null,
+	};
+	const rep2: Representada = {
+		id: faker.string.uuid(),
+		tenant_id: tenantId,
+		razao_social: `${faker.company.name()} S/A`,
+		nome_fantasia: faker.company.name(),
+		cnpj: `${baseCnpj2}${calcularDigitosVerificadoresCnpj(baseCnpj2)}`,
+		percentual_comissao_padrao: 750, // 7,50%
+		valor_pedido_minimo_centavos: 300000, // R$ 3.000,00
+		regras_frete_padrao: "FOB",
+		created_at: new Date().toISOString(),
+		updated_at: new Date().toISOString(),
+		deleted_at: null,
+	};
+	await db.representadas.bulkAdd([rep1, rep2]);
+	const representadasIds = [rep1.id, rep2.id];
 
 	// Gerar 10 Produtos
 	const produtos: Produto[] = Array.from({ length: 10 }).map(() => ({

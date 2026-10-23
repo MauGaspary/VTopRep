@@ -8,6 +8,7 @@ import type { Pedido } from "../modules/pedidos/domain/pedido.schema";
 import type { ItemPreco } from "../modules/produtos/domain/item-preco.schema";
 import type { Produto } from "../modules/produtos/domain/produto.schema";
 import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
+import type { Representada } from "../modules/representadas/domain/representada.schema";
 import type { OutboxMutation } from "../modules/sync/domain/outbox.schema";
 
 export class AppDatabase extends Dexie {
@@ -21,6 +22,7 @@ export class AppDatabase extends Dexie {
 	pedidos!: Table<Pedido, string>;
 	itens_pedido!: Table<ItemPedido, string>;
 	outbox!: Table<OutboxMutation, string>;
+	representadas!: Table<Representada, string>;
 
 	constructor() {
 		super("VTop_Rep_DB");
@@ -50,6 +52,10 @@ export class AppDatabase extends Dexie {
 			itens_pedido:
 				"id, tenant_id, [tenant_id+pedido_id], [tenant_id+deleted_at]",
 			outbox: "id, tenantId, [tenantId+status]",
+		});
+
+		this.version(3).stores({
+			representadas: "id, tenant_id, [tenant_id+cnpj]",
 		});
 	}
 }

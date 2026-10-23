@@ -29,14 +29,19 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.5. Módulo de Representadas
-- [ ] **Repositório:** Implementar adaptador Dexie para gestão de representadas.
-- [ ] **UI:** Criar tela de listagem e formulário de cadastro básico de representadas.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Repositório:** Implementar adaptador Dexie para gestão de representadas.
+- [x] **UI:** Criar tela de listagem e formulário de cadastro básico de representadas.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.6. Módulo de Clientes (CRM Base)
 - [ ] **Repositório:** Implementar operações de CRUD no Dexie com inserção transacional (Cliente + Endereços + Contatos).
 - [ ] **UI:** Criar tela de listagem de clientes na carteira.
 - [ ] **UI:** Criar formulário de cadastro/edição permitindo adicionar múltiplos contatos e endereços.
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+### 1.7. Módulo de Produtos
+- [ ] **Repositório:** Implementar repositório Dexie para gestão de produtos.
+- [ ] **UI:** Criar tela de listagem e formulário de cadastro de produtos.
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ---
@@ -54,9 +59,9 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [ ] **Testes de Arredondamento:** Cobrir com Vitest casos de arredondamento bancário e centavos.
 - [ ] **Validação:** Rodar `pnpm validate`.
 
-### 2.3. Carrinho Ágil e Fechamento de Orçamento/Pedido
+### 2.3. Orçamento Ágil e Fechamento de Orçamento/Pedido
 - [ ] **Contexto de Venda:** Seleção rápida de Cliente, Endereço de Entrega, Contato, Tipo de Frete (CIF/FOB) e Condição de Pagamento.
-- [ ] **UI do Carrinho:** Grid/lista com adição rápida a partir do catálogo, edição ágil de quantidade e desconto sem travas obstrutivas.
+- [ ] **UI do Orçamento:** Grid/lista com adição rápida a partir do catálogo, edição ágil de quantidade e desconto sem travas obstrutivas.
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ### 2.4. Persistência Offline, Sincronização e Espelho PDF

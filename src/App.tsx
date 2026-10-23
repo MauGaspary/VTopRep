@@ -1,21 +1,48 @@
+import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { TenantProvider } from "./config/tenant/TenantContext";
+import { useTenant } from "./config/tenant/useTenant";
 import { CatalogoView } from "./modules/produtos/components/catalogo-view";
+import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
+import { RepresentadasListView } from "./modules/representadas/components/representadas-list-view";
 import { DevSeedButton } from "./shared/components/dev/DevSeedButton";
 import { Header } from "./shared/components/layout/Header";
 
-const tenantIdMock = "11111111-1111-4111-a111-111111111111";
+function AppRoutes() {
+	const { config } = useTenant();
+
+	return (
+		<div className="flex min-h-svh flex-col">
+			<Header />
+			<main className="flex-1">
+				<Routes>
+					<Route path="/" element={<Navigate to="/catalogo" replace />} />
+					<Route
+						path="/catalogo"
+						element={<CatalogoView tenantId={config.id} />}
+					/>
+					<Route path="/representadas" element={<RepresentadasListView />} />
+					<Route
+						path="/representadas/nova"
+						element={<RepresentadaFormView />}
+					/>
+					<Route
+						path="/representadas/:id/editar"
+						element={<RepresentadaFormView />}
+					/>
+					<Route path="*" element={<Navigate to="/catalogo" replace />} />
+				</Routes>
+			</main>
+			<DevSeedButton tenantId={config.id} />
+		</div>
+	);
+}
 
 export default function App() {
 	return (
 		<TenantProvider>
-			<div>
-				<Header />
-				<main style={{ padding: "1rem" }}>
-					<CatalogoView tenantId={tenantIdMock} />
-
-					<DevSeedButton tenantId={tenantIdMock} />
-				</main>
-			</div>
+			<BrowserRouter>
+				<AppRoutes />
+			</BrowserRouter>
 		</TenantProvider>
 	);
 }

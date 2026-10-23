@@ -1,4 +1,4 @@
-import { createContext, type ReactNode, useState } from "react";
+import { createContext, type ReactNode, useEffect, useState } from "react";
 import type { TenantConfig } from "./tenant.schema";
 
 interface TenantContextData {
@@ -29,6 +29,19 @@ interface TenantProviderProps {
 
 export function TenantProvider({ children }: TenantProviderProps) {
 	const [config] = useState<TenantConfig>(defaultMockConfig);
+
+	// White-label: aplica a cor primária do tenant ao token HSL do tema.
+	useEffect(() => {
+		const cor = config.visual.primaryColorHsl;
+		if (!cor) return;
+		const root = document.documentElement;
+		root.style.setProperty("--primary", cor);
+		root.style.setProperty("--ring", cor);
+		return () => {
+			root.style.removeProperty("--primary");
+			root.style.removeProperty("--ring");
+		};
+	}, [config.visual.primaryColorHsl]);
 
 	return (
 		<TenantContext.Provider value={{ config }}>
