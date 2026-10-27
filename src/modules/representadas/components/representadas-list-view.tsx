@@ -10,19 +10,22 @@ import type { Representada } from "../domain/representada.schema";
 import { ROTULOS_FRETE } from "../domain/representada-form";
 import {
 	useRepresentadaActions,
-	useRepresentadas,
+	useTodasRepresentadas,
 } from "../hooks/use-representadas";
 
 export function RepresentadasListView() {
 	const { config } = useTenant();
 	const [termoBusca, setTermoBusca] = useState("");
 	const [erro, setErro] = useState<string | null>(null);
-	const { representadas, isLoading } = useRepresentadas(config.id, termoBusca);
-	const { inativar } = useRepresentadaActions(config.id);
+	const { representadas, isLoading } = useTodasRepresentadas(
+		config.id,
+		termoBusca,
+	);
+	const { inativar, reativar } = useRepresentadaActions(config.id);
 
 	const handleInativar = async (representada: Representada) => {
 		const confirmado = window.confirm(
-			`Inativar a representada "${representada.nome_fantasia}"? Ela deixará de aparecer na lista.`,
+			`Inativar a representada "${representada.nome_fantasia}"? Ela não estará disponível para novos orçamentos.`,
 		);
 		if (!confirmado) return;
 		setErro(null);
@@ -30,6 +33,15 @@ export function RepresentadasListView() {
 			await inativar(representada.id);
 		} catch (e) {
 			setErro(e instanceof Error ? e.message : "Erro ao inativar representada");
+		}
+	};
+
+	const handleReativar = async (representada: Representada) => {
+		setErro(null);
+		try {
+			await reativar(representada.id);
+		} catch (e) {
+			setErro(e instanceof Error ? e.message : "Erro ao reativar representada");
 		}
 	};
 
@@ -92,72 +104,100 @@ export function RepresentadasListView() {
 
 			{!isLoading && representadas.length > 0 && (
 				<ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-					{representadas.map((r) => (
-						<li
-							key={r.id}
-							className="flex flex-col gap-3 rounded-lg border border-border bg-card p-4 shadow-sm"
-						>
-							<div className="flex flex-col">
-								<h2 className="font-semibold leading-tight text-card-foreground">
-									{r.nome_fantasia}
-								</h2>
-								<span className="text-sm text-muted-foreground">
-									{r.razao_social}
-								</span>
-								<span className="font-mono text-xs text-muted-foreground">
-									{formatarCnpj(r.cnpj)}
-								</span>
-							</div>
+					{representadas.map((r) => {
+						const isInativa = r.deleted_at !== null;
+						return (
+							<li
+								key={r.id}
+								className={`flex flex-col gap-3 rounded-lg border p-4 shadow-sm transition-opacity ${
+									isInativa
+										? "border-dashed border-border bg-muted/40 opacity-70"
+										: "border-border bg-card"
+								}`}
+							>
+								<div className="flex items-start justify-between gap-2">
+									<div className="flex flex-col">
+										<div className="flex items-center gap-2">
+											<h2 className="font-semibold leading-tight text-card-foreground">
+												{r.nome_fantasia}
+											</h2>
+											{isInativa && (
+												<span className="inline-flex items-center rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
+													Inativa
+												</span>
+											)}
+										</div>
+										<span className="text-sm text-muted-foreground">
+											{r.razao_social}
+										</span>
+										<span className="font-mono text-xs text-muted-foreground">
+											{formatarCnpj(r.cnpj)}
+										</span>
+									</div>
+								</div>
 
-							<dl className="grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm">
-								<div>
-									<dt className="text-xs uppercase tracking-wide text-muted-foreground">
-										Comissão
-									</dt>
-									<dd className="text-card-foreground">
-										{formatarCentesimosPercentual(r.percentual_comissao_padrao)}
-									</dd>
-								</div>
-								<div>
-									<dt className="text-xs uppercase tracking-wide text-muted-foreground">
-										Ped. mínimo
-									</dt>
-									<dd className="text-card-foreground">
-										{r.valor_pedido_minimo_centavos > 0
-											? formatarCentavos(r.valor_pedido_minimo_centavos)
-											: "—"}
-									</dd>
-								</div>
-								<div>
-									<dt className="text-xs uppercase tracking-wide text-muted-foreground">
-										Frete
-									</dt>
-									<dd
-										className="text-card-foreground"
-										title={ROTULOS_FRETE[r.regras_frete_padrao]}
+								<dl className="grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm">
+									<div>
+										<dt className="text-xs uppercase tracking-wide text-muted-foreground">
+											Comissão
+										</dt>
+										<dd className="text-card-foreground">
+											{formatarCentesimosPercentual(
+												r.percentual_comissao_padrao,
+											)}
+										</dd>
+									</div>
+									<div>
+										<dt className="text-xs uppercase tracking-wide text-muted-foreground">
+											Ped. mínimo
+										</dt>
+										<dd className="text-card-foreground">
+											{r.valor_pedido_minimo_centavos > 0
+												? formatarCentavos(r.valor_pedido_minimo_centavos)
+												: "—"}
+										</dd>
+									</div>
+									<div>
+										<dt className="text-xs uppercase tracking-wide text-muted-foreground">
+											Frete
+										</dt>
+										<dd
+											className="text-card-foreground"
+											title={ROTULOS_FRETE[r.regras_frete_padrao]}
+										>
+											{r.regras_frete_padrao.replace("_", " ")}
+										</dd>
+									</div>
+								</dl>
+
+								<div className="flex justify-end gap-2">
+									{isInativa ? (
+										<button
+											type="button"
+											onClick={() => handleReativar(r)}
+											className="rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
+										>
+											Reativar
+										</button>
+									) : (
+										<button
+											type="button"
+											onClick={() => handleInativar(r)}
+											className="rounded-lg px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
+										>
+											Inativar
+										</button>
+									)}
+									<Link
+										to={`/representadas/${r.id}/editar`}
+										className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-muted"
 									>
-										{r.regras_frete_padrao.replace("_", " ")}
-									</dd>
+										Editar
+									</Link>
 								</div>
-							</dl>
-
-							<div className="flex justify-end gap-2">
-								<button
-									type="button"
-									onClick={() => handleInativar(r)}
-									className="rounded-lg px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
-								>
-									Inativar
-								</button>
-								<Link
-									to={`/representadas/${r.id}/editar`}
-									className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-muted"
-								>
-									Editar
-								</Link>
-							</div>
-						</li>
-					))}
+							</li>
+						);
+					})}
 				</ul>
 			)}
 		</section>

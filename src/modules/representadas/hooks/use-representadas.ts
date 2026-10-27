@@ -16,15 +16,38 @@ export function useRepresentadas(tenantId: string, termoBusca?: string) {
 	};
 }
 
+/** Lista reativa de todas as representadas do tenant (ativas e inativas). */
+export function useTodasRepresentadas(tenantId: string, termoBusca?: string) {
+	const representadas = useLiveQuery(
+		() => representadaRepository.listarTodas(tenantId, termoBusca),
+		[tenantId, termoBusca],
+	);
+
+	return {
+		representadas: representadas ?? [],
+		isLoading: representadas === undefined,
+	};
+}
+
 /**
  * Representada por id. `representada` é `undefined` enquanto carrega e
- * `null` quando não existe (ou pertence a outro tenant / foi inativada).
+ * `null` quando não existe.
  */
-export function useRepresentada(tenantId: string, id: string | undefined) {
+export function useRepresentada(
+	tenantId: string,
+	id: string | undefined,
+	permitirInativo = false,
+) {
 	const representada = useLiveQuery(async () => {
 		if (!id) return null;
-		return (await representadaRepository.obterPorId(tenantId, id)) ?? null;
-	}, [tenantId, id]);
+		return (
+			(await representadaRepository.obterPorId(
+				tenantId,
+				id,
+				permitirInativo,
+			)) ?? null
+		);
+	}, [tenantId, id, permitirInativo]);
 
 	return {
 		representada,
@@ -41,6 +64,7 @@ export function useRepresentadaActions(tenantId: string) {
 			atualizar: (id: string, input: RepresentadaInput) =>
 				representadaRepository.atualizar(tenantId, id, input),
 			inativar: (id: string) => representadaRepository.inativar(tenantId, id),
+			reativar: (id: string) => representadaRepository.reativar(tenantId, id),
 		}),
 		[tenantId],
 	);

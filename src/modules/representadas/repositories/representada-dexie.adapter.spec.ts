@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../../db/database";
 import {
 	CnpjDuplicadoError,
+	NomeFantasiaDuplicadoError,
+	RazaoSocialDuplicadaError,
 	RepresentadaNaoEncontradaError,
 } from "../domain/representada";
 import type { RepresentadaInput } from "../domain/representada.schema";
@@ -67,18 +69,50 @@ describe("RepresentadaDexieAdapter", () => {
 			await expect(
 				adapter.criar(
 					TENANT_1,
-					input({ cnpj: "11222333000181", nome_fantasia: "Outra" }),
+					input({
+						cnpj: "11222333000181",
+						nome_fantasia: "Outro Nome",
+						razao_social: "Outra Razão Social",
+					}),
 				),
 			).rejects.toBeInstanceOf(CnpjDuplicadoError);
 			expect(await db.representadas.count()).toBe(1);
 		});
 
-		it("permite o mesmo CNPJ em tenants diferentes", async () => {
+		it("bloqueia Razão Social duplicada no mesmo tenant (case-insensitive)", async () => {
+			await adapter.criar(TENANT_1, input());
+			await expect(
+				adapter.criar(
+					TENANT_1,
+					input({
+						cnpj: CNPJ_B,
+						razao_social: "fábrica alfa ltda",
+						nome_fantasia: "Outro Nome",
+					}),
+				),
+			).rejects.toBeInstanceOf(RazaoSocialDuplicadaError);
+		});
+
+		it("bloqueia Nome Fantasia duplicado no mesmo tenant (case-insensitive)", async () => {
+			await adapter.criar(TENANT_1, input());
+			await expect(
+				adapter.criar(
+					TENANT_1,
+					input({
+						cnpj: CNPJ_B,
+						razao_social: "Outra Razão Ltda",
+						nome_fantasia: "ALFA",
+					}),
+				),
+			).rejects.toBeInstanceOf(NomeFantasiaDuplicadoError);
+		});
+
+		it("permite o mesmo CNPJ, Razão Social ou Nome Fantasia em tenants diferentes", async () => {
 			await adapter.criar(TENANT_1, input());
 			await expect(adapter.criar(TENANT_2, input())).resolves.toBeDefined();
 		});
 
-		it("permite recadastrar CNPJ de representada inativada", async () => {
+		it("permite recadastrar CNPJ/Nome de representada inativada", async () => {
 			const original = await adapter.criar(TENANT_1, input());
 			await adapter.inativar(TENANT_1, original.id);
 			await expect(adapter.criar(TENANT_1, input())).resolves.toBeDefined();
@@ -87,15 +121,30 @@ describe("RepresentadaDexieAdapter", () => {
 
 	describe("listar", () => {
 		it("retorna apenas ativas do tenant, ordenadas por nome fantasia", async () => {
-			await adapter.criar(TENANT_1, input({ nome_fantasia: "Zeta" }));
+			await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Zeta",
+					razao_social: "Zeta Ltda",
+					cnpj: CNPJ_A,
+				}),
+			);
 			const inativa = await adapter.criar(
 				TENANT_1,
-				input({ nome_fantasia: "Beta", cnpj: CNPJ_B }),
+				input({
+					nome_fantasia: "Beta",
+					razao_social: "Beta Ltda",
+					cnpj: CNPJ_B,
+				}),
 			);
 			await adapter.inativar(TENANT_1, inativa.id);
 			await adapter.criar(
 				TENANT_1,
-				input({ nome_fantasia: "Ácido", cnpj: CNPJ_B }),
+				input({
+					nome_fantasia: "Ácido",
+					razao_social: "Ácido Ltda",
+					cnpj: CNPJ_B,
+				}),
 			);
 			await adapter.criar(TENANT_2, input({ nome_fantasia: "Outro tenant" }));
 
@@ -104,10 +153,21 @@ describe("RepresentadaDexieAdapter", () => {
 		});
 
 		it("filtra por termo de busca", async () => {
-			await adapter.criar(TENANT_1, input({ nome_fantasia: "Calçados Sul" }));
 			await adapter.criar(
 				TENANT_1,
-				input({ nome_fantasia: "Têxtil Norte", cnpj: CNPJ_B }),
+				input({
+					nome_fantasia: "Calçados Sul",
+					razao_social: "Calçados Sul Ltda",
+					cnpj: CNPJ_A,
+				}),
+			);
+			await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Têxtil Norte",
+					razao_social: "Têxtil Norte Ltda",
+					cnpj: CNPJ_B,
+				}),
 			);
 
 			expect(
@@ -122,6 +182,44 @@ describe("RepresentadaDexieAdapter", () => {
 
 		it("rejeita tenantId inválido", async () => {
 			await expect(adapter.listar("")).rejects.toThrow();
+		});
+	});
+
+	describe("listarTodas", () => {
+		it("retorna ativas e inativas, com inativas no final", async () => {
+			await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Zeta Ativa",
+					razao_social: "Zeta Ativa Ltda",
+					cnpj: CNPJ_A,
+				}),
+			);
+			const inativa = await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Alfa Inativa",
+					razao_social: "Alfa Inativa Ltda",
+					cnpj: CNPJ_B,
+				}),
+			);
+			await adapter.inativar(TENANT_1, inativa.id);
+			await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Beta Ativa",
+					razao_social: "Beta Ativa Ltda",
+					cnpj: "44.555.666/0001-81",
+				}),
+			);
+
+			const lista = await adapter.listarTodas(TENANT_1);
+			expect(lista.map((r) => r.nome_fantasia)).toEqual([
+				"Beta Ativa",
+				"Zeta Ativa",
+				"Alfa Inativa",
+			]);
+			expect(lista[2].deleted_at).not.toBeNull();
 		});
 	});
 
@@ -164,10 +262,32 @@ describe("RepresentadaDexieAdapter", () => {
 		});
 
 		it("bloqueia troca para CNPJ de outra representada ativa", async () => {
-			await adapter.criar(TENANT_1, input());
-			const segunda = await adapter.criar(TENANT_1, input({ cnpj: CNPJ_B }));
+			await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Alfa 1",
+					razao_social: "Alfa 1 Ltda",
+					cnpj: CNPJ_A,
+				}),
+			);
+			const segunda = await adapter.criar(
+				TENANT_1,
+				input({
+					nome_fantasia: "Alfa 2",
+					razao_social: "Alfa 2 Ltda",
+					cnpj: CNPJ_B,
+				}),
+			);
 			await expect(
-				adapter.atualizar(TENANT_1, segunda.id, input({ cnpj: CNPJ_A })),
+				adapter.atualizar(
+					TENANT_1,
+					segunda.id,
+					input({
+						nome_fantasia: "Alfa 2",
+						razao_social: "Alfa 2 Ltda",
+						cnpj: CNPJ_A,
+					}),
+				),
 			).rejects.toBeInstanceOf(CnpjDuplicadoError);
 		});
 
@@ -202,6 +322,42 @@ describe("RepresentadaDexieAdapter", () => {
 			await expect(
 				adapter.inativar(TENANT_1, crypto.randomUUID()),
 			).rejects.toBeInstanceOf(RepresentadaNaoEncontradaError);
+		});
+	});
+
+	describe("reativar", () => {
+		it("limpa deleted_at reativando a representada", async () => {
+			const criada = await adapter.criar(TENANT_1, input());
+			await adapter.inativar(TENANT_1, criada.id);
+
+			expect(
+				(await db.representadas.get(criada.id))?.deleted_at,
+			).not.toBeNull();
+
+			await adapter.reativar(TENANT_1, criada.id);
+
+			const reativada = await db.representadas.get(criada.id);
+			expect(reativada?.deleted_at).toBeNull();
+		});
+
+		it("bloqueia reativação se conflitar com outra ativa já existente (CNPJ/Nome)", async () => {
+			const primeira = await adapter.criar(TENANT_1, input());
+			await adapter.inativar(TENANT_1, primeira.id);
+
+			// Cadastra uma nova com o mesmo nome fantasia
+			await adapter.criar(
+				TENANT_1,
+				input({
+					cnpj: CNPJ_B,
+					razao_social: "Outra Razão",
+					nome_fantasia: "Alfa",
+				}),
+			);
+
+			// Tenta reativar a primeira com nome "Alfa"
+			await expect(
+				adapter.reativar(TENANT_1, primeira.id),
+			).rejects.toBeInstanceOf(NomeFantasiaDuplicadoError);
 		});
 	});
 });

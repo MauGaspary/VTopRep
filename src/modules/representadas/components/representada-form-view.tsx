@@ -1,7 +1,11 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
-import { CnpjDuplicadoError } from "../domain/representada";
+import {
+	CnpjDuplicadoError,
+	NomeFantasiaDuplicadoError,
+	RazaoSocialDuplicadaError,
+} from "../domain/representada";
 import type { Representada } from "../domain/representada.schema";
 import { REGRAS_FRETE } from "../domain/representada.schema";
 import {
@@ -20,7 +24,7 @@ import {
 export function RepresentadaFormView() {
 	const { id } = useParams();
 	const { config } = useTenant();
-	const { representada, isLoading } = useRepresentada(config.id, id);
+	const { representada, isLoading } = useRepresentada(config.id, id, true);
 
 	if (id && isLoading) {
 		return (
@@ -92,6 +96,10 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 		} catch (err) {
 			if (err instanceof CnpjDuplicadoError) {
 				setErros((atual) => ({ ...atual, cnpj: err.message }));
+			} else if (err instanceof RazaoSocialDuplicadaError) {
+				setErros((atual) => ({ ...atual, razao_social: err.message }));
+			} else if (err instanceof NomeFantasiaDuplicadoError) {
+				setErros((atual) => ({ ...atual, nome_fantasia: err.message }));
 			} else {
 				setErroGeral(
 					err instanceof Error ? err.message : "Erro ao salvar representada",

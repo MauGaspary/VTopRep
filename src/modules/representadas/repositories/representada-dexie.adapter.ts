@@ -6,8 +6,13 @@ import {
 	correspondeBuscaRepresentada,
 	criarRepresentada,
 	inativarRepresentada,
+	NomeFantasiaDuplicadoError,
+	normalizarTextoComparacao,
 	ordenarRepresentadas,
+	ordenarRepresentadasComInativasNoFim,
+	RazaoSocialDuplicadaError,
 	RepresentadaNaoEncontradaError,
+	reativarRepresentada,
 } from "../domain/representada";
 import type {
 	Representada,
@@ -48,13 +53,31 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		return ordenarRepresentadas(lista);
 	}
 
+	async listarTodas(
+		tenantId: string,
+		termoBusca?: string,
+	): Promise<Representada[]> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const lista = await this.db.representadas
+			.where("tenant_id")
+			.equals(tenant)
+			.filter((r) => correspondeBuscaRepresentada(r, termoBusca))
+			.toArray();
+		return ordenarRepresentadasComInativasNoFim(lista);
+	}
+
 	async obterPorId(
 		tenantId: string,
 		id: string,
+		permitirInativo = false,
 	): Promise<Representada | undefined> {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const registro = await this.db.representadas.get(IdSchema.parse(id));
-		if (!registro || registro.tenant_id !== tenant || registro.deleted_at) {
+		if (
+			!registro ||
+			registro.tenant_id !== tenant ||
+			(!permitirInativo && registro.deleted_at)
+		) {
 			return undefined;
 		}
 		return registro;
@@ -73,7 +96,7 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		});
 
 		await this.db.transaction("rw", this.db.representadas, async () => {
-			await this.garantirCnpjUnico(tenant, nova.cnpj, nova.id);
+			await this.garantirUnicidade(tenant, nova, nova.id);
 			await this.db.representadas.add(nova);
 		});
 
@@ -96,7 +119,7 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 				input,
 				this.agora(),
 			);
-			await this.garantirCnpjUnico(tenant, atualizada.cnpj, atualizada.id);
+			await this.garantirUnicidade(tenant, atualizada, atualizada.id);
 			await this.db.representadas.put(atualizada);
 			return atualizada;
 		});
@@ -114,6 +137,21 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		});
 	}
 
+	async reativar(tenantId: string, id: string): Promise<void> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const idValido = IdSchema.parse(id);
+
+		await this.db.transaction("rw", this.db.representadas, async () => {
+			const registro = await this.db.representadas.get(idValido);
+			if (!registro || registro.tenant_id !== tenant) {
+				throw new RepresentadaNaoEncontradaError(idValido);
+			}
+			const reativada = reativarRepresentada(registro, tenant, this.agora());
+			await this.garantirUnicidade(tenant, reativada, reativada.id);
+			await this.db.representadas.put(reativada);
+		});
+	}
+
 	private async obterAtivaOuFalhar(
 		tenantId: string,
 		id: string,
@@ -125,18 +163,30 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		return registro;
 	}
 
-	private async garantirCnpjUnico(
+	private async garantirUnicidade(
 		tenantId: string,
-		cnpj: string,
+		dados: Pick<Representada, "cnpj" | "razao_social" | "nome_fantasia">,
 		idAtual: string,
 	): Promise<void> {
-		const conflito = await this.db.representadas
-			.where("[tenant_id+cnpj]")
-			.equals([tenantId, cnpj])
+		const ativasDoTenant = await this.db.representadas
+			.where("tenant_id")
+			.equals(tenantId)
 			.filter((r) => r.deleted_at === null && r.id !== idAtual)
-			.first();
-		if (conflito) {
-			throw new CnpjDuplicadoError();
+			.toArray();
+
+		const razaoNorm = normalizarTextoComparacao(dados.razao_social);
+		const fantasiaNorm = normalizarTextoComparacao(dados.nome_fantasia);
+
+		for (const r of ativasDoTenant) {
+			if (r.cnpj === dados.cnpj) {
+				throw new CnpjDuplicadoError();
+			}
+			if (normalizarTextoComparacao(r.razao_social) === razaoNorm) {
+				throw new RazaoSocialDuplicadaError();
+			}
+			if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
+				throw new NomeFantasiaDuplicadoError();
+			}
 		}
 	}
 }

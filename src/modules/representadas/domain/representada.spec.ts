@@ -5,6 +5,8 @@ import {
 	criarRepresentada,
 	inativarRepresentada,
 	ordenarRepresentadas,
+	ordenarRepresentadasComInativasNoFim,
+	reativarRepresentada,
 	TenantDivergenteError,
 } from "./representada";
 import {
@@ -163,6 +165,32 @@ describe("inativarRepresentada", () => {
 	});
 });
 
+describe("reativarRepresentada", () => {
+	it("limpa deleted_at e atualiza updated_at", () => {
+		const inativa = inativarRepresentada(criar(), TENANT, DEPOIS);
+		const reativada = reativarRepresentada(
+			inativa,
+			TENANT,
+			"2026-10-24T12:00:00.000Z",
+		);
+		expect(reativada.deleted_at).toBeNull();
+		expect(reativada.updated_at).toBe("2026-10-24T12:00:00.000Z");
+	});
+
+	it("é idempotente se já estiver ativa", () => {
+		const ativa = criar();
+		const reativada = reativarRepresentada(ativa, TENANT, DEPOIS);
+		expect(reativada).toBe(ativa);
+	});
+
+	it("bloqueia reativação com tenant divergente", () => {
+		const inativa = inativarRepresentada(criar(), TENANT, DEPOIS);
+		expect(() => inativarRepresentada(inativa, OUTRO_TENANT, DEPOIS)).toThrow(
+			TenantDivergenteError,
+		);
+	});
+});
+
 describe("correspondeBuscaRepresentada", () => {
 	const r = criar();
 
@@ -198,5 +226,24 @@ describe("ordenarRepresentadas", () => {
 			"Zeta",
 		]);
 		expect(lista[0].nome_fantasia).toBe("Zeta");
+	});
+});
+
+describe("ordenarRepresentadasComInativasNoFim", () => {
+	it("coloca ativas primeiro e inativas no final, ordenadas por nome fantasia", () => {
+		const lista = [
+			{ ...criar(), nome_fantasia: "Zeta Ativa", deleted_at: null },
+			{ ...criar(), nome_fantasia: "Alfa Inativa", deleted_at: AGORA },
+			{ ...criar(), nome_fantasia: "Beta Ativa", deleted_at: null },
+			{ ...criar(), nome_fantasia: "Zeta Inativa", deleted_at: AGORA },
+		];
+
+		const ordenada = ordenarRepresentadasComInativasNoFim(lista);
+		expect(ordenada.map((x) => x.nome_fantasia)).toEqual([
+			"Beta Ativa",
+			"Zeta Ativa",
+			"Alfa Inativa",
+			"Zeta Inativa",
+		]);
 	});
 });
