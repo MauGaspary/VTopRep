@@ -2,9 +2,17 @@ import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
 import {
+	Alert,
+	Button,
+	FormField,
+	InactiveRecoveryCard,
+	Input,
+} from "../../../shared/components/ui";
+import {
 	CnpjDuplicadoError,
 	NomeFantasiaDuplicadoError,
 	RazaoSocialDuplicadaError,
+	RepresentadaInativaExistenteError,
 } from "../domain/representada";
 import type { Representada } from "../domain/representada.schema";
 import { REGRAS_FRETE } from "../domain/representada.schema";
@@ -43,7 +51,6 @@ export function RepresentadaFormView() {
 		);
 	}
 
-	// `key` reinicia o estado do formulário ao trocar de registro.
 	return (
 		<RepresentadaForm
 			key={representada?.id ?? "nova"}
@@ -60,12 +67,14 @@ interface RepresentadaFormProps {
 
 function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 	const navigate = useNavigate();
-	const { criar, atualizar } = useRepresentadaActions(tenantId);
+	const { criar, atualizar, reativar } = useRepresentadaActions(tenantId);
 	const [valores, setValores] = useState<RepresentadaFormValues>(() =>
 		valoresIniciaisFormulario(representada),
 	);
 	const [erros, setErros] = useState<RepresentadaFormErros>({});
 	const [erroGeral, setErroGeral] = useState<string | null>(null);
+	const [inativaConflitante, setInativaConflitante] =
+		useState<Representada | null>(null);
 	const [salvando, setSalvando] = useState(false);
 
 	const editando = representada !== undefined;
@@ -73,11 +82,29 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 	const alterar = (campo: keyof RepresentadaFormValues, valor: string) => {
 		setValores((atual) => ({ ...atual, [campo]: valor }));
 		setErros((atual) => ({ ...atual, [campo]: undefined }));
+		setInativaConflitante(null);
+	};
+
+	const handleReativarExistente = async () => {
+		if (!inativaConflitante) return;
+		setSalvando(true);
+		setErroGeral(null);
+		try {
+			await reativar(inativaConflitante.id);
+			navigate("/representadas");
+		} catch (err) {
+			setErroGeral(
+				err instanceof Error ? err.message : "Erro ao reativar representada",
+			);
+		} finally {
+			setSalvando(false);
+		}
 	};
 
 	const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
 		setErroGeral(null);
+		setInativaConflitante(null);
 
 		const resultado = validarFormularioRepresentada(valores);
 		if (!resultado.success) {
@@ -94,7 +121,16 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 			}
 			navigate("/representadas");
 		} catch (err) {
-			if (err instanceof CnpjDuplicadoError) {
+			if (err instanceof RepresentadaInativaExistenteError) {
+				setInativaConflitante(err.representadaInativa);
+				if (err.campoConflito === "cnpj") {
+					setErros((atual) => ({ ...atual, cnpj: err.message }));
+				} else if (err.campoConflito === "razao_social") {
+					setErros((atual) => ({ ...atual, razao_social: err.message }));
+				} else if (err.campoConflito === "nome_fantasia") {
+					setErros((atual) => ({ ...atual, nome_fantasia: err.message }));
+				}
+			} else if (err instanceof CnpjDuplicadoError) {
 				setErros((atual) => ({ ...atual, cnpj: err.message }));
 			} else if (err instanceof RazaoSocialDuplicadaError) {
 				setErros((atual) => ({ ...atual, razao_social: err.message }));
@@ -129,85 +165,92 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 				onSubmit={handleSubmit}
 				className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 shadow-sm"
 			>
-				<Campo
+				<FormField
 					id="nome_fantasia"
 					label="Nome fantasia"
-					erro={erros.nome_fantasia}
+					error={erros.nome_fantasia}
 				>
-					<input
+					<Input
 						id="nome_fantasia"
 						value={valores.nome_fantasia}
 						onChange={(e) => alterar("nome_fantasia", e.target.value)}
 						autoComplete="off"
-						className={classeInput(erros.nome_fantasia)}
+						hasError={Boolean(erros.nome_fantasia)}
 					/>
-				</Campo>
+				</FormField>
 
-				<Campo id="razao_social" label="Razão social" erro={erros.razao_social}>
-					<input
+				<FormField
+					id="razao_social"
+					label="Razão social"
+					error={erros.razao_social}
+				>
+					<Input
 						id="razao_social"
 						value={valores.razao_social}
 						onChange={(e) => alterar("razao_social", e.target.value)}
 						autoComplete="off"
-						className={classeInput(erros.razao_social)}
+						hasError={Boolean(erros.razao_social)}
 					/>
-				</Campo>
+				</FormField>
 
-				<Campo id="cnpj" label="CNPJ" erro={erros.cnpj}>
-					<input
+				<FormField id="cnpj" label="CNPJ" error={erros.cnpj}>
+					<Input
 						id="cnpj"
 						value={valores.cnpj}
 						onChange={(e) => alterar("cnpj", e.target.value)}
 						placeholder="00.000.000/0000-00"
 						autoComplete="off"
 						maxLength={18}
-						className={`${classeInput(erros.cnpj)} font-mono uppercase`}
+						hasError={Boolean(erros.cnpj)}
+						className="font-mono uppercase"
 					/>
-				</Campo>
+				</FormField>
 
 				<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-					<Campo
+					<FormField
 						id="percentual_comissao"
 						label="Comissão padrão (%)"
-						erro={erros.percentual_comissao}
+						error={erros.percentual_comissao}
 					>
-						<input
+						<Input
 							id="percentual_comissao"
 							value={valores.percentual_comissao}
 							onChange={(e) => alterar("percentual_comissao", e.target.value)}
 							inputMode="decimal"
 							placeholder="5,00"
-							className={classeInput(erros.percentual_comissao)}
+							hasError={Boolean(erros.percentual_comissao)}
 						/>
-					</Campo>
+					</FormField>
 
-					<Campo
+					<FormField
 						id="valor_pedido_minimo"
 						label="Pedido mínimo (R$)"
-						erro={erros.valor_pedido_minimo}
-						ajuda="Informativo. Deixe vazio se não houver."
+						error={erros.valor_pedido_minimo}
+						help="Informativo. Deixe vazio se não houver."
 					>
-						<input
+						<Input
 							id="valor_pedido_minimo"
 							value={valores.valor_pedido_minimo}
 							onChange={(e) => alterar("valor_pedido_minimo", e.target.value)}
 							inputMode="decimal"
 							placeholder="0,00"
-							className={classeInput(erros.valor_pedido_minimo)}
+							hasError={Boolean(erros.valor_pedido_minimo)}
 						/>
-					</Campo>
+					</FormField>
 				</div>
 
-				<Campo
+				<FormField
 					id="regras_frete_padrao"
 					label="Frete padrão"
-					erro={erros.regras_frete_padrao}
+					error={erros.regras_frete_padrao}
 				>
 					<select
 						id="regras_frete_padrao"
 						value={valores.regras_frete_padrao}
 						onChange={(e) => alterar("regras_frete_padrao", e.target.value)}
-						className={classeInput(erros.regras_frete_padrao)}
+						className={`w-full rounded-lg border bg-background px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring text-sm ${
+							erros.regras_frete_padrao ? "border-destructive" : "border-input"
+						}`}
 					>
 						{REGRAS_FRETE.map((regra) => (
 							<option key={regra} value={regra}>
@@ -215,65 +258,29 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 							</option>
 						))}
 					</select>
-				</Campo>
+				</FormField>
 
-				{erroGeral && (
-					<p
-						role="alert"
-						className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-					>
-						{erroGeral}
-					</p>
+				{inativaConflitante && (
+					<InactiveRecoveryCard
+						title="Representada inativa encontrada:"
+						entityName={inativaConflitante.nome_fantasia}
+						details={inativaConflitante.razao_social}
+						onReativar={handleReativarExistente}
+						isLoading={salvando}
+					/>
 				)}
 
+				{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
+
 				<div className="flex justify-end gap-2 pt-2">
-					<Link
-						to="/representadas"
-						className="rounded-lg px-4 py-2 text-sm font-medium text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
-					>
-						Cancelar
+					<Link to="/representadas">
+						<Button variant="ghost">Cancelar</Button>
 					</Link>
-					<button
-						type="submit"
-						disabled={salvando}
-						className="rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 disabled:opacity-50"
-					>
+					<Button type="submit" disabled={salvando}>
 						{salvando ? "Salvando..." : "Salvar"}
-					</button>
+					</Button>
 				</div>
 			</form>
 		</section>
-	);
-}
-
-function classeInput(erro: string | undefined): string {
-	return `w-full rounded-lg border bg-background px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring ${
-		erro ? "border-destructive" : "border-input"
-	}`;
-}
-
-interface CampoProps {
-	id: string;
-	label: string;
-	erro?: string;
-	ajuda?: string;
-	children: React.ReactNode;
-}
-
-function Campo({ id, label, erro, ajuda, children }: CampoProps) {
-	return (
-		<div className="flex flex-col gap-1">
-			<label htmlFor={id} className="text-sm font-medium text-foreground">
-				{label}
-			</label>
-			{children}
-			{erro ? (
-				<span role="alert" className="text-xs text-destructive">
-					{erro}
-				</span>
-			) : (
-				ajuda && <span className="text-xs text-muted-foreground">{ajuda}</span>
-			)}
-		</div>
 	);
 }

@@ -1,6 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { TenantProvider } from "./config/tenant/TenantContext";
 import { useTenant } from "./config/tenant/useTenant";
+import { ClienteFormView } from "./modules/clientes/components/cliente-form-view";
+import { ClientesListView } from "./modules/clientes/components/clientes-list-view";
 import { CatalogoView } from "./modules/produtos/components/catalogo-view";
 import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
 import { RepresentadasListView } from "./modules/representadas/components/representadas-list-view";
@@ -29,6 +31,9 @@ function AppRoutes() {
 						path="/representadas/:id/editar"
 						element={<RepresentadaFormView />}
 					/>
+					<Route path="/clientes" element={<ClientesListView />} />
+					<Route path="/clientes/novo" element={<ClienteFormView />} />
+					<Route path="/clientes/:id/editar" element={<ClienteFormView />} />
 					<Route path="*" element={<Navigate to="/catalogo" replace />} />
 				</Routes>
 			</main>

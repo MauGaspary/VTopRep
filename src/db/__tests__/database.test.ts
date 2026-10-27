@@ -16,7 +16,7 @@ describe("AppDatabase", () => {
 		const clienteData = {
 			id: clienteId,
 			tenant_id: tenantId,
-			cnpj_cpf: "12345678901234",
+			cnpj_cpf: "11222333000181",
 			razao_social: "Empresa Teste LTDA",
 			// omitted nome_fantasia
 			ativo: true,

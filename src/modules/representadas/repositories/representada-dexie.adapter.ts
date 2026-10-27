@@ -11,6 +11,7 @@ import {
 	ordenarRepresentadas,
 	ordenarRepresentadasComInativasNoFim,
 	RazaoSocialDuplicadaError,
+	RepresentadaInativaExistenteError,
 	RepresentadaNaoEncontradaError,
 	reativarRepresentada,
 } from "../domain/representada";
@@ -147,7 +148,8 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 				throw new RepresentadaNaoEncontradaError(idValido);
 			}
 			const reativada = reativarRepresentada(registro, tenant, this.agora());
-			await this.garantirUnicidade(tenant, reativada, reativada.id);
+			// Ao reativar, garante que não conflita com nenhuma outra ATIVA
+			await this.garantirUnicidadeEntreAtivas(tenant, reativada, reativada.id);
 			await this.db.representadas.put(reativada);
 		});
 	}
@@ -163,7 +165,7 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		return registro;
 	}
 
-	private async garantirUnicidade(
+	private async garantirUnicidadeEntreAtivas(
 		tenantId: string,
 		dados: Pick<Representada, "cnpj" | "razao_social" | "nome_fantasia">,
 		idAtual: string,
@@ -186,6 +188,51 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 			}
 			if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
 				throw new NomeFantasiaDuplicadoError();
+			}
+		}
+	}
+
+	private async garantirUnicidade(
+		tenantId: string,
+		dados: Pick<Representada, "cnpj" | "razao_social" | "nome_fantasia">,
+		idAtual: string,
+	): Promise<void> {
+		const todasDoTenant = await this.db.representadas
+			.where("tenant_id")
+			.equals(tenantId)
+			.filter((r) => r.id !== idAtual)
+			.toArray();
+
+		const razaoNorm = normalizarTextoComparacao(dados.razao_social);
+		const fantasiaNorm = normalizarTextoComparacao(dados.nome_fantasia);
+
+		// Primeiro verifica conflito com representadas ativas
+		for (const r of todasDoTenant) {
+			if (r.deleted_at === null) {
+				if (r.cnpj === dados.cnpj) {
+					throw new CnpjDuplicadoError();
+				}
+				if (normalizarTextoComparacao(r.razao_social) === razaoNorm) {
+					throw new RazaoSocialDuplicadaError();
+				}
+				if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
+					throw new NomeFantasiaDuplicadoError();
+				}
+			}
+		}
+
+		// Em seguida, verifica se existe representada inativa com os mesmos dados
+		for (const r of todasDoTenant) {
+			if (r.deleted_at !== null) {
+				if (r.cnpj === dados.cnpj) {
+					throw new RepresentadaInativaExistenteError(r, "cnpj");
+				}
+				if (normalizarTextoComparacao(r.razao_social) === razaoNorm) {
+					throw new RepresentadaInativaExistenteError(r, "razao_social");
+				}
+				if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
+					throw new RepresentadaInativaExistenteError(r, "nome_fantasia");
+				}
 			}
 		}
 	}

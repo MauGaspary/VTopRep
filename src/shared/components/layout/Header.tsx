@@ -4,6 +4,7 @@ import { useTenant } from "../../../config/tenant/useTenant";
 const LINKS = [
 	{ to: "/catalogo", label: "Catálogo" },
 	{ to: "/representadas", label: "Representadas" },
+	{ to: "/clientes", label: "Clientes" },
 ] as const;
 
 export function Header() {

@@ -33,6 +33,29 @@ export class NomeFantasiaDuplicadoError extends Error {
 	}
 }
 
+export class RepresentadaInativaExistenteError extends Error {
+	readonly representadaInativa: Representada;
+	readonly campoConflito: "cnpj" | "razao_social" | "nome_fantasia";
+
+	constructor(
+		representadaInativa: Representada,
+		campoConflito: "cnpj" | "razao_social" | "nome_fantasia",
+	) {
+		const rotuloCampo =
+			campoConflito === "cnpj"
+				? "CNPJ"
+				: campoConflito === "razao_social"
+					? "Razão Social"
+					: "Nome Fantasia";
+		super(
+			`Existe uma representada inativa com este mesmo ${rotuloCampo}: "${representadaInativa.nome_fantasia}". Deseja reativá-la?`,
+		);
+		this.name = "RepresentadaInativaExistenteError";
+		this.representadaInativa = representadaInativa;
+		this.campoConflito = campoConflito;
+	}
+}
+
 export class TenantDivergenteError extends Error {
 	constructor() {
 		super("Operação não permitida: registro pertence a outro tenant");

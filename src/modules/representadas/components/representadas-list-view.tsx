@@ -1,6 +1,13 @@
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
+import {
+	Alert,
+	Badge,
+	Button,
+	PageHeader,
+	SearchInput,
+} from "../../../shared/components/ui";
 import { formatarCnpj } from "../../../shared/domain/cnpj";
 import {
 	formatarCentavos,
@@ -47,48 +54,24 @@ export function RepresentadasListView() {
 
 	return (
 		<section className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-				<div>
-					<h1 className="text-2xl font-semibold text-foreground">
-						Representadas
-					</h1>
-					<p className="text-sm text-muted-foreground">
-						Fábricas que você representa.
-					</p>
-				</div>
-				<Link
-					to="/representadas/nova"
-					className="inline-flex items-center justify-center rounded-lg bg-primary px-4 py-2 text-sm font-medium text-primary-foreground shadow-sm transition-opacity hover:opacity-90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-				>
-					+ Nova representada
-				</Link>
-			</div>
+			<PageHeader
+				title="Representadas"
+				description="Fábricas que você representa."
+				action={
+					<Link to="/representadas/nova">
+						<Button variant="primary">+ Nova representada</Button>
+					</Link>
+				}
+			/>
 
-			<div className="flex flex-col gap-1">
-				<label
-					htmlFor="busca-representadas"
-					className="text-sm font-medium text-foreground"
-				>
-					Buscar
-				</label>
-				<input
-					id="busca-representadas"
-					type="search"
-					placeholder="Nome, razão social ou CNPJ..."
-					value={termoBusca}
-					onChange={(e) => setTermoBusca(e.target.value)}
-					className="rounded-lg border border-input bg-card px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring"
-				/>
-			</div>
+			<SearchInput
+				id="busca-representadas"
+				placeholder="Nome, razão social ou CNPJ..."
+				value={termoBusca}
+				onChange={setTermoBusca}
+			/>
 
-			{erro && (
-				<p
-					role="alert"
-					className="rounded-lg border border-destructive/40 bg-destructive/10 px-3 py-2 text-sm text-destructive"
-				>
-					{erro}
-				</p>
-			)}
+			{erro && <Alert variant="destructive">{erro}</Alert>}
 
 			{isLoading && (
 				<p className="py-6 text-center text-muted-foreground">Carregando...</p>
@@ -122,9 +105,7 @@ export function RepresentadasListView() {
 												{r.nome_fantasia}
 											</h2>
 											{isInativa && (
-												<span className="inline-flex items-center rounded bg-destructive/10 px-2 py-0.5 text-xs font-medium text-destructive">
-													Inativa
-												</span>
+												<Badge variant="destructive">Inativa</Badge>
 											)}
 										</div>
 										<span className="text-sm text-muted-foreground">
@@ -172,27 +153,26 @@ export function RepresentadasListView() {
 
 								<div className="flex justify-end gap-2">
 									{isInativa ? (
-										<button
-											type="button"
+										<Button
+											variant="secondary"
+											size="sm"
 											onClick={() => handleReativar(r)}
-											className="rounded-lg bg-primary/10 px-3 py-1.5 text-sm font-medium text-primary transition-colors hover:bg-primary/20"
 										>
 											Reativar
-										</button>
+										</Button>
 									) : (
-										<button
-											type="button"
+										<Button
+											variant="destructive"
+											size="sm"
 											onClick={() => handleInativar(r)}
-											className="rounded-lg px-3 py-1.5 text-sm font-medium text-destructive transition-colors hover:bg-destructive/10"
 										>
 											Inativar
-										</button>
+										</Button>
 									)}
-									<Link
-										to={`/representadas/${r.id}/editar`}
-										className="rounded-lg bg-secondary px-3 py-1.5 text-sm font-medium text-secondary-foreground transition-colors hover:bg-muted"
-									>
-										Editar
+									<Link to={`/representadas/${r.id}/editar`}>
+										<Button variant="secondary" size="sm">
+											Editar
+										</Button>
 									</Link>
 								</div>
 							</li>

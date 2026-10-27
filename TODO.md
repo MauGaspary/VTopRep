@@ -34,10 +34,10 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.6. Módulo de Clientes (CRM Base)
-- [ ] **Repositório:** Implementar operações de CRUD no Dexie com inserção transacional (Cliente + Endereços + Contatos).
-- [ ] **UI:** Criar tela de listagem de clientes na carteira.
-- [ ] **UI:** Criar formulário de cadastro/edição permitindo adicionar múltiplos contatos e endereços.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Repositório:** Implementar operações de CRUD no Dexie com inserção transacional (Cliente + Endereços + Contatos).
+- [x] **UI:** Criar tela de listagem de clientes na carteira.
+- [x] **UI:** Criar formulário de cadastro/edição permitindo adicionar múltiplos contatos e endereços.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.7. Módulo de Produtos
 - [ ] **Repositório:** Implementar repositório Dexie para gestão de produtos.
