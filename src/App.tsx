@@ -4,6 +4,7 @@ import { useTenant } from "./config/tenant/useTenant";
 import { ClienteFormView } from "./modules/clientes/components/cliente-form-view";
 import { ClientesListView } from "./modules/clientes/components/clientes-list-view";
 import { CatalogoView } from "./modules/produtos/components/catalogo-view";
+import { ProdutoFormView } from "./modules/produtos/components/produto-form-view";
 import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
 import { RepresentadasListView } from "./modules/representadas/components/representadas-list-view";
 import { DevSeedButton } from "./shared/components/dev/DevSeedButton";
@@ -22,6 +23,12 @@ function AppRoutes() {
 						path="/catalogo"
 						element={<CatalogoView tenantId={config.id} />}
 					/>
+					<Route
+						path="/produtos"
+						element={<Navigate to="/catalogo" replace />}
+					/>
+					<Route path="/produtos/novo" element={<ProdutoFormView />} />
+					<Route path="/produtos/:id/editar" element={<ProdutoFormView />} />
 					<Route path="/representadas" element={<RepresentadasListView />} />
 					<Route
 						path="/representadas/nova"

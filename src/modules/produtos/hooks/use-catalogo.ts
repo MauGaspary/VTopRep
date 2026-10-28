@@ -1,18 +1,5 @@
-import { useLiveQuery } from "dexie-react-hooks";
-import { produtoRepository } from "../repositories/produto-dexie.adapter";
+import { useProdutos } from "./use-produtos";
 
 export function useCatalogo(tenantId: string, termoBusca?: string) {
-	const produtos = useLiveQuery(
-		() => {
-			if (!tenantId) return Promise.resolve([]);
-			return produtoRepository.buscarCatalogo(tenantId, termoBusca);
-		},
-		[tenantId, termoBusca],
-		[], // Default value
-	);
-
-	return {
-		produtos: produtos,
-		isLoading: produtos === undefined,
-	};
+	return useProdutos(tenantId, termoBusca);
 }

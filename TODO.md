@@ -40,9 +40,9 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.7. Módulo de Produtos
-- [ ] **Repositório:** Implementar repositório Dexie para gestão de produtos.
-- [ ] **UI:** Criar tela de listagem e formulário de cadastro de produtos.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Repositório:** Implementar repositório Dexie para gestão de produtos.
+- [x] **UI:** Criar tela de listagem e formulário de cadastro de produtos.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 
