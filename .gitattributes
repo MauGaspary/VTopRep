@@ -1,0 +1,13 @@
+# Força LF no working tree em qualquer SO (o Biome espera LF).
+* text=auto eol=lf
+
+# Binários
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.ico binary
+*.webp binary
+*.pdf binary
+*.woff binary
+*.woff2 binary
