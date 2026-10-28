@@ -1,154 +1,201 @@
 import { fakerPT_BR as faker } from "@faker-js/faker";
-import type { Cliente } from "../modules/clientes/domain/cliente.schema";
-import type { ClienteContato } from "../modules/clientes/domain/cliente-contato.schema";
-import type { ClienteEndereco } from "../modules/clientes/domain/cliente-endereco.schema";
-import type { ItemPreco } from "../modules/produtos/domain/item-preco.schema";
-import type { Produto } from "../modules/produtos/domain/produto.schema";
-import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
-import type { Representada } from "../modules/representadas/domain/representada.schema";
+import { criarClienteCompleto } from "../modules/clientes/domain/cliente";
+import {
+	type ItemPreco,
+	ItemPrecoSchema,
+} from "../modules/produtos/domain/item-preco.schema";
+import { criarProduto } from "../modules/produtos/domain/produto";
+import {
+	type TabelaPreco,
+	TabelaPrecoSchema,
+} from "../modules/produtos/domain/tabela-preco.schema";
+import { criarRepresentada } from "../modules/representadas/domain/representada";
 import { calcularDigitosVerificadoresCnpj } from "../shared/domain/cnpj";
+import {
+	calcularDigitosVerificadoresCpf,
+	isCpfOuCnpjValido,
+} from "../shared/domain/cpf-cnpj";
 import type { AppDatabase } from "./database";
 
+/** Gera documentos válidos e distintos entre si. */
+function criarGeradorDocumentos() {
+	const usados = new Set<string>();
+	const gerar = (montar: () => string) => {
+		for (;;) {
+			const documento = montar();
+			if (isCpfOuCnpjValido(documento) && !usados.has(documento)) {
+				usados.add(documento);
+				return documento;
+			}
+		}
+	};
+
+	return {
+		cnpj: () =>
+			gerar(() => {
+				const base = faker.string.numeric(12);
+				return `${base}${calcularDigitosVerificadoresCnpj(base)}`;
+			}),
+		cpf: () =>
+			gerar(() => {
+				const base = faker.string.numeric(9);
+				return `${base}${calcularDigitosVerificadoresCpf(base)}`;
+			}),
+	};
+}
+
+/**
+ * Remove todos os registros do tenant em todas as tabelas (inclusive pedidos
+ * e outbox). Dados de outros tenants não são tocados.
+ */
+export async function limparDadosDoTenant(
+	db: AppDatabase,
+	tenantId: string,
+): Promise<void> {
+	await db.transaction("rw", db.tables, async () => {
+		await Promise.all(
+			db.tables.map((tabela) =>
+				tabela.where("tenant_id").equals(tenantId).delete(),
+			),
+		);
+	});
+}
+
+/**
+ * Substitui os dados do tenant por dados falsos (apenas desenvolvimento).
+ * Todos os registros passam pelas funções de domínio / schemas Zod.
+ */
 export async function seedDatabase(db: AppDatabase, tenantId: string) {
-	// Limpar tabelas
-	await Promise.all([
-		db.clientes.clear(),
-		db.clientes_enderecos.clear(),
-		db.clientes_contatos.clear(),
-		db.clientes_metricas.clear(),
-		db.produtos.clear(),
-		db.tabelas_preco.clear(),
-		db.itens_preco.clear(),
-		db.representadas.clear(),
-	]);
+	const agora = () => new Date().toISOString();
+	const documentos = criarGeradorDocumentos();
 
-	// Gerar 2 Representadas
-	const baseCnpj1 = "112223330001";
-	const baseCnpj2 = "223334440001";
-	const rep1: Representada = {
-		id: faker.string.uuid(),
-		tenant_id: tenantId,
-		razao_social: `${faker.company.name()} Indústria e Comércio Ltda`,
-		nome_fantasia: faker.company.name(),
-		cnpj: `${baseCnpj1}${calcularDigitosVerificadoresCnpj(baseCnpj1)}`,
-		percentual_comissao_padrao: 500, // 5,00%
-		valor_pedido_minimo_centavos: 150000, // R$ 1.500,00
-		regras_frete_padrao: "CIF",
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString(),
-		deleted_at: null,
-	};
-	const rep2: Representada = {
-		id: faker.string.uuid(),
-		tenant_id: tenantId,
-		razao_social: `${faker.company.name()} S/A`,
-		nome_fantasia: faker.company.name(),
-		cnpj: `${baseCnpj2}${calcularDigitosVerificadoresCnpj(baseCnpj2)}`,
-		percentual_comissao_padrao: 750, // 7,50%
-		valor_pedido_minimo_centavos: 300000, // R$ 3.000,00
-		regras_frete_padrao: "FOB",
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString(),
-		deleted_at: null,
-	};
-	await db.representadas.bulkAdd([rep1, rep2]);
-	const representadasIds = [rep1.id, rep2.id];
+	const representadas = [
+		{ sufixo: "Indústria e Comércio Ltda", comissao: 500, minimo: 150000 },
+		{ sufixo: "S/A", comissao: 750, minimo: 300000 },
+	].map(({ sufixo, comissao, minimo }, indice) =>
+		criarRepresentada({
+			tenantId,
+			id: faker.string.uuid(),
+			agora: agora(),
+			input: {
+				razao_social: `${faker.company.name()} ${sufixo}`,
+				nome_fantasia: faker.company.name(),
+				cnpj: documentos.cnpj(),
+				percentual_comissao_padrao: comissao,
+				valor_pedido_minimo_centavos: minimo,
+				regras_frete_padrao: indice === 0 ? "CIF" : "FOB",
+			},
+		}),
+	);
 
-	// Gerar 10 Produtos
-	const produtos: Produto[] = Array.from({ length: 10 }).map(() => ({
-		id: faker.string.uuid(),
-		tenant_id: tenantId,
-		representada_id: faker.helpers.arrayElement(representadasIds),
-		sku: faker.string.alphanumeric(8).toUpperCase(),
-		descricao: faker.commerce.productName(),
-		unidade_medida: faker.helpers.arrayElement(["CX", "UN", "PCT", "KG"]),
-		multiplo_embalagem: faker.number.int({ min: 1, max: 12 }),
-		ativo: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString(),
-		deleted_at: null,
-	}));
-	await db.produtos.bulkAdd(produtos);
+	const skusUsados = new Set<string>();
+	const produtos = Array.from({ length: 10 }, () => {
+		const representada = faker.helpers.arrayElement(representadas);
+		let sku = "";
+		do {
+			sku = faker.string.alphanumeric(8).toUpperCase();
+		} while (skusUsados.has(`${representada.id}:${sku}`));
+		skusUsados.add(`${representada.id}:${sku}`);
 
-	// Gerar 2 Tabelas de Preço
-	const tabelasPreco: TabelaPreco[] = representadasIds.map((repId) => ({
-		id: faker.string.uuid(),
-		tenant_id: tenantId,
-		representada_id: repId,
-		nome_tabela: `Tabela Padrão ${faker.company.name()}`,
-		vigencia_inicio: faker.date.past().toISOString(),
-		vigencia_fim: null,
-		ativo: true,
-		created_at: new Date().toISOString(),
-		updated_at: new Date().toISOString(),
-		deleted_at: null,
-	}));
-	await db.tabelas_preco.bulkAdd(tabelasPreco);
+		return criarProduto({
+			tenantId,
+			id: faker.string.uuid(),
+			agora: agora(),
+			input: {
+				representada_id: representada.id,
+				sku,
+				descricao: faker.commerce.productName(),
+				unidade_medida: faker.helpers.arrayElement(["CX", "UN", "PCT", "KG"]),
+				multiplo_embalagem: faker.number.int({ min: 1, max: 12 }),
+			},
+		});
+	});
 
-	// Gerar Itens de Preço (1 para cada produto na tabela de sua representada)
-	const itensPreco: ItemPreco[] = produtos.map((produto) => {
+	const tabelasPreco: TabelaPreco[] = representadas.map((representada) =>
+		TabelaPrecoSchema.parse({
+			id: faker.string.uuid(),
+			tenant_id: tenantId,
+			representada_id: representada.id,
+			nome_tabela: `Tabela Padrão ${representada.nome_fantasia}`,
+			vigencia_inicio: faker.date.past().toISOString().slice(0, 10),
+			vigencia_fim: null,
+			ativo: true,
+			created_at: agora(),
+			updated_at: agora(),
+			deleted_at: null,
+		}),
+	);
+
+	// 1 item de preço por produto, na tabela da sua representada
+	const itensPreco: ItemPreco[] = produtos.flatMap((produto) => {
 		const tabela = tabelasPreco.find(
 			(t) => t.representada_id === produto.representada_id,
 		);
-		return {
+		if (!tabela) return [];
+		return ItemPrecoSchema.parse({
 			id: faker.string.uuid(),
 			tenant_id: tenantId,
-			tabela_id: tabela?.id ?? faker.string.uuid(),
+			tabela_id: tabela.id,
 			produto_id: produto.id,
-			preco_base_centavos: faker.number.int({ min: 1000, max: 50000 }), // R$10.00 - R$500.00
-			teto_desconto_permitido: faker.helpers.arrayElement([0, 500, 1000]), // 0%, 5%, 10%
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
+			preco_base_centavos: faker.number.int({ min: 1000, max: 50000 }), // R$ 10,00 - R$ 500,00
+			desconto_maximo_permitido: faker.helpers.arrayElement([0, 500, 1000]), // 0%, 5%, 10%
+			created_at: agora(),
+			updated_at: agora(),
 			deleted_at: null,
-		};
+		});
 	});
-	await db.itens_preco.bulkAdd(itensPreco);
 
-	// Gerar 5 Clientes com Endereços e Contatos
-	for (let i = 0; i < 5; i++) {
-		const clienteId = faker.string.uuid();
+	const clientes = Array.from({ length: 5 }, () =>
+		criarClienteCompleto({
+			tenantId,
+			agora: agora(),
+			clienteInput: {
+				cnpj_cpf: faker.datatype.boolean()
+					? documentos.cnpj()
+					: documentos.cpf(),
+				razao_social: faker.company.name(),
+				nome_fantasia: faker.helpers.maybe(() => faker.company.name(), {
+					probability: 0.7,
+				}),
+			},
+			enderecosInput: [
+				{
+					tipo_endereco: "PRINCIPAL",
+					endereco_completo: `${faker.location.streetAddress()}, ${faker.location.city()}`,
+					latitude: faker.location.latitude(),
+					longitude: faker.location.longitude(),
+				},
+			],
+			contatosInput: [
+				{
+					nome: faker.person.fullName(),
+					papel: faker.helpers.maybe(
+						() =>
+							faker.helpers.arrayElement([
+								"COMPRADOR",
+								"FINANCEIRO",
+								"DIRETORIA",
+							] as const),
+						{ probability: 0.6 },
+					),
+					telefone_whatsapp: faker.phone.number(),
+					email: faker.helpers.maybe(
+						() => faker.internet.email({ allowSpecialCharacters: false }),
+						{ probability: 0.8 },
+					),
+				},
+			],
+		}),
+	);
 
-		const cliente: Cliente = {
-			id: clienteId,
-			tenant_id: tenantId,
-			cnpj_cpf: faker.string.numeric(14),
-			razao_social: faker.company.name(),
-			nome_fantasia: faker.helpers.maybe(() => faker.company.name(), {
-				probability: 0.7,
-			}), // Pode ser nulo
-			ativo: true,
-			created_at: new Date().toISOString(),
-			updated_at: new Date().toISOString(),
-			deleted_at: null,
-		};
-		await db.clientes.add(cliente);
-
-		const endereco: ClienteEndereco = {
-			id: faker.string.uuid(),
-			cliente_id: clienteId,
-			tipo_endereco: "PRINCIPAL",
-			endereco_completo: `${faker.location.streetAddress()}, ${faker.location.city()}`,
-			latitude: faker.location.latitude(),
-			longitude: faker.location.longitude(),
-		};
-		await db.clientes_enderecos.add(endereco);
-
-		const contato: ClienteContato = {
-			id: faker.string.uuid(),
-			cliente_id: clienteId,
-			nome: faker.person.fullName(),
-			papel: faker.helpers.maybe(
-				() =>
-					faker.helpers.arrayElement(["COMPRADOR", "FINANCEIRO", "DIRETORIA"]),
-				{ probability: 0.6 },
-			), // Pode ser nulo
-			telefone_whatsapp: faker.phone.number(),
-			email: faker.helpers.maybe(() => faker.internet.email(), {
-				probability: 0.8,
-			}),
-		};
-		await db.clientes_contatos.add(contato);
-	}
-
-	console.log("Banco de dados populado com sucesso (Faker)!");
+	await limparDadosDoTenant(db, tenantId);
+	await db.transaction("rw", db.tables, async () => {
+		await db.representadas.bulkAdd(representadas);
+		await db.produtos.bulkAdd(produtos);
+		await db.tabelas_preco.bulkAdd(tabelasPreco);
+		await db.itens_preco.bulkAdd(itensPreco);
+		await db.clientes.bulkAdd(clientes.map((c) => c.cliente));
+		await db.clientes_enderecos.bulkAdd(clientes.flatMap((c) => c.enderecos));
+		await db.clientes_contatos.bulkAdd(clientes.flatMap((c) => c.contatos));
+	});
 }

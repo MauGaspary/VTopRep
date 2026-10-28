@@ -39,9 +39,13 @@ describe("AppDatabase", () => {
 	it("should accept ClienteContato without optional fields", () => {
 		const contatoData = {
 			id: crypto.randomUUID(),
+			tenant_id: crypto.randomUUID(),
 			cliente_id: crypto.randomUUID(),
 			nome: "Teste Contato",
 			telefone_whatsapp: "51999999999",
+			created_at: new Date().toISOString(),
+			updated_at: new Date().toISOString(),
+			deleted_at: null,
 			// omitted papel and email
 		};
 

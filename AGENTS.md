@@ -5,9 +5,11 @@ Este bloco atua como as instruções operacionais para agentes de codificação 
 ### 1. Regras Operacionais Inegociáveis
 1. **Tipagem e Linter:** Proibido o uso de `any` ou type-assertions cegas (`as Type` sem validação). Qualquer entrada externa deve ser validada via Zod. O código deve passar 100% pelo `pnpm biome check`.
 2. **Dinheiro e Aritmética:** Nunca utilize tipos decimais para cálculo financeiro. Valores são sempre inteiros representando centavos. Cálculos de comissão e totais devem ser testados contra casos com dízimas periódicas e arredondamentos bancários (*half-even*).
-3. **Isolamento de Infraestrutura:** Nunca importe `@supabase/supabase-js` ou `dexie` diretamente dentro da pasta `components/` ou `hooks/`. Sempre passe por interfaces em `repositories/`.
+3. **Isolamento de Infraestrutura:** Nunca importe `@supabase/supabase-js`, `dexie` ou `dexie-react-hooks` diretamente dentro da pasta `components/` ou `hooks/`. Sempre passe por interfaces em `repositories/`.
+   - Para consultas reativas, use `useLiveRepositoryQuery` (`src/shared/hooks/use-live-repository-query.ts`), o único ponto do app que importa `dexie-react-hooks`.
+   - Exceção documentada: `src/shared/components/dev/DevSeedButton.tsx` importa o banco e o seed diretamente. Ele só é renderizado em desenvolvimento (`import.meta.env.DEV`) e não deve ser usado como modelo.
 4. **Isolamento de Tenant:** Toda mutação local e remota deve injetar e validar o `tenant_id`.
-5. **Reaproveitamento de Componentes de UI:** Antes de criar novos elementos visuais, verifique obrigatoriamente se já existem componentes correspondentes em `src/shared/components/ui/` (ex: `Button`, `Input`, `FormField`, `Badge`, `Alert`, `SearchInput`, `PageHeader`, `InactiveRecoveryCard`). Reutilize-os sempre que possível para manter consistência visual, evitar duplicação e otimizar tokens. Crie componentes atômicos compartilhados sempre que um padrão visual se repetir entre módulos.
+5. **Reaproveitamento de Componentes de UI:** Antes de criar novos elementos visuais, verifique obrigatoriamente se já existem componentes correspondentes em `src/shared/components/ui/` (ex: `Button`, `Input`, `FormField`, `Badge`, `Alert`, `SearchInput`, `PageHeader`, `InactiveRecoveryCard`, `HomonymWarning`). Reutilize-os sempre que possível para manter consistência visual, evitar duplicação e otimizar tokens. Crie componentes atômicos compartilhados sempre que um padrão visual se repetir entre módulos.
 
 ### 2. Protocolo de Desenvolvimento em Fatias Verticais (Vertical Slice TDD)
 Ao implementar uma nova funcionalidade, o agente deve seguir estritamente o pipeline:

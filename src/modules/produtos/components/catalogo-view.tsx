@@ -7,6 +7,7 @@ import {
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
+import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { useTodasRepresentadas } from "../../representadas/hooks/use-representadas";
 import type { Produto } from "../domain/produto.schema";
 import { useProdutoActions, useTodosProdutos } from "../hooks/use-produtos";
@@ -46,7 +47,7 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 		try {
 			await inativar(produto.id);
 		} catch (e) {
-			setErro(e instanceof Error ? e.message : "Erro ao inativar produto");
+			setErro(mensagemDeErro(e, "Erro ao inativar produto"));
 		}
 	};
 
@@ -55,7 +56,7 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 		try {
 			await reativar(produto.id);
 		} catch (e) {
-			setErro(e instanceof Error ? e.message : "Erro ao reativar produto");
+			setErro(mensagemDeErro(e, "Erro ao reativar produto"));
 		}
 	};
 
@@ -94,7 +95,7 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 				{!isLoading && (
 					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
 						{produtos.map((produto) => {
-							const isInativo = !produto.ativo || produto.deleted_at !== null;
+							const isInativo = !produto.ativo;
 							const nomeRepresentada =
 								representadasMap.get(produto.representada_id) ??
 								"Representada desconhecida";

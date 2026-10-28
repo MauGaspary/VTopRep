@@ -1,10 +1,33 @@
-import { isCnpjValido } from "./cnpj";
+import { isCnpjValido, normalizarCnpj } from "./cnpj";
 
 /**
  * Normaliza CPF removendo pontuações e espaços.
  */
 export function normalizarCpf(valor: string): string {
 	return valor.replace(/\D/g, "");
+}
+
+function calcularDigitoCpf(digitos: string, pesoInicial: number): number {
+	let soma = 0;
+	for (let i = 0; i < digitos.length; i++) {
+		soma += Number(digitos[i]) * (pesoInicial - i);
+	}
+	const resto = (soma * 10) % 11;
+	return resto === 10 ? 0 : resto;
+}
+
+/**
+ * Calcula os 2 dígitos verificadores para uma base de 9 dígitos.
+ * Lança erro se a base for inválida.
+ */
+export function calcularDigitosVerificadoresCpf(base: string): string {
+	const baseNormalizada = normalizarCpf(base);
+	if (!/^\d{9}$/.test(baseNormalizada)) {
+		throw new Error("Base de CPF deve conter 9 dígitos");
+	}
+	const dv1 = calcularDigitoCpf(baseNormalizada, 10);
+	const dv2 = calcularDigitoCpf(`${baseNormalizada}${dv1}`, 11);
+	return `${dv1}${dv2}`;
 }
 
 /**
@@ -14,31 +37,15 @@ export function isCpfValido(valor: string): boolean {
 	const cpf = normalizarCpf(valor);
 	if (cpf.length !== 11) return false;
 	if (/^(\d)\1{10}$/.test(cpf)) return false;
-
-	// 1º dígito verificador
-	let soma = 0;
-	for (let i = 0; i < 9; i++) {
-		soma += Number(cpf[i]) * (10 - i);
-	}
-	let resto = (soma * 10) % 11;
-	const dv1 = resto === 10 || resto === 11 ? 0 : resto;
-	if (dv1 !== Number(cpf[9])) return false;
-
-	// 2º dígito verificador
-	soma = 0;
-	for (let i = 0; i < 10; i++) {
-		soma += Number(cpf[i]) * (11 - i);
-	}
-	resto = (soma * 10) % 11;
-	const dv2 = resto === 10 || resto === 11 ? 0 : resto;
-	return dv2 === Number(cpf[10]);
+	return cpf.slice(9) === calcularDigitosVerificadoresCpf(cpf.slice(0, 9));
 }
 
 /**
- * Normaliza qualquer documento (CPF ou CNPJ).
+ * Normaliza qualquer documento (CPF ou CNPJ): remove pontuação/espaços e
+ * converte para maiúsculas (CNPJ alfanumérico).
  */
 export function normalizarCpfCnpj(valor: string): string {
-	return valor.replace(/[.\-/\s]/g, "").toUpperCase();
+	return normalizarCnpj(valor);
 }
 
 /**

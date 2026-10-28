@@ -8,18 +8,16 @@ import {
 	InactiveRecoveryCard,
 	Input,
 } from "../../../shared/components/ui";
+import { mensagemDeErro } from "../../../shared/domain/formulario";
+import { ROTULOS_FRETE, TIPOS_FRETE } from "../../../shared/domain/frete";
 import {
 	CnpjDuplicadoError,
-	NomeFantasiaDuplicadoError,
-	RazaoSocialDuplicadaError,
 	RepresentadaInativaExistenteError,
 } from "../domain/representada";
 import type { Representada } from "../domain/representada.schema";
-import { REGRAS_FRETE } from "../domain/representada.schema";
 import {
 	type RepresentadaFormErros,
 	type RepresentadaFormValues,
-	ROTULOS_FRETE,
 	validarFormularioRepresentada,
 	valoresIniciaisFormulario,
 } from "../domain/representada-form";
@@ -93,9 +91,7 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 			await reativar(inativaConflitante.id);
 			navigate("/representadas");
 		} catch (err) {
-			setErroGeral(
-				err instanceof Error ? err.message : "Erro ao reativar representada",
-			);
+			setErroGeral(mensagemDeErro(err, "Erro ao reativar representada"));
 		} finally {
 			setSalvando(false);
 		}
@@ -109,6 +105,7 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 		const resultado = validarFormularioRepresentada(valores);
 		if (!resultado.success) {
 			setErros(resultado.erros);
+			setErroGeral(resultado.geral);
 			return;
 		}
 
@@ -123,23 +120,11 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 		} catch (err) {
 			if (err instanceof RepresentadaInativaExistenteError) {
 				setInativaConflitante(err.representadaInativa);
-				if (err.campoConflito === "cnpj") {
-					setErros((atual) => ({ ...atual, cnpj: err.message }));
-				} else if (err.campoConflito === "razao_social") {
-					setErros((atual) => ({ ...atual, razao_social: err.message }));
-				} else if (err.campoConflito === "nome_fantasia") {
-					setErros((atual) => ({ ...atual, nome_fantasia: err.message }));
-				}
+				setErros((atual) => ({ ...atual, cnpj: err.message }));
 			} else if (err instanceof CnpjDuplicadoError) {
 				setErros((atual) => ({ ...atual, cnpj: err.message }));
-			} else if (err instanceof RazaoSocialDuplicadaError) {
-				setErros((atual) => ({ ...atual, razao_social: err.message }));
-			} else if (err instanceof NomeFantasiaDuplicadoError) {
-				setErros((atual) => ({ ...atual, nome_fantasia: err.message }));
 			} else {
-				setErroGeral(
-					err instanceof Error ? err.message : "Erro ao salvar representada",
-				);
+				setErroGeral(mensagemDeErro(err, "Erro ao salvar representada"));
 			}
 		} finally {
 			setSalvando(false);
@@ -252,7 +237,7 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 							erros.regras_frete_padrao ? "border-destructive" : "border-input"
 						}`}
 					>
-						{REGRAS_FRETE.map((regra) => (
+						{TIPOS_FRETE.map((regra) => (
 							<option key={regra} value={regra}>
 								{ROTULOS_FRETE[regra]}
 							</option>

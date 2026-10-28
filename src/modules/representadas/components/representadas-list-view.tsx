@@ -13,8 +13,9 @@ import {
 	formatarCentavos,
 	formatarCentesimosPercentual,
 } from "../../../shared/domain/decimal-br";
+import { mensagemDeErro } from "../../../shared/domain/formulario";
+import { ROTULOS_FRETE } from "../../../shared/domain/frete";
 import type { Representada } from "../domain/representada.schema";
-import { ROTULOS_FRETE } from "../domain/representada-form";
 import {
 	useRepresentadaActions,
 	useTodasRepresentadas,
@@ -39,7 +40,7 @@ export function RepresentadasListView() {
 		try {
 			await inativar(representada.id);
 		} catch (e) {
-			setErro(e instanceof Error ? e.message : "Erro ao inativar representada");
+			setErro(mensagemDeErro(e, "Erro ao inativar representada"));
 		}
 	};
 
@@ -48,7 +49,7 @@ export function RepresentadasListView() {
 		try {
 			await reativar(representada.id);
 		} catch (e) {
-			setErro(e instanceof Error ? e.message : "Erro ao reativar representada");
+			setErro(mensagemDeErro(e, "Erro ao reativar representada"));
 		}
 	};
 
@@ -88,7 +89,7 @@ export function RepresentadasListView() {
 			{!isLoading && representadas.length > 0 && (
 				<ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
 					{representadas.map((r) => {
-						const isInativa = r.deleted_at !== null;
+						const isInativa = !r.ativo;
 						return (
 							<li
 								key={r.id}

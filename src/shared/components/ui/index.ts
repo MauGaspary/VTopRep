@@ -2,6 +2,7 @@ export * from "./Alert";
 export * from "./Badge";
 export * from "./Button";
 export * from "./FormField";
+export * from "./HomonymWarning";
 export * from "./InactiveRecoveryCard";
 export * from "./Input";
 export * from "./PageHeader";

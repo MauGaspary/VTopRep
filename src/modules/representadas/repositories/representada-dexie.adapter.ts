@@ -5,12 +5,10 @@ import {
 	CnpjDuplicadoError,
 	correspondeBuscaRepresentada,
 	criarRepresentada,
+	detectarConflitoCnpj,
 	inativarRepresentada,
-	NomeFantasiaDuplicadoError,
-	normalizarTextoComparacao,
 	ordenarRepresentadas,
 	ordenarRepresentadasComInativasNoFim,
-	RazaoSocialDuplicadaError,
 	RepresentadaInativaExistenteError,
 	RepresentadaNaoEncontradaError,
 	reativarRepresentada,
@@ -48,7 +46,9 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 			.equals(tenant)
 			.filter(
 				(r) =>
-					r.deleted_at === null && correspondeBuscaRepresentada(r, termoBusca),
+					r.ativo &&
+					r.deleted_at === null &&
+					correspondeBuscaRepresentada(r, termoBusca),
 			)
 			.toArray();
 		return ordenarRepresentadas(lista);
@@ -62,7 +62,10 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		const lista = await this.db.representadas
 			.where("tenant_id")
 			.equals(tenant)
-			.filter((r) => correspondeBuscaRepresentada(r, termoBusca))
+			.filter(
+				(r) =>
+					r.deleted_at === null && correspondeBuscaRepresentada(r, termoBusca),
+			)
 			.toArray();
 		return ordenarRepresentadasComInativasNoFim(lista);
 	}
@@ -77,7 +80,8 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		if (
 			!registro ||
 			registro.tenant_id !== tenant ||
-			(!permitirInativo && registro.deleted_at)
+			registro.deleted_at !== null ||
+			(!permitirInativo && !registro.ativo)
 		) {
 			return undefined;
 		}
@@ -97,7 +101,7 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		});
 
 		await this.db.transaction("rw", this.db.representadas, async () => {
-			await this.garantirUnicidade(tenant, nova, nova.id);
+			await this.garantirCnpjUnico(tenant, nova, { oferecerReativacao: true });
 			await this.db.representadas.add(nova);
 		});
 
@@ -120,7 +124,11 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 				input,
 				this.agora(),
 			);
-			await this.garantirUnicidade(tenant, atualizada, atualizada.id);
+			if (atualizada.cnpj !== existente.cnpj) {
+				await this.garantirCnpjUnico(tenant, atualizada, {
+					oferecerReativacao: true,
+				});
+			}
 			await this.db.representadas.put(atualizada);
 			return atualizada;
 		});
@@ -143,13 +151,15 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		const idValido = IdSchema.parse(id);
 
 		await this.db.transaction("rw", this.db.representadas, async () => {
-			const registro = await this.db.representadas.get(idValido);
-			if (!registro || registro.tenant_id !== tenant) {
+			const registro = await this.obterPorId(tenant, idValido, true);
+			if (!registro) {
 				throw new RepresentadaNaoEncontradaError(idValido);
 			}
 			const reativada = reativarRepresentada(registro, tenant, this.agora());
-			// Ao reativar, garante que não conflita com nenhuma outra ATIVA
-			await this.garantirUnicidadeEntreAtivas(tenant, reativada, reativada.id);
+			// Ao reativar, só importa o conflito com outra ATIVA de mesmo CNPJ.
+			await this.garantirCnpjUnico(tenant, reativada, {
+				oferecerReativacao: false,
+			});
 			await this.db.representadas.put(reativada);
 		});
 	}
@@ -158,82 +168,34 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		tenantId: string,
 		id: string,
 	): Promise<Representada> {
-		const registro = await this.db.representadas.get(id);
-		if (!registro || registro.tenant_id !== tenantId || registro.deleted_at) {
+		const registro = await this.obterPorId(tenantId, id);
+		if (!registro) {
 			throw new RepresentadaNaoEncontradaError(id);
 		}
 		return registro;
 	}
 
-	private async garantirUnicidadeEntreAtivas(
+	/**
+	 * CNPJ é a única chave bloqueante. Com `oferecerReativacao`, um CNPJ igual
+	 * ao de uma inativa vira `RepresentadaInativaExistenteError` para a UI
+	 * oferecer a reativação em vez de criar um duplicado.
+	 */
+	private async garantirCnpjUnico(
 		tenantId: string,
-		dados: Pick<Representada, "cnpj" | "razao_social" | "nome_fantasia">,
-		idAtual: string,
+		dados: Pick<Representada, "id" | "cnpj">,
+		{ oferecerReativacao }: { oferecerReativacao: boolean },
 	): Promise<void> {
-		const ativasDoTenant = await this.db.representadas
-			.where("tenant_id")
-			.equals(tenantId)
-			.filter((r) => r.deleted_at === null && r.id !== idAtual)
+		const candidatos = await this.db.representadas
+			.where("[tenant_id+cnpj]")
+			.equals([tenantId, dados.cnpj])
 			.toArray();
 
-		const razaoNorm = normalizarTextoComparacao(dados.razao_social);
-		const fantasiaNorm = normalizarTextoComparacao(dados.nome_fantasia);
-
-		for (const r of ativasDoTenant) {
-			if (r.cnpj === dados.cnpj) {
-				throw new CnpjDuplicadoError();
-			}
-			if (normalizarTextoComparacao(r.razao_social) === razaoNorm) {
-				throw new RazaoSocialDuplicadaError();
-			}
-			if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
-				throw new NomeFantasiaDuplicadoError();
-			}
+		const conflito = detectarConflitoCnpj(candidatos, dados.cnpj, dados.id);
+		if (conflito?.tipo === "ativo") {
+			throw new CnpjDuplicadoError();
 		}
-	}
-
-	private async garantirUnicidade(
-		tenantId: string,
-		dados: Pick<Representada, "cnpj" | "razao_social" | "nome_fantasia">,
-		idAtual: string,
-	): Promise<void> {
-		const todasDoTenant = await this.db.representadas
-			.where("tenant_id")
-			.equals(tenantId)
-			.filter((r) => r.id !== idAtual)
-			.toArray();
-
-		const razaoNorm = normalizarTextoComparacao(dados.razao_social);
-		const fantasiaNorm = normalizarTextoComparacao(dados.nome_fantasia);
-
-		// Primeiro verifica conflito com representadas ativas
-		for (const r of todasDoTenant) {
-			if (r.deleted_at === null) {
-				if (r.cnpj === dados.cnpj) {
-					throw new CnpjDuplicadoError();
-				}
-				if (normalizarTextoComparacao(r.razao_social) === razaoNorm) {
-					throw new RazaoSocialDuplicadaError();
-				}
-				if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
-					throw new NomeFantasiaDuplicadoError();
-				}
-			}
-		}
-
-		// Em seguida, verifica se existe representada inativa com os mesmos dados
-		for (const r of todasDoTenant) {
-			if (r.deleted_at !== null) {
-				if (r.cnpj === dados.cnpj) {
-					throw new RepresentadaInativaExistenteError(r, "cnpj");
-				}
-				if (normalizarTextoComparacao(r.razao_social) === razaoNorm) {
-					throw new RepresentadaInativaExistenteError(r, "razao_social");
-				}
-				if (normalizarTextoComparacao(r.nome_fantasia) === fantasiaNorm) {
-					throw new RepresentadaInativaExistenteError(r, "nome_fantasia");
-				}
-			}
+		if (conflito?.tipo === "inativo" && oferecerReativacao) {
+			throw new RepresentadaInativaExistenteError(conflito.registro);
 		}
 	}
 }

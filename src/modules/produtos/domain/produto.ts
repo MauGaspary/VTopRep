@@ -1,3 +1,9 @@
+import { garantirMesmoTenant } from "../../../shared/domain/tenant";
+import { normalizarTexto } from "../../../shared/domain/texto";
+import {
+	type ConflitoUnicidade,
+	detectarConflito,
+} from "../../../shared/domain/unicidade";
 import {
 	type Produto,
 	type ProdutoInput,
@@ -9,7 +15,7 @@ export class SkuDuplicadoError extends Error {
 	readonly sku: string;
 
 	constructor(sku: string) {
-		super(`Já existe um produto ativo cadastrado com o SKU "${sku}".`);
+		super(`Já existe um produto ativo com o SKU "${sku}" nesta representada.`);
 		this.name = "SkuDuplicadoError";
 		this.sku = sku;
 	}
@@ -20,7 +26,7 @@ export class ProdutoInativoExistenteError extends Error {
 
 	constructor(produtoInativo: Produto) {
 		super(
-			`Já existe um produto inativo com o SKU "${produtoInativo.sku}" (${produtoInativo.descricao}). Deseja reativá-lo?`,
+			`Já existe um produto inativo com o SKU "${produtoInativo.sku}" (${produtoInativo.descricao}) nesta representada. Deseja reativá-lo?`,
 		);
 		this.name = "ProdutoInativoExistenteError";
 		this.produtoInativo = produtoInativo;
@@ -49,102 +55,99 @@ export class RepresentadaNaoVinculadaError extends Error {
 	}
 }
 
-export interface DominioProdutoOptions {
-	gerarId?: () => string;
-	agora?: () => string;
-}
-
 export function normalizarSku(sku: string): string {
 	return sku.trim().toUpperCase();
 }
 
-export function normalizarTexto(texto: string): string {
-	return texto
-		.trim()
-		.toLowerCase()
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "");
+function camposEditaveis(input: ProdutoInput) {
+	const dados = ProdutoInputSchema.parse(input);
+	return {
+		representada_id: dados.representada_id,
+		sku: normalizarSku(dados.sku),
+		descricao: dados.descricao,
+		unidade_medida: dados.unidade_medida.toUpperCase(),
+		multiplo_embalagem: dados.multiplo_embalagem ?? 1,
+	};
 }
 
-export function criarProduto(
+interface CriarProdutoParams {
+	tenantId: string;
+	input: ProdutoInput;
+	id: string;
+	agora: string;
+}
+
+export function criarProduto({
+	tenantId,
+	input,
+	id,
+	agora,
+}: CriarProdutoParams): Produto {
+	return ProdutoSchema.parse({
+		...camposEditaveis(input),
+		id,
+		tenant_id: tenantId,
+		ativo: true,
+		created_at: agora,
+		updated_at: agora,
+		deleted_at: null,
+	});
+}
+
+/** Aplica alterações preservando identidade, tenant, estado e data de criação. */
+export function atualizarProduto(
+	existente: Produto,
 	tenantId: string,
 	input: ProdutoInput,
-	options: DominioProdutoOptions = {},
+	agora: string,
 ): Produto {
-	const dadosValidados = ProdutoInputSchema.parse(input);
-	const gerarId = options.gerarId ?? (() => crypto.randomUUID());
-	const agora = options.agora ?? (() => new Date().toISOString());
-	const timestamp = agora();
-
-	const novoProduto: Produto = {
-		id: gerarId(),
-		tenant_id: tenantId,
-		representada_id: dadosValidados.representada_id,
-		sku: dadosValidados.sku.trim(),
-		descricao: dadosValidados.descricao.trim(),
-		unidade_medida: dadosValidados.unidade_medida.trim().toUpperCase(),
-		multiplo_embalagem: dadosValidados.multiplo_embalagem ?? 1,
-		ativo: true,
-		created_at: timestamp,
-		updated_at: timestamp,
-		deleted_at: null,
-	};
-
-	return ProdutoSchema.parse(novoProduto);
+	garantirMesmoTenant(existente, tenantId);
+	return ProdutoSchema.parse({
+		...existente,
+		...camposEditaveis(input),
+		updated_at: agora,
+	});
 }
 
-export function atualizarProduto(
-	produtoExistente: Produto,
-	input: ProdutoInput,
-	options: DominioProdutoOptions = {},
-): Produto {
-	const dadosValidados = ProdutoInputSchema.parse(input);
-	const agora = options.agora ?? (() => new Date().toISOString());
-
-	const produtoAtualizado: Produto = {
-		...produtoExistente,
-		representada_id: dadosValidados.representada_id,
-		sku: dadosValidados.sku.trim(),
-		descricao: dadosValidados.descricao.trim(),
-		unidade_medida: dadosValidados.unidade_medida.trim().toUpperCase(),
-		multiplo_embalagem: dadosValidados.multiplo_embalagem ?? 1,
-		updated_at: agora(),
-	};
-
-	return ProdutoSchema.parse(produtoAtualizado);
-}
-
+/** Inativação (estado de negócio, reversível): marca `ativo = false`. Idempotente. */
 export function inativarProduto(
-	produto: Produto,
-	options: DominioProdutoOptions = {},
+	existente: Produto,
+	tenantId: string,
+	agora: string,
 ): Produto {
-	const agora = options.agora ?? (() => new Date().toISOString());
-	const timestamp = agora();
-
-	const inativado: Produto = {
-		...produto,
-		ativo: false,
-		updated_at: timestamp,
-		deleted_at: timestamp,
-	};
-
-	return ProdutoSchema.parse(inativado);
+	garantirMesmoTenant(existente, tenantId);
+	if (!existente.ativo) return existente;
+	return { ...existente, ativo: false, updated_at: agora };
 }
 
+/** Reativação: marca `ativo = true`. Idempotente. */
 export function reativarProduto(
-	produto: Produto,
-	options: DominioProdutoOptions = {},
+	existente: Produto,
+	tenantId: string,
+	agora: string,
 ): Produto {
-	const agora = options.agora ?? (() => new Date().toISOString());
+	garantirMesmoTenant(existente, tenantId);
+	if (existente.ativo) return existente;
+	return { ...existente, ativo: true, updated_at: agora };
+}
 
-	const reativado: Produto = {
-		...produto,
-		ativo: true,
-		updated_at: agora(),
-		deleted_at: null,
-	};
-
-	return ProdutoSchema.parse(reativado);
+/**
+ * Conflito bloqueante: outro produto (não excluído) da mesma representada
+ * com o mesmo SKU normalizado. Representadas diferentes podem repetir SKU.
+ */
+export function detectarConflitoSku(
+	candidatos: readonly Produto[],
+	chave: Pick<Produto, "representada_id" | "sku">,
+	idAtual?: string,
+): ConflitoUnicidade<Produto> | null {
+	const sku = normalizarSku(chave.sku);
+	return detectarConflito(
+		candidatos,
+		(p) =>
+			p.representada_id === chave.representada_id &&
+			normalizarSku(p.sku) === sku,
+		idAtual,
+	);
 }
 
 export function correspondeBuscaProduto(

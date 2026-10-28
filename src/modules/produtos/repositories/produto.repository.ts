@@ -1,11 +1,13 @@
 import type { Produto, ProdutoInput } from "../domain/produto.schema";
 
 export interface ProdutoRepository {
+	/** Lista produtos ativos do tenant. */
 	listar(
 		tenantId: string,
 		termoBusca?: string,
 		representadaId?: string,
 	): Promise<Produto[]>;
+	/** Lista ativos e inativos do tenant (sem excluídos), com inativos ao final. */
 	listarTodos(
 		tenantId: string,
 		termoBusca?: string,
@@ -17,7 +19,12 @@ export interface ProdutoRepository {
 		id: string,
 		permitirInativo?: boolean,
 	): Promise<Produto | null>;
-	obterPorSku(tenantId: string, sku: string): Promise<Produto | null>;
+	/** SKU é único por representada, não por tenant. */
+	obterPorSku(
+		tenantId: string,
+		representadaId: string,
+		sku: string,
+	): Promise<Produto | null>;
 	criar(tenantId: string, input: ProdutoInput): Promise<Produto>;
 	atualizar(
 		tenantId: string,

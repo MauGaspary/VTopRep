@@ -3,8 +3,8 @@ import {
 	formatarInteiroComoDecimalBr,
 	parseDecimalBrParaInteiro,
 } from "../../../shared/domain/decimal-br";
+import { mapearIssues } from "../../../shared/domain/formulario";
 import {
-	type RegraFrete,
 	type Representada,
 	RepresentadaInputSchema,
 	type RepresentadaInputValidado,
@@ -26,13 +26,7 @@ export type RepresentadaFormErros = Partial<
 
 export type ResultadoFormulario =
 	| { success: true; data: RepresentadaInputValidado }
-	| { success: false; erros: RepresentadaFormErros };
-
-export const ROTULOS_FRETE: Record<RegraFrete, string> = {
-	CIF: "CIF (frete pago pela fábrica)",
-	FOB: "FOB (frete pago pelo cliente)",
-	FOB_REDESPACHO: "FOB Redespacho",
-};
+	| { success: false; erros: RepresentadaFormErros; geral: string | null };
 
 export function valoresIniciaisFormulario(
 	representada?: Representada,
@@ -70,15 +64,23 @@ const CAMPO_POR_PATH: Record<string, keyof RepresentadaFormValues> = {
 	regras_frete_padrao: "regras_frete_padrao",
 };
 
+function campoDoCaminho(
+	caminho: readonly PropertyKey[],
+): keyof RepresentadaFormValues | undefined {
+	const chave = caminho[0];
+	return typeof chave === "string" ? CAMPO_POR_PATH[chave] : undefined;
+}
+
 /** Converte e valida os valores do formulário em um input de domínio. */
 export function validarFormularioRepresentada(
 	valores: RepresentadaFormValues,
 ): ResultadoFormulario {
-	const erros: RepresentadaFormErros = {};
+	const errosConversao: RepresentadaFormErros = {};
 
 	const percentual = parseDecimalBrParaInteiro(valores.percentual_comissao);
 	if (percentual === null) {
-		erros.percentual_comissao = "Informe um percentual válido (ex: 5,00)";
+		errosConversao.percentual_comissao =
+			"Informe um percentual válido (ex: 5,00)";
 	}
 
 	const pedidoMinimo =
@@ -86,7 +88,8 @@ export function validarFormularioRepresentada(
 			? 0
 			: parseDecimalBrParaInteiro(valores.valor_pedido_minimo);
 	if (pedidoMinimo === null) {
-		erros.valor_pedido_minimo = "Informe um valor válido (ex: 1.500,00)";
+		errosConversao.valor_pedido_minimo =
+			"Informe um valor válido (ex: 1.500,00)";
 	}
 
 	const resultado = RepresentadaInputSchema.safeParse({
@@ -98,20 +101,14 @@ export function validarFormularioRepresentada(
 		regras_frete_padrao: valores.regras_frete_padrao,
 	});
 
-	if (!resultado.success) {
-		for (const issue of resultado.error.issues) {
-			const chave = issue.path[0];
-			const campo =
-				typeof chave === "string" ? CAMPO_POR_PATH[chave] : undefined;
-			if (campo && erros[campo] === undefined) {
-				erros[campo] = issue.message;
-			}
-		}
+	if (resultado.success && Object.keys(errosConversao).length === 0) {
+		return { success: true, data: resultado.data };
 	}
 
-	if (Object.keys(erros).length > 0 || !resultado.success) {
-		return { success: false, erros };
-	}
-
-	return { success: true, data: resultado.data };
+	const { erros, geral } = mapearIssues(
+		resultado.success ? [] : resultado.error.issues,
+		campoDoCaminho,
+		errosConversao,
+	);
+	return { success: false, erros, geral };
 }

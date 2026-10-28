@@ -10,6 +10,10 @@ import type { Produto } from "../modules/produtos/domain/produto.schema";
 import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
 import type { Representada } from "../modules/representadas/domain/representada.schema";
 import type { OutboxMutation } from "../modules/sync/domain/outbox.schema";
+import { migrarParaV4 } from "./migrations/v4";
+import { migrarParaV5 } from "./migrations/v5";
+
+export const NOME_BANCO_PADRAO = "VTop_Rep_DB";
 
 export class AppDatabase extends Dexie {
 	clientes!: Table<Cliente, string>;
@@ -24,8 +28,8 @@ export class AppDatabase extends Dexie {
 	outbox!: Table<OutboxMutation, string>;
 	representadas!: Table<Representada, string>;
 
-	constructor() {
-		super("VTop_Rep_DB");
+	constructor(nome = NOME_BANCO_PADRAO) {
+		super(nome);
 
 		this.version(1).stores({
 			clientes: "id, tenant_id, [tenant_id+cnpj_cpf], [tenant_id+deleted_at]",
@@ -57,6 +61,21 @@ export class AppDatabase extends Dexie {
 		this.version(3).stores({
 			representadas: "id, tenant_id, [tenant_id+cnpj]",
 		});
+
+		// v4: tenant_id nas tabelas filhas de clientes, SKU único por
+		// representada, `ativo` separado de `deleted_at`, outbox em snake_case.
+		this.version(4)
+			.stores({
+				clientes_enderecos: "id, tenant_id, [tenant_id+cliente_id]",
+				clientes_contatos: "id, tenant_id, [tenant_id+cliente_id]",
+				produtos:
+					"id, tenant_id, [tenant_id+representada_id+sku], [tenant_id+deleted_at]",
+				outbox: "id, tenant_id, [tenant_id+status]",
+			})
+			.upgrade(migrarParaV4);
+
+		// v5: timestamps e soft delete em endereços e contatos (sem mudar índices).
+		this.version(5).stores({}).upgrade(migrarParaV5);
 	}
 }
 

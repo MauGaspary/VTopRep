@@ -1,14 +1,42 @@
 import { describe, expect, it } from "vitest";
 import {
+	calcularDigitosVerificadoresCpf,
 	formatarCpfCnpj,
 	isCpfOuCnpjValido,
 	isCpfValido,
 	normalizarCpf,
+	normalizarCpfCnpj,
 } from "./cpf-cnpj";
 
 describe("normalizarCpf", () => {
 	it("remove caracteres não numéricos", () => {
 		expect(normalizarCpf(" 123.456.789-00 ")).toBe("12345678900");
+	});
+});
+
+describe("normalizarCpfCnpj", () => {
+	it("remove pontuação e converte para maiúsculas (CNPJ alfanumérico)", () => {
+		expect(normalizarCpfCnpj(" 529.982.247-25 ")).toBe("52998224725");
+		expect(normalizarCpfCnpj("12.abc.345/01de-35")).toBe("12ABC34501DE35");
+	});
+});
+
+describe("calcularDigitosVerificadoresCpf", () => {
+	it("calcula os DVs de bases conhecidas", () => {
+		expect(calcularDigitosVerificadoresCpf("529982247")).toBe("25");
+		expect(calcularDigitosVerificadoresCpf("529.982.247")).toBe("25");
+	});
+
+	it("gera CPFs que passam na validação", () => {
+		for (const base of ["123456789", "000000001", "987654321"]) {
+			expect(
+				isCpfValido(`${base}${calcularDigitosVerificadoresCpf(base)}`),
+			).toBe(true);
+		}
+	});
+
+	it("lança erro para base inválida", () => {
+		expect(() => calcularDigitosVerificadoresCpf("123")).toThrow();
 	});
 });
 

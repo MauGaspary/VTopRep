@@ -1,13 +1,14 @@
 import { describe, expect, it } from "vitest";
+import { TenantDivergenteError } from "../../../shared/domain/tenant";
 import {
 	atualizarRepresentada,
 	correspondeBuscaRepresentada,
 	criarRepresentada,
+	detectarConflitoCnpj,
 	inativarRepresentada,
 	ordenarRepresentadas,
 	ordenarRepresentadasComInativasNoFim,
 	reativarRepresentada,
-	TenantDivergenteError,
 } from "./representada";
 import {
 	type RepresentadaInput,
@@ -17,6 +18,7 @@ import {
 const TENANT = "11111111-1111-4111-a111-111111111111";
 const OUTRO_TENANT = "22222222-2222-4222-a222-222222222222";
 const ID = "33333333-3333-4333-a333-333333333333";
+const OUTRO_ID = "44444444-4444-4444-a444-444444444444";
 const AGORA = "2026-10-22T12:00:00.000Z";
 const DEPOIS = "2026-10-23T12:00:00.000Z";
 
@@ -52,6 +54,7 @@ describe("criarRepresentada", () => {
 			percentual_comissao_padrao: 500,
 			valor_pedido_minimo_centavos: 150000,
 			regras_frete_padrao: "CIF",
+			ativo: true,
 			created_at: AGORA,
 			updated_at: AGORA,
 			deleted_at: null,
@@ -142,9 +145,10 @@ describe("atualizarRepresentada", () => {
 });
 
 describe("inativarRepresentada", () => {
-	it("marca deleted_at e updated_at", () => {
+	it("marca ativo = false e updated_at, sem tombstone", () => {
 		const inativa = inativarRepresentada(criar(), TENANT, DEPOIS);
-		expect(inativa.deleted_at).toBe(DEPOIS);
+		expect(inativa.ativo).toBe(false);
+		expect(inativa.deleted_at).toBeNull();
 		expect(inativa.updated_at).toBe(DEPOIS);
 	});
 
@@ -166,13 +170,14 @@ describe("inativarRepresentada", () => {
 });
 
 describe("reativarRepresentada", () => {
-	it("limpa deleted_at e atualiza updated_at", () => {
+	it("marca ativo = true e atualiza updated_at", () => {
 		const inativa = inativarRepresentada(criar(), TENANT, DEPOIS);
 		const reativada = reativarRepresentada(
 			inativa,
 			TENANT,
 			"2026-10-24T12:00:00.000Z",
 		);
+		expect(reativada.ativo).toBe(true);
 		expect(reativada.deleted_at).toBeNull();
 		expect(reativada.updated_at).toBe("2026-10-24T12:00:00.000Z");
 	});
@@ -185,9 +190,26 @@ describe("reativarRepresentada", () => {
 
 	it("bloqueia reativação com tenant divergente", () => {
 		const inativa = inativarRepresentada(criar(), TENANT, DEPOIS);
-		expect(() => inativarRepresentada(inativa, OUTRO_TENANT, DEPOIS)).toThrow(
+		expect(() => reativarRepresentada(inativa, OUTRO_TENANT, DEPOIS)).toThrow(
 			TenantDivergenteError,
 		);
+	});
+});
+
+describe("detectarConflitoCnpj", () => {
+	it("detecta CNPJ igual mesmo com outra formatação", () => {
+		const existente = criar();
+		expect(
+			detectarConflitoCnpj([existente], "11.222.333/0001-81", OUTRO_ID),
+		).toEqual({ tipo: "ativo", registro: existente });
+	});
+
+	it("diferencia conflito com inativa e ignora a própria representada", () => {
+		const inativa = inativarRepresentada(criar(), TENANT, DEPOIS);
+		expect(
+			detectarConflitoCnpj([inativa], "11222333000181", OUTRO_ID)?.tipo,
+		).toBe("inativo");
+		expect(detectarConflitoCnpj([inativa], "11222333000181", ID)).toBeNull();
 	});
 });
 
@@ -232,10 +254,10 @@ describe("ordenarRepresentadas", () => {
 describe("ordenarRepresentadasComInativasNoFim", () => {
 	it("coloca ativas primeiro e inativas no final, ordenadas por nome fantasia", () => {
 		const lista = [
-			{ ...criar(), nome_fantasia: "Zeta Ativa", deleted_at: null },
-			{ ...criar(), nome_fantasia: "Alfa Inativa", deleted_at: AGORA },
-			{ ...criar(), nome_fantasia: "Beta Ativa", deleted_at: null },
-			{ ...criar(), nome_fantasia: "Zeta Inativa", deleted_at: AGORA },
+			{ ...criar(), nome_fantasia: "Zeta Ativa", ativo: true },
+			{ ...criar(), nome_fantasia: "Alfa Inativa", ativo: false },
+			{ ...criar(), nome_fantasia: "Beta Ativa", ativo: true },
+			{ ...criar(), nome_fantasia: "Zeta Inativa", ativo: false },
 		];
 
 		const ordenada = ordenarRepresentadasComInativasNoFim(lista);

@@ -17,6 +17,7 @@ describe("ProdutoDexieAdapter", () => {
 	const repIdValida = "33333333-3333-4333-a333-333333333333";
 	const repIdOutroTenant = "44444444-4444-4444-a444-444444444444";
 	const repIdInativa = "55555555-5555-4555-a555-555555555555";
+	const repIdOutraValida = "66666666-6666-4666-a666-666666666666";
 
 	beforeEach(async () => {
 		await db.produtos.clear();
@@ -31,6 +32,7 @@ describe("ProdutoDexieAdapter", () => {
 			percentual_comissao_padrao: 500,
 			valor_pedido_minimo_centavos: 10000,
 			regras_frete_padrao: "FOB",
+			ativo: true,
 			created_at: new Date().toISOString(),
 			updated_at: new Date().toISOString(),
 			deleted_at: null,
@@ -45,7 +47,7 @@ describe("ProdutoDexieAdapter", () => {
 		const repInativa: Representada = {
 			...repValida,
 			id: repIdInativa,
-			deleted_at: new Date().toISOString(),
+			ativo: false,
 		};
 
 		await db.representadas.bulkAdd([repValida, repOutroTenant, repInativa]);
@@ -124,6 +126,7 @@ describe("ProdutoDexieAdapter", () => {
 				percentual_comissao_padrao: 400,
 				valor_pedido_minimo_centavos: 5000,
 				regras_frete_padrao: "CIF",
+				ativo: true,
 				created_at: new Date().toISOString(),
 				updated_at: new Date().toISOString(),
 				deleted_at: null,
@@ -208,6 +211,62 @@ describe("ProdutoDexieAdapter", () => {
 				ProdutoInativoExistenteError,
 			);
 		});
+
+		it("permite o mesmo SKU em representadas distintas do mesmo tenant", async () => {
+			await db.representadas.add({
+				id: repIdOutraValida,
+				tenant_id: tenant1,
+				razao_social: "Fabrica Beta Ltda",
+				nome_fantasia: "Fabrica Beta",
+				cnpj: "12ABC34501DE35",
+				percentual_comissao_padrao: 300,
+				valor_pedido_minimo_centavos: 0,
+				regras_frete_padrao: "CIF",
+				ativo: true,
+				created_at: new Date().toISOString(),
+				updated_at: new Date().toISOString(),
+				deleted_at: null,
+			});
+
+			const daAlpha = await adapter.criar(tenant1, inputValido);
+			const daBeta = await adapter.criar(tenant1, {
+				...inputValido,
+				sku: "prd-new-01",
+				representada_id: repIdOutraValida,
+			});
+
+			expect(daBeta.sku).toBe(daAlpha.sku);
+			expect(
+				await adapter.obterPorSku(tenant1, repIdOutraValida, "PRD-NEW-01"),
+			).toEqual(daBeta);
+			expect(
+				await adapter.obterPorSku(tenant1, repIdValida, " prd-new-01 "),
+			).toEqual(daAlpha);
+		});
+
+		it("ignora registros excluídos (tombstone) na unicidade de SKU", async () => {
+			await db.produtos.add(
+				mockProduto({
+					sku: "PRD-NEW-01",
+					deleted_at: new Date().toISOString(),
+				}),
+			);
+
+			await expect(adapter.criar(tenant1, inputValido)).resolves.toBeDefined();
+		});
+
+		it("serializa criações concorrentes com o mesmo SKU (transação)", async () => {
+			const resultados = await Promise.allSettled([
+				adapter.criar(tenant1, inputValido),
+				adapter.criar(tenant1, inputValido),
+			]);
+
+			expect(resultados.map((r) => r.status).sort()).toEqual([
+				"fulfilled",
+				"rejected",
+			]);
+			expect(await db.produtos.count()).toBe(1);
+		});
 	});
 
 	describe("atualizar", () => {
@@ -246,7 +305,7 @@ describe("ProdutoDexieAdapter", () => {
 	});
 
 	describe("inativar e reativar", () => {
-		it("inativa produto com soft-delete e permite reativação", async () => {
+		it("inativa produto (ativo = false, sem tombstone) e permite reativação", async () => {
 			const criado = await adapter.criar(tenant1, {
 				representada_id: repIdValida,
 				sku: "SKU-REATIVAVEL",
@@ -256,7 +315,8 @@ describe("ProdutoDexieAdapter", () => {
 
 			const inativado = await adapter.inativar(tenant1, criado.id);
 			expect(inativado.ativo).toBe(false);
-			expect(inativado.deleted_at).not.toBeNull();
+			expect(inativado.deleted_at).toBeNull();
+			expect(await db.produtos.get(criado.id)).toEqual(inativado);
 
 			// Não deve aparecer na listagem de ativos
 			const ativos = await adapter.listar(tenant1);
@@ -282,14 +342,44 @@ describe("ProdutoDexieAdapter", () => {
 
 			await adapter.inativar(tenant1, criado.id);
 
-			// Inativa a representada via soft delete
-			await db.representadas.update(repIdValida, {
-				deleted_at: new Date().toISOString(),
-			});
+			await db.representadas.update(repIdValida, { ativo: false });
 
 			await expect(adapter.reativar(tenant1, criado.id)).rejects.toBeInstanceOf(
 				RepresentadaNaoVinculadaError,
 			);
+		});
+
+		it("impede reativação se outro produto ativo assumiu o mesmo SKU", async () => {
+			const criado = await adapter.criar(tenant1, {
+				representada_id: repIdValida,
+				sku: "SKU-DISPUTADO",
+				descricao: "Original",
+				unidade_medida: "UN",
+			});
+			await adapter.inativar(tenant1, criado.id);
+			// Ex.: chegou via sincronização outro produto ativo com o mesmo SKU
+			await db.produtos.add(mockProduto({ sku: "SKU-DISPUTADO" }));
+
+			await expect(adapter.reativar(tenant1, criado.id)).rejects.toBeInstanceOf(
+				SkuDuplicadoError,
+			);
+		});
+
+		it("não permite inativar nem reativar produto de outro tenant", async () => {
+			const criado = await adapter.criar(tenant1, {
+				representada_id: repIdValida,
+				sku: "SKU-T1",
+				descricao: "Do tenant 1",
+				unidade_medida: "UN",
+			});
+
+			await expect(adapter.inativar(tenant2, criado.id)).rejects.toBeInstanceOf(
+				ProdutoNaoEncontradoError,
+			);
+			await expect(adapter.reativar(tenant2, criado.id)).rejects.toBeInstanceOf(
+				ProdutoNaoEncontradoError,
+			);
+			expect((await db.produtos.get(criado.id))?.ativo).toBe(true);
 		});
 	});
 });

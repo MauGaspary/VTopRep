@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
-import { normalizarTextoComparacao } from "../../representadas/domain/representada";
 import {
 	atualizarClienteDados,
 	type ClienteCompleto,
@@ -9,23 +8,15 @@ import {
 	CpfCnpjDuplicadoError,
 	correspondeBuscaCliente,
 	criarClienteCompleto,
+	detectarConflitoDocumento,
+	detectarHomonimosCliente,
+	type HomonimoCliente,
 	inativarCliente,
-	NomeFantasiaClienteDuplicadoError,
 	ordenarClientesComInativosNoFim,
-	RazaoSocialClienteDuplicadaError,
 	reativarCliente,
+	sincronizarFilhosCliente,
 } from "../domain/cliente";
 import type { Cliente } from "../domain/cliente.schema";
-import {
-	type ClienteContato,
-	ClienteContatoInputSchema,
-	ClienteContatoSchema,
-} from "../domain/cliente-contato.schema";
-import {
-	type ClienteEndereco,
-	ClienteEnderecoInputSchema,
-	ClienteEnderecoSchema,
-} from "../domain/cliente-endereco.schema";
 import type { ClienteRepository, SalvarClienteDTO } from "./cliente.repository";
 
 const TenantIdSchema = z.string().uuid("tenantId inválido");
@@ -54,7 +45,10 @@ export class ClienteDexieAdapter implements ClienteRepository {
 			.where("tenant_id")
 			.equals(tenant)
 			.filter(
-				(c) => c.deleted_at === null && correspondeBuscaCliente(c, termoBusca),
+				(c) =>
+					c.ativo &&
+					c.deleted_at === null &&
+					correspondeBuscaCliente(c, termoBusca),
 			)
 			.toArray();
 		return ordenarClientesComInativosNoFim(lista);
@@ -65,7 +59,9 @@ export class ClienteDexieAdapter implements ClienteRepository {
 		const lista = await this.db.clientes
 			.where("tenant_id")
 			.equals(tenant)
-			.filter((c) => correspondeBuscaCliente(c, termoBusca))
+			.filter(
+				(c) => c.deleted_at === null && correspondeBuscaCliente(c, termoBusca),
+			)
 			.toArray();
 		return ordenarClientesComInativosNoFim(lista);
 	}
@@ -78,21 +74,25 @@ export class ClienteDexieAdapter implements ClienteRepository {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const idValido = IdSchema.parse(id);
 
-		const cliente = await this.db.clientes.get(idValido);
-		if (
-			!cliente ||
-			cliente.tenant_id !== tenant ||
-			(!permitirInativo && cliente.deleted_at !== null)
-		) {
+		const cliente = await this.obterCliente(tenant, idValido, permitirInativo);
+		if (!cliente) {
 			return undefined;
 		}
 
-		const [enderecos, contatos] = await Promise.all([
-			this.db.clientes_enderecos.where("cliente_id").equals(idValido).toArray(),
-			this.db.clientes_contatos.where("cliente_id").equals(idValido).toArray(),
-		]);
+		return { cliente, ...(await this.obterFilhosVivos(tenant, idValido)) };
+	}
 
-		return { cliente, enderecos, contatos };
+	async buscarHomonimos(
+		tenantId: string,
+		nomes: Pick<Cliente, "razao_social" | "nome_fantasia">,
+		idAtual?: string,
+	): Promise<HomonimoCliente[]> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const candidatos = await this.db.clientes
+			.where("tenant_id")
+			.equals(tenant)
+			.toArray();
+		return detectarHomonimosCliente(candidatos, nomes, idAtual);
 	}
 
 	async criar(
@@ -115,11 +115,9 @@ export class ClienteDexieAdapter implements ClienteRepository {
 			"rw",
 			[this.db.clientes, this.db.clientes_enderecos, this.db.clientes_contatos],
 			async () => {
-				await this.garantirUnicidade(
-					tenant,
-					completo.cliente,
-					completo.cliente.id,
-				);
+				await this.garantirDocumentoUnico(tenant, completo.cliente, {
+					oferecerReativacao: true,
+				});
 				await this.db.clientes.add(completo.cliente);
 
 				if (completo.enderecos.length > 0) {
@@ -147,71 +145,47 @@ export class ClienteDexieAdapter implements ClienteRepository {
 			"rw",
 			[this.db.clientes, this.db.clientes_enderecos, this.db.clientes_contatos],
 			async () => {
-				const existente = await this.db.clientes.get(idValido);
-				if (
-					!existente ||
-					existente.tenant_id !== tenant ||
-					existente.deleted_at
-				) {
+				const existente = await this.obterCliente(tenant, idValido, false);
+				if (!existente) {
 					throw new ClienteNaoEncontradoError(idValido);
 				}
 
+				const agora = this.agora();
 				const atualizado = atualizarClienteDados(
 					existente,
 					tenant,
 					dto.cliente,
-					this.agora(),
+					agora,
 				);
 
-				await this.garantirUnicidade(tenant, atualizado, atualizado.id);
+				if (atualizado.cnpj_cpf !== existente.cnpj_cpf) {
+					await this.garantirDocumentoUnico(tenant, atualizado, {
+						oferecerReativacao: true,
+					});
+				}
 
-				// Processar endereços: substituir coleção do cliente
-				const novosEnderecos: ClienteEndereco[] = (dto.enderecos || []).map(
-					(end) => {
-						const parsed = ClienteEnderecoInputSchema.parse(end);
-						return ClienteEnderecoSchema.parse({
-							...parsed,
-							id: parsed.id ?? this.gerarId(),
-							cliente_id: idValido,
-						});
-					},
-				);
-
-				// Processar contatos: substituir coleção do cliente
-				const novosContatos: ClienteContato[] = (dto.contatos || []).map(
-					(cont) => {
-						const parsed = ClienteContatoInputSchema.parse(cont);
-						return ClienteContatoSchema.parse({
-							...parsed,
-							id: parsed.id ?? this.gerarId(),
-							cliente_id: idValido,
-						});
-					},
-				);
+				// Endereços e contatos: grava só novos, alterados e removidos
+				// (tombstone), para o delta sync enxergar cada mudança.
+				const filhos = sincronizarFilhosCliente({
+					tenantId: tenant,
+					clienteId: idValido,
+					agora,
+					enderecosInput: dto.enderecos,
+					contatosInput: dto.contatos,
+					existentes: await this.obterFilhosVivos(tenant, idValido),
+					gerarId: this.gerarId,
+				});
 
 				await Promise.all([
 					this.db.clientes.put(atualizado),
-					this.db.clientes_enderecos
-						.where("cliente_id")
-						.equals(idValido)
-						.delete(),
-					this.db.clientes_contatos
-						.where("cliente_id")
-						.equals(idValido)
-						.delete(),
+					this.db.clientes_enderecos.bulkPut(filhos.gravar.enderecos),
+					this.db.clientes_contatos.bulkPut(filhos.gravar.contatos),
 				]);
-
-				if (novosEnderecos.length > 0) {
-					await this.db.clientes_enderecos.bulkAdd(novosEnderecos);
-				}
-				if (novosContatos.length > 0) {
-					await this.db.clientes_contatos.bulkAdd(novosContatos);
-				}
 
 				return {
 					cliente: atualizado,
-					enderecos: novosEnderecos,
-					contatos: novosContatos,
+					enderecos: filhos.enderecos,
+					contatos: filhos.contatos,
 				};
 			},
 		);
@@ -222,12 +196,8 @@ export class ClienteDexieAdapter implements ClienteRepository {
 		const idValido = IdSchema.parse(id);
 
 		await this.db.transaction("rw", this.db.clientes, async () => {
-			const existente = await this.db.clientes.get(idValido);
-			if (
-				!existente ||
-				existente.tenant_id !== tenant ||
-				existente.deleted_at
-			) {
+			const existente = await this.obterCliente(tenant, idValido, false);
+			if (!existente) {
 				throw new ClienteNaoEncontradoError(idValido);
 			}
 			await this.db.clientes.put(
@@ -241,103 +211,82 @@ export class ClienteDexieAdapter implements ClienteRepository {
 		const idValido = IdSchema.parse(id);
 
 		await this.db.transaction("rw", this.db.clientes, async () => {
-			const existente = await this.db.clientes.get(idValido);
-			if (!existente || existente.tenant_id !== tenant) {
+			const existente = await this.obterCliente(tenant, idValido, true);
+			if (!existente) {
 				throw new ClienteNaoEncontradoError(idValido);
 			}
 			const reativado = reativarCliente(existente, tenant, this.agora());
-			await this.garantirUnicidadeEntreAtivos(tenant, reativado, reativado.id);
+			// Ao reativar, só importa o conflito com outro ATIVO de mesmo documento.
+			await this.garantirDocumentoUnico(tenant, reativado, {
+				oferecerReativacao: false,
+			});
 			await this.db.clientes.put(reativado);
 		});
 	}
 
-	private async garantirUnicidade(
+	/** Endereços e contatos do cliente no tenant, sem os excluídos (tombstones). */
+	private async obterFilhosVivos(
 		tenantId: string,
-		dados: Pick<Cliente, "cnpj_cpf" | "razao_social" | "nome_fantasia">,
-		idAtual: string,
-	): Promise<void> {
-		const todos = await this.db.clientes
-			.where("tenant_id")
-			.equals(tenantId)
-			.filter((c) => c.id !== idAtual)
-			.toArray();
-
-		const razaoNorm = normalizarTextoComparacao(dados.razao_social);
-		const fantasiaNorm =
-			dados.nome_fantasia && dados.nome_fantasia.length > 0
-				? normalizarTextoComparacao(dados.nome_fantasia)
-				: null;
-
-		// 1. Checa conflito com ativos
-		for (const c of todos) {
-			if (c.deleted_at === null) {
-				if (c.cnpj_cpf === dados.cnpj_cpf) {
-					throw new CpfCnpjDuplicadoError();
-				}
-				if (normalizarTextoComparacao(c.razao_social) === razaoNorm) {
-					throw new RazaoSocialClienteDuplicadaError();
-				}
-				if (
-					fantasiaNorm !== null &&
-					c.nome_fantasia &&
-					normalizarTextoComparacao(c.nome_fantasia) === fantasiaNorm
-				) {
-					throw new NomeFantasiaClienteDuplicadoError();
-				}
-			}
-		}
-
-		// 2. Checa conflito com inativos
-		for (const c of todos) {
-			if (c.deleted_at !== null) {
-				if (c.cnpj_cpf === dados.cnpj_cpf) {
-					throw new ClienteInativoExistenteError(c, "cnpj_cpf");
-				}
-				if (normalizarTextoComparacao(c.razao_social) === razaoNorm) {
-					throw new ClienteInativoExistenteError(c, "razao_social");
-				}
-				if (
-					fantasiaNorm !== null &&
-					c.nome_fantasia &&
-					normalizarTextoComparacao(c.nome_fantasia) === fantasiaNorm
-				) {
-					throw new ClienteInativoExistenteError(c, "nome_fantasia");
-				}
-			}
-		}
+		clienteId: string,
+	): Promise<Pick<ClienteCompleto, "enderecos" | "contatos">> {
+		const [enderecos, contatos] = await Promise.all([
+			this.db.clientes_enderecos
+				.where("[tenant_id+cliente_id]")
+				.equals([tenantId, clienteId])
+				.filter((e) => e.deleted_at === null)
+				.toArray(),
+			this.db.clientes_contatos
+				.where("[tenant_id+cliente_id]")
+				.equals([tenantId, clienteId])
+				.filter((c) => c.deleted_at === null)
+				.toArray(),
+		]);
+		return { enderecos, contatos };
 	}
 
-	private async garantirUnicidadeEntreAtivos(
+	/** Cliente do tenant, nunca excluído; inativo apenas com `permitirInativo`. */
+	private async obterCliente(
 		tenantId: string,
-		dados: Pick<Cliente, "cnpj_cpf" | "razao_social" | "nome_fantasia">,
-		idAtual: string,
+		id: string,
+		permitirInativo: boolean,
+	): Promise<Cliente | undefined> {
+		const cliente = await this.db.clientes.get(id);
+		if (
+			!cliente ||
+			cliente.tenant_id !== tenantId ||
+			cliente.deleted_at !== null ||
+			(!permitirInativo && !cliente.ativo)
+		) {
+			return undefined;
+		}
+		return cliente;
+	}
+
+	/**
+	 * CPF/CNPJ é a única chave bloqueante. Com `oferecerReativacao`, um
+	 * documento igual ao de um inativo vira `ClienteInativoExistenteError`
+	 * para a UI oferecer a reativação em vez de criar um duplicado.
+	 */
+	private async garantirDocumentoUnico(
+		tenantId: string,
+		dados: Pick<Cliente, "id" | "cnpj_cpf">,
+		{ oferecerReativacao }: { oferecerReativacao: boolean },
 	): Promise<void> {
-		const ativos = await this.db.clientes
-			.where("tenant_id")
-			.equals(tenantId)
-			.filter((c) => c.deleted_at === null && c.id !== idAtual)
+		const candidatos = await this.db.clientes
+			.where("[tenant_id+cnpj_cpf]")
+			.equals([tenantId, dados.cnpj_cpf])
 			.toArray();
 
-		const razaoNorm = normalizarTextoComparacao(dados.razao_social);
-		const fantasiaNorm =
-			dados.nome_fantasia && dados.nome_fantasia.length > 0
-				? normalizarTextoComparacao(dados.nome_fantasia)
-				: null;
-
-		for (const c of ativos) {
-			if (c.cnpj_cpf === dados.cnpj_cpf) {
-				throw new CpfCnpjDuplicadoError();
-			}
-			if (normalizarTextoComparacao(c.razao_social) === razaoNorm) {
-				throw new RazaoSocialClienteDuplicadaError();
-			}
-			if (
-				fantasiaNorm !== null &&
-				c.nome_fantasia &&
-				normalizarTextoComparacao(c.nome_fantasia) === fantasiaNorm
-			) {
-				throw new NomeFantasiaClienteDuplicadoError();
-			}
+		const conflito = detectarConflitoDocumento(
+			candidatos,
+			dados.cnpj_cpf,
+			dados.id,
+		);
+		if (conflito?.tipo === "ativo") {
+			throw new CpfCnpjDuplicadoError();
+		}
+		if (conflito?.tipo === "inativo" && oferecerReativacao) {
+			throw new ClienteInativoExistenteError(conflito.registro);
 		}
 	}
 }

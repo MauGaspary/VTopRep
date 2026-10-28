@@ -1,31 +1,41 @@
 import { z } from "zod";
+import { CamposSincronizaveisSchema } from "../../../shared/domain/datas";
 
 export const PAPEL_CONTATO = ["COMPRADOR", "FINANCEIRO", "DIRETORIA"] as const;
-export const PapelContatoSchema = z.enum(PAPEL_CONTATO);
+export const PapelContatoSchema = z.enum(PAPEL_CONTATO, {
+	error: "Selecione um papel válido",
+});
 export type PapelContato = z.infer<typeof PapelContatoSchema>;
 
-export const ClienteContatoSchema = z.object({
-	id: z.string().uuid(),
-	cliente_id: z.string().uuid(),
-	nome: z.string().trim().min(1, "Nome do contato é obrigatório"),
-	papel: PapelContatoSchema.nullable().optional(),
-	telefone_whatsapp: z
-		.string()
-		.trim()
-		.min(1, "Telefone / WhatsApp é obrigatório"),
-	email: z.string().trim().email("E-mail inválido").nullable().optional(),
-});
+const NomeContatoSchema = z
+	.string()
+	.trim()
+	.min(1, "Nome do contato é obrigatório");
+const TelefoneContatoSchema = z
+	.string()
+	.trim()
+	.min(1, "Telefone / WhatsApp é obrigatório");
+
+export const ClienteContatoSchema = z
+	.object({
+		id: z.string().uuid(),
+		tenant_id: z.string().uuid(),
+		cliente_id: z.string().uuid(),
+		nome: NomeContatoSchema,
+		papel: PapelContatoSchema.nullable().optional(),
+		telefone_whatsapp: TelefoneContatoSchema,
+		email: z.string().trim().email("E-mail inválido").nullable().optional(),
+	})
+	.extend(CamposSincronizaveisSchema.shape);
 
 export type ClienteContato = z.infer<typeof ClienteContatoSchema>;
 
+/** `id` presente = contato já existente do cliente (edição). */
 export const ClienteContatoInputSchema = z.object({
 	id: z.string().uuid().optional(),
-	nome: z.string().trim().min(1, "Nome do contato é obrigatório"),
+	nome: NomeContatoSchema,
 	papel: PapelContatoSchema.nullable().optional(),
-	telefone_whatsapp: z
-		.string()
-		.trim()
-		.min(1, "Telefone / WhatsApp é obrigatório"),
+	telefone_whatsapp: TelefoneContatoSchema,
 	email: z
 		.string()
 		.trim()

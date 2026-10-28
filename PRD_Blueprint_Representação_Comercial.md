@@ -21,6 +21,15 @@ O sistema é a ferramenta central de trabalho em campo para representantes comer
 * **Precisão Monetária Absoluta:** O uso de tipos de ponto flutuante (`float`, `double`, `number` decimal nativo) para valores monetários é estritamente proibido. Todos os valores de moeda e descontos no banco de dados e na memória da aplicação devem ser armazenados e manipulados como **inteiros representando centavos** (ex.: R$ 150,50 = `15050`). O frontend utiliza funções puras de formatação apenas na camada de apresentação.
 * **Isolamento Multi-Tenant:** Toda entidade persistida contém obrigatoriamente a coluna `tenant_id: UUID`. Nenhuma consulta é realizada sem esse filtro.
 * **Soft Delete Universal:** Nenhuma exclusão em tabelas de negócio é física. Toda tabela sincronizável possui a coluna `deleted_at: timestamptz (nullable)`. O cliente local filtra registros ativos com `deleted_at is null` e processa remoções remotas recebendo registros marcados (*tombstones*).
+* **Inativo ≠ Excluído:** São dois conceitos com colunas distintas.
+  * `ativo: boolean` é **estado de negócio**, reversível. Um cadastro inativo some das seleções de novos orçamentos, mas continua na lista de "inativos" e pode ser reativado.
+  * `deleted_at` é **exclusão lógica** (tombstone de sincronização). O registro some de todas as telas e consultas, inclusive da lista de inativos, e não participa das regras de unicidade.
+  * Inativar ou reativar altera apenas `ativo` e `updated_at`. Nunca preenche `deleted_at`.
+* **Unicidade de Cadastros (por tenant):**
+  * **Bloqueantes:** CPF/CNPJ do cliente; CNPJ da representada; SKU do produto **por representada** (fábricas diferentes podem repetir o SKU). A comparação usa o valor normalizado (sem pontuação/espaços, maiúsculo). Se a chave pertence a um registro **inativo**, a UI oferece reativá-lo em vez de criar um duplicado.
+  * **Não bloqueantes:** razão social e nome fantasia (de clientes e de representadas) podem se repetir, já que filiais e redes compartilham nomes. No cadastro de **clientes**, a UI avisa (sem bloquear) quando encontra outro cliente com o mesmo nome, para pegar duplicados com documento diferente (erro de digitação, CPF do dono × CNPJ da empresa). Representadas não têm aviso: são poucas e conhecidas pelo representante.
+* **CPF/CNPJ obrigatório:** todo cliente exige documento válido no cadastro (CPF ou CNPJ, inclusive alfanumérico).
+* **Datas:** timestamps (`created_at`, `updated_at`, `deleted_at`, `data_emissao`) são ISO-8601 em UTC (`2026-10-28T12:00:00.000Z`). Datas de calendário (`vigencia_*`, `data_*` sem horário) usam `AAAA-MM-DD`.
 * **Imutabilidade de Pedidos Sincronizados:** Um pedido marcado como `emitido` ou superior torna-se somente-leitura. Ajustes pós-envio à fábrica exigem a emissão de aditivos ou novos pedidos vinculados.
 
 ---
@@ -55,7 +64,8 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `cnpj: text`
 * `percentual_comissao_padrao: integer` (Base em centésimos de %, ex: 500 = 5,00%)
 * `valor_pedido_minimo_centavos: integer`
-* `regras_frete_padrao: text` (`'CIF' | 'FOB' | 'FOB_REDESPACHO'`)
+* `regras_frete_padrao: text` (`'CIF' | 'FOB' | 'FOB_REDESPACHO'`; mesmo domínio de `pedidos.tipo_frete`)
+* `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
@@ -73,19 +83,29 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 
 #### `clientes_enderecos`
 * `id: UUID` (PK)
+* `tenant_id: UUID` (FK; igual ao do cliente pai)
 * `cliente_id: UUID` (FK)
 * `tipo_endereco: text` (`'PRINCIPAL' | 'ENTREGA' | 'COBRANCA'`)
 * `endereco_completo: text`
 * `latitude: double precision (nullable)`
 * `longitude: double precision (nullable)`
+* `created_at: timestamptz`
+* `updated_at: timestamptz`
+* `deleted_at: timestamptz (nullable)`
 
 #### `clientes_contatos`
 * `id: UUID` (PK)
+* `tenant_id: UUID` (FK; igual ao do cliente pai)
 * `cliente_id: UUID` (FK)
 * `nome: text`
 * `papel: text (nullable)` (`'COMPRADOR' | 'FINANCEIRO' | 'DIRETORIA'`)
 * `telefone_whatsapp: text`
 * `email: text (nullable)`
+* `created_at: timestamptz`
+* `updated_at: timestamptz`
+* `deleted_at: timestamptz (nullable)`
+
+Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada com a gravada: itens sem alteração não são regravados, alterados recebem novo `updated_at` e removidos recebem `deleted_at`. Nada é apagado fisicamente.
 
 #### `clientes_metricas`
 * `cliente_id: UUID` (PK/FK)
@@ -99,10 +119,10 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `representada_id: UUID` (FK)
-* `sku: text`
+* `sku: text` (normalizado em maiúsculas; único por `tenant_id + representada_id`)
 * `descricao: text`
 * `unidade_medida: text` (Ex: `'UN'`, `'CX'`, `'KG'`)
-* `multiplo_embalagem: integer` (Ex: 6 = só vende em múltiplos de 6)
+* `multiplo_embalagem: integer` (Ex: 6 = só vende em múltiplos de 6; padrão 1)
 * `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
@@ -114,7 +134,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `representada_id: UUID` (FK)
 * `nome_tabela: text`
 * `vigencia_inicio: date`
-* `vigencia_fim: date`
+* `vigencia_fim: date (nullable)` (`null` = vigência em aberto; se informada, não pode ser anterior ao início)
 * `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
@@ -126,7 +146,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `tabela_id: UUID` (FK)
 * `produto_id: UUID` (FK)
 * `preco_base_centavos: integer`
-* `desconto_maximo_permitido: integer` (Centésimos de %, ex: 1500 = 15,00%)
+* `desconto_maximo_permitido: integer` (Centésimos de %, ex: 1500 = 15,00%; entre 0 e 10000; padrão 0)
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
@@ -141,7 +161,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `contato_id: UUID (nullable)`
 * `data_emissao: timestamptz`
 * `condicao_pagamento: text`
-* `tipo_frete: text` (`'CIF' | 'FOB'`)
+* `tipo_frete: text` (`'CIF' | 'FOB' | 'FOB_REDESPACHO'`; herda `representadas.regras_frete_padrao` por padrão)
 * `status: text` (`'rascunho' | 'emitido' | 'parcialmente_faturado' | 'faturado_total' | 'cancelado'`)
 * `valor_total_centavos: integer`
 * `comissao_projetada_centavos: integer`
@@ -158,8 +178,8 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `produto_id: UUID` (FK)
 * `quantidade: integer` (Validada contra `multiplo_embalagem`)
 * `preco_unitario_tabela_centavos: integer`
-* `percentual_desconto: integer` (Centésimos de %)
-* `preco_liquido_unitario_centavos: integer`
+* `percentual_desconto: integer` (Centésimos de %, entre 0 e 10000. É a fonte da verdade do desconto)
+* `preco_liquido_unitario_centavos: integer` (Derivado: `preco_unitario_tabela_centavos` com `percentual_desconto` aplicado, arredondamento half-even)
 * `subtotal_centavos: integer`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
@@ -199,17 +219,19 @@ Toda mutação executada pelo usuário em modo offline não toca a rede; ela per
 ```typescript
 export interface OutboxMutation {
   id: string; // UUID local
-  tenantId: string;
-  entity: 'pedidos' | 'clientes' | 'itens_pedido';
+  tenant_id: string;
+  entity: EntidadeSincronizavel; // nome de qualquer tabela de negócio (ver abaixo)
   action: 'INSERT' | 'UPDATE' | 'DELETE';
   payload: Record<string, unknown>;
-  idempotencyKey: string;
+  idempotency_key: string;
   status: 'pending' | 'syncing' | 'failed';
-  retryCount: number;
-  lastError?: string;
-  createdAt: string; // ISO-8601
+  retry_count: number;
+  last_error?: string;
+  created_at: string; // ISO-8601
 }
 ```
+
+Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `representadas`, `clientes`, `clientes_enderecos`, `clientes_contatos`, `clientes_metricas`, `produtos`, `tabelas_preco`, `itens_preco`, `pedidos` e `itens_pedido` (fonte: `ENTIDADES_SINCRONIZAVEIS` em `src/modules/sync/domain/outbox.schema.ts`).
 
 ### 3.2. Estratégia de Resolução de Conflitos
 * **Entidades Transacionais Geradas em Campo (Pedidos, Itens, Clientes Novos):**
@@ -220,6 +242,10 @@ export interface OutboxMutation {
   * O backend é a fonte de autoridade. O cliente consome rotinas de *delta sync* consultando `updated_at > :ultimaSincronizacaoLocal`.
 * **Tratamento de Exclusões:**
   * O servidor envia registros com `deleted_at != null`. O Dexie.js atualiza o registro local marcando o soft-delete para removê-lo das telas sem perder integridade referencial com pedidos antigos já persistidos.
+* **Cadastros editados em campo (Clientes, Endereços, Contatos):**
+  * Edições do mesmo cliente em dois aparelhos offline seguem **Last-Write-Wins por `updated_at`**, registro a registro (sem merge por campo nesta fase).
+* **Imutabilidade remota de pedidos:**
+  * Pedidos com `status` diferente de `rascunho` são somente-leitura também no PostgreSQL: a migração que criar `pedidos`/`itens_pedido` deve incluir um *trigger* que rejeite `UPDATE` de campos comerciais (exceto as transições de status do funil de faturamento).
 
 ---
 
@@ -267,7 +293,7 @@ Exemplo de contrato:
 ```typescript
 export interface PedidoRepository {
   salvarLocal(pedido: NovoPedidoInput): Promise<Pedido>;
-  buscarPorId(id: string): Promise<Pedido null |>;
+  buscarPorId(id: string): Promise<Pedido | null>;
   listarPendentesSincronizacao(tenantId: string): Promise<Pedido[]>;
 }
 ```
@@ -396,6 +422,6 @@ Ao implementar uma nova funcionalidade, o agente deve seguir estritamente o pipe
 4. **Interface e Integração:** Desenvolver o componente React consumindo o hook do repositório, garantindo conformidade com o design token (variáveis HSL do tema).
 5. **Autovalidação:** Executar no terminal:
    ```bash
-   pnpm biome check --write && pnpm type-check && pnpm test:run
+   pnpm validate
    ```
-   Se houver falha, ler o relatório de saída e corrigir o código antes de reportar a conclusão da tarefa.
+   Se houver falha, ler o relatório de saída e corrigir o código antes de reportar a conclusão da tarefa. A versão vigente destas diretrizes está em `AGENTS.md`.

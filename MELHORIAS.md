@@ -4,213 +4,164 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 
 **Prioridade:** 🔴 Alta (corrigir antes da Fase 2) · 🟡 Média · 🟢 Baixa
 
+**Situação em 28/10/2026:** todos os itens de código foram resolvidos. `pnpm validate` ✅ (Biome limpo, `tsc` sem erros, 20 arquivos / 227 testes). Ficam pendentes apenas os itens que dependem de outra máquina, do navegador real ou do backend Supabase (ver "Pendências").
+
+---
+
+## Decisões Registradas
+
+| Tema | Decisão |
+|---|---|
+| CPF/CNPJ do cliente (1.4) | **Continua obrigatório** e precisa ser válido. |
+| Nomes repetidos (1.2) | Em **clientes e representadas**, só o documento bloqueia. Só **clientes** mostram aviso de nome igual (`HomonymWarning`, com *debounce* de 400 ms); em representadas o aviso foi descartado por ter pouco valor. |
+| Desconto do item (3.6) | **Percentual** em centésimos (0 a 10000) é a fonte da verdade; o preço líquido deriva dele com half-even. |
+| `ativo` × `deleted_at` (3.1) | `ativo` = estado de negócio reversível; `deleted_at` = tombstone de sincronização (some de tudo e não conta na unicidade). |
+| Hooks reativos (4.5) | Wrapper `useLiveRepositoryQuery` em `shared/hooks/`; `DevSeedButton` documentado como exceção dev-only no `AGENTS.md`. |
+| Conflito de sync (6.2) | **Proposta**, a confirmar: LWW por `updated_at` para edições de cadastros de campo; mestres da fábrica seguem server-wins. Registrado no PRD 3.2. |
+
 ---
 
 ## 0. Baseline
 
 - [x] Instalar ferramentas (`pnpm` 12.16.1, dependências) e rodar a validação.
-- [x] Registrar o resultado (28/10/2026, Windows):
-
-| Etapa | Resultado |
-|---|---|
-| `pnpm type-check` (`tsc -b`) | ✅ Sem erros |
-| `pnpm test:run` (Vitest) | ✅ 11 arquivos, 126 testes passando |
-| `pnpm biome check`, regras de lint | ✅ Sem erros |
-| `pnpm biome check`, formatação | ❌ 72 erros, **todos de quebra de linha (CRLF)**, ver 0.1 |
+- [x] Registrar o resultado (28/10/2026, Windows): `tsc` ✅, Vitest ✅ (126 testes), lint ✅, formatação ❌ (72 erros de CRLF, ver 0.1).
 
 ### 0.1. 🔴 Quebras de linha CRLF quebram o `biome check` no Windows
-- **Problema:** o repositório guarda os arquivos em LF, mas `core.autocrlf=true` nesta máquina converte para CRLF no checkout (`git ls-files --eol` → `i/lf w/crlf`). O Biome espera LF e acusa os 72 arquivos. Confirmado: com `biome format --line-ending=crlf`, não sobra nenhum erro. A falha depende da máquina, e por isso não aparecia na outra.
-- **Ação:**
-  - [x] Criar `.gitattributes` com `* text=auto eol=lf` (força LF no working tree em qualquer SO).
-  - [x] Renormalizar o checkout local (arquivos versionados apagados e restaurados via `git checkout -- .`, agora todos `w/lf`).
-  - [x] Fixar `"lineEnding": "lf"` no `formatter` do `biome.json` para deixar a intenção explícita.
-  - [x] Rodar `pnpm validate` de novo: ✅ Biome limpo, `tsc` sem erros, 126/126 testes.
-  - [ ] Na outra máquina, depois do pull: se houver arquivos em CRLF, rodar a mesma renormalização (`git ls-files --eol` mostra o estado).
-- **Atenção:** **não** rodar `pnpm biome check --write` antes de resolver isso. Ele reescreveria os 72 arquivos e geraria um diff enorme só de quebra de linha.
+- [x] `.gitattributes` com `* text=auto eol=lf`.
+- [x] Checkout local renormalizado (todos `w/lf`).
+- [x] `"lineEnding": "lf"` no `formatter` do `biome.json`.
+- [x] `pnpm validate` verde.
+- [ ] Na outra máquina, depois do pull: se houver arquivos em CRLF, rodar a mesma renormalização (`git ls-files --eol` mostra o estado).
 
 ---
 
 ## 1. Regras de Negócio
 
-### 1.1. 🔴 Unicidade de SKU por representada
-- **Problema:** `garantirUnicidadeSku` em `src/modules/produtos/repositories/produto-dexie.adapter.ts` considera o SKU único por tenant. Fábricas diferentes podem usar o mesmo SKU (ex.: "001").
-- **Ação:**
-  - [ ] Unicidade por `tenant_id + representada_id + sku normalizado`.
-  - [ ] Ajustar `obterPorSku` para receber `representadaId`.
-  - [ ] Adicionar índice `[tenant_id+representada_id+sku]` em nova versão do Dexie.
-  - [ ] Testes: mesmo SKU em representadas distintas é permitido; na mesma representada é rejeitado; caso do inativo continua oferecendo reativação.
+### 1.1. 🔴 Unicidade de SKU por representada ✅
+- [x] Unicidade por `tenant_id + representada_id + sku normalizado` (`detectarConflitoSku`).
+- [x] `obterPorSku(tenantId, representadaId, sku)`.
+- [x] Índice `[tenant_id+representada_id+sku]` na v4 do Dexie. O SKU passa a ser **gravado normalizado** (trim + maiúsculas), então a consulta é exata pelo índice. A migração normaliza os SKUs existentes.
+- [x] Testes: mesmo SKU em representadas distintas permitido; na mesma representada rejeitado; inativo continua oferecendo reativação; tombstone não bloqueia.
 
-### 1.2. 🔴 Unicidade de nomes em clientes
-- **Problema:** `garantirUnicidade` em `src/modules/clientes/repositories/cliente-dexie.adapter.ts` bloqueia razão social e nome fantasia duplicados. Isso impede o cadastro de filiais (mesma razão social, CNPJs diferentes) e de redes com o mesmo nome fantasia.
-- **Ação:**
-  - [ ] Manter como bloqueio apenas o CPF/CNPJ.
-  - [ ] Transformar conflito de nomes em **aviso** (não bloqueante) na UI.
-  - [ ] Revisar se a mesma regra faz sentido para representadas (provavelmente sim para CNPJ; avaliar nomes).
-  - [ ] Atualizar testes.
+### 1.2. 🔴 Unicidade de nomes em clientes ✅
+- [x] Bloqueio apenas por CPF/CNPJ.
+- [x] Conflito de nomes vira aviso não bloqueante na UI (`buscarHomonimos` no repositório + `useHomonimosCliente` + `HomonymWarning`).
+- [x] Representadas: CNPJ bloqueia, nomes repetidos são livres e sem aviso (poucos cadastros, conhecidos pelo representante).
+- [x] Erros `RazaoSocial*Duplicad*Error` / `NomeFantasia*Duplicado*Error` removidos; `*InativoExistenteError` passa a tratar só o documento.
+- [x] Testes atualizados (cenário de filiais).
 
-### 1.3. 🔴 Tipo de frete inconsistente
-- **Problema:** `Representada.regras_frete_padrao` aceita `CIF | FOB | FOB_REDESPACHO`, mas `Pedido.tipo_frete` aceita só `CIF | FOB`. Um pedido não consegue herdar o padrão da representada.
-- **Ação:**
-  - [ ] Criar um único `TipoFreteSchema` em `shared/domain/` e reutilizá-lo nos dois schemas.
-  - [ ] Atualizar o PRD.
+### 1.3. 🔴 Tipo de frete inconsistente ✅
+- [x] `TipoFreteSchema` / `TIPOS_FRETE` / `ROTULOS_FRETE` em `src/shared/domain/frete.ts`, usados por `Representada.regras_frete_padrao` e `Pedido.tipo_frete`.
+- [x] PRD atualizado.
 
-### 1.4. 🟡 CPF/CNPJ obrigatório no cliente (`duvidas.md`)
-- **Problema:** o schema exige documento válido, o que bloqueia o cadastro rápido de prospects em campo.
-- **Ação:**
-  - [ ] Decidir a regra (opcional para prospect? obrigatório só para emitir pedido?).
-  - [ ] Refletir a decisão no schema, nos testes e no PRD; remover de `duvidas.md`.
+### 1.4. 🟡 CPF/CNPJ obrigatório no cliente ✅
+- [x] Decisão: continua obrigatório. Testes cobrem documento ausente e inválido; PRD registra a regra; `duvidas.md` limpo.
 
 ---
 
 ## 2. Isolamento de Tenant (Regra 4 do `AGENTS.md`)
 
-### 2.1. 🔴 `tenant_id` em tabelas filhas
-- **Problema:** `clientes_enderecos` e `clientes_contatos` não têm `tenant_id`. Vai faltar para a RLS no Supabase e contraria a regra de "toda entidade persistida contém `tenant_id`".
-- **Ação:**
-  - [ ] Adicionar `tenant_id` aos schemas `ClienteEnderecoSchema` e `ClienteContatoSchema`.
-  - [ ] Nova versão do Dexie com índices `[tenant_id+cliente_id]` e `upgrade()` preenchendo o `tenant_id` a partir do cliente pai.
-  - [ ] Filtrar por tenant nas consultas de `obterPorId` e `atualizar`.
-  - [ ] Atualizar o dicionário de dados do PRD.
+### 2.1. 🔴 `tenant_id` em tabelas filhas ✅
+- [x] `tenant_id` em `ClienteEnderecoSchema` e `ClienteContatoSchema`, preenchido por `montarFilhosCliente`.
+- [x] Dexie v4 com `[tenant_id+cliente_id]`; `upgrade()` herda o tenant do cliente pai e remove órfãos (inalcançáveis pela UI).
+- [x] `obterPorId` e `atualizar` consultam/apagam filhos por `[tenant_id+cliente_id]`.
+- [x] Dicionário de dados do PRD atualizado.
 
-### 2.2. 🟡 Tenant em `inativarProduto` / `reativarProduto`
-- **Problema:** as funções de domínio de produto não recebem nem validam `tenantId`. Clientes e representadas recebem.
-- **Ação:**
-  - [ ] Padronizar a assinatura `(existente, tenantId, agora)` e lançar `TenantDivergente*Error`.
-  - [ ] Teste de tenant divergente.
+### 2.2. 🟡 Tenant em `inativarProduto` / `reativarProduto` ✅
+- [x] Assinatura `(existente, tenantId, agora)` também em `atualizarProduto`; `criarProduto({ tenantId, input, id, agora })` no padrão de representadas.
+- [x] `TenantDivergenteError` único em `src/shared/domain/tenant.ts` (substitui `TenantDivergenteError`/`TenantDivergenteClienteError` dos módulos).
+- [x] Testes de tenant divergente nos três módulos.
 
-### 2.3. 🟢 Seed apaga dados de todos os tenants
-- **Problema:** `seedDatabase` em `src/db/seed.ts` faz `clear()` em todas as tabelas.
-- **Ação:**
-  - [ ] Apagar apenas os registros do tenant informado, ou renomear para `resetarBancoEPopular` deixando o efeito explícito.
-  - [ ] Incluir `pedidos`, `itens_pedido` e `outbox` na limpeza, se mantido o reset total.
+### 2.3. 🟢 Seed apaga dados de todos os tenants ✅
+- [x] `limparDadosDoTenant` apaga só o tenant informado, em **todas** as tabelas (inclusive `pedidos`, `itens_pedido` e `outbox`).
+- [x] Teste garante que dados de outro tenant sobrevivem.
 
 ---
 
 ## 3. Modelo de Dados
 
-### 3.1. 🔴 `ativo` vs `deleted_at`
-- **Problema:** em Cliente e Produto, inativar preenche `ativo = false` **e** `deleted_at`. Os dois campos dizem a mesma coisa, mas o PRD trata `deleted_at` como *tombstone* de sincronização (exclusão), enquanto "inativo" é um estado de negócio.
-- **Ação:**
-  - [ ] Decidir a semântica: `ativo` = estado de negócio (reversível, aparece em "inativos"); `deleted_at` = exclusão lógica (some da UI, propaga como tombstone).
-  - [ ] Aplicar a decisão de forma uniforme em Cliente, Produto e Representada (hoje Representada só tem `deleted_at`).
-  - [ ] Migração Dexie e ajuste dos filtros/listagens/testes.
+### 3.1. 🔴 `ativo` vs `deleted_at` ✅
+- [x] Semântica decidida (ver tabela) e aplicada em Cliente, Produto e Representada (Representada ganhou `ativo`).
+- [x] Migração v4: todo `deleted_at` legado era inativação, então vira `ativo = false` + `deleted_at = null`.
+- [x] Listagens: `listar` = ativos; `listarTodos/listarTodas` = ativos + inativos; tombstones nunca aparecem e não participam da unicidade.
 
-### 3.2. 🔴 Nomes de campos divergentes do PRD
-- **Problema:** `ItemPreco.teto_desconto_permitido` no código vs `desconto_maximo_permitido` no PRD.
-- **Ação:**
-  - [ ] Escolher um nome e alinhar schema, seed e PRD.
-  - [ ] Varrer os demais schemas comparando com o dicionário de dados do PRD.
+### 3.2. 🔴 Nomes de campos divergentes do PRD ✅
+- [x] `teto_desconto_permitido` → `desconto_maximo_permitido` (schema, seed, migração), com teto de 100%.
+- [x] Varredura dos demais schemas: `multiplo_embalagem` agora é obrigatório na entidade (padrão 1); `vigencia_fim` documentada como nullable no PRD, com validação `fim >= início`.
 
-### 3.3. 🟡 Convenção do Outbox
-- **Problema:** `OutboxMutationSchema` usa camelCase (`tenantId`, `createdAt`, `idempotencyKey`), e o restante usa snake_case. `entity` cobre só `pedidos`, `clientes` e `itens_pedido`.
-- **Ação:**
-  - [ ] Padronizar para snake_case (e índice Dexie correspondente).
-  - [ ] Incluir `produtos`, `representadas`, `clientes_enderecos`, `clientes_contatos`, `tabelas_preco`, `itens_preco`, ou derivar a lista dos nomes de tabela.
+### 3.3. 🟡 Convenção do Outbox ✅
+- [x] snake_case (`tenant_id`, `idempotency_key`, `retry_count`, `last_error`, `created_at`) e índice `[tenant_id+status]`; migração renomeia registros existentes.
+- [x] `entity` derivado de `ENTIDADES_SINCRONIZAVEIS` (todas as tabelas de negócio).
 
-### 3.4. 🟡 Datas sem formato validado
-- **Problema:** timestamps e vigências são `z.string()` livres.
-- **Ação:**
-  - [ ] Usar `z.iso.datetime()` para `created_at`/`updated_at`/`deleted_at`/`data_emissao`.
-  - [ ] Usar `z.iso.date()` para `vigencia_inicio`/`vigencia_fim`/`data_ultima_compra`.
-  - [ ] Pré-requisito para a resolução de preço por vigência (TODO 2.1).
+### 3.4. 🟡 Datas sem formato validado ✅
+- [x] `TimestampSchema` (`z.iso.datetime()`) e `DataSchema` (`z.iso.date()`) em `src/shared/domain/datas.ts`; `CamposSincronizaveisSchema` reaproveitado por todas as entidades.
+- [x] Vigências e `data_ultima_compra` como data pura; migração converte valores legados.
 
-### 3.5. 🟡 Seed não passa pelos schemas
-- **Problema:** `seed.ts` monta objetos à mão; `cnpj_cpf: faker.string.numeric(14)` gera CNPJs quase sempre inválidos, e a tela de edição depois recusa o registro.
-- **Ação:**
-  - [ ] Gerar dados via funções de domínio (`criarClienteCompleto`, `criarProduto`, `criarRepresentada`) ou validar com `Schema.parse` antes de gravar.
-  - [ ] Gerar CPF/CNPJ válidos com `calcularDigitosVerificadoresCnpj` (e equivalente para CPF).
+### 3.5. 🟡 Seed não passa pelos schemas ✅
+- [x] Seed usa `criarRepresentada`, `criarProduto`, `criarClienteCompleto` e `Schema.parse`.
+- [x] CPF/CNPJ válidos e distintos (`calcularDigitosVerificadoresCpf` criado).
+- [x] Teste valida todos os registros gerados contra os schemas.
 
-### 3.6. 🟢 Desconto em `ItemPedido`
-- **Problema:** `percentual_desconto` não tem teto (`max(10000)`) e o TODO 2.2 fala em `desconto_unitario` em centavos.
-- **Ação:**
-  - [ ] Definir se o desconto é percentual, valor ou ambos; ajustar o schema antes do motor financeiro.
+### 3.6. 🟢 Desconto em `ItemPedido` ✅
+- [x] Percentual (0 a 10000) como fonte da verdade; PRD e TODO 2.2 ajustados.
 
 ---
 
 ## 4. Organização e Duplicação de Código
 
-### 4.1. 🟡 Normalização de texto duplicada
-- **Problema:** `normalizarTextoComparacao` (representadas) e `normalizarTexto` (produtos) fazem o mesmo. Clientes importa de `representadas/domain`, acoplando módulos.
-- **Ação:**
-  - [ ] Criar `src/shared/domain/texto.ts` com uma única função + testes.
-  - [ ] Substituir os usos nos três módulos.
-- **Problema relacionado:** `normalizarCnpj` e `normalizarCpfCnpj` também são idênticas. Unificar.
+### 4.1. 🟡 Normalização de texto duplicada ✅
+- [x] `src/shared/domain/texto.ts` (`normalizarTexto`) com testes; módulos não importam mais uns dos outros.
+- [x] `normalizarCpfCnpj` delega para `normalizarCnpj` (uma única implementação); buscas por documento reutilizam essas funções.
 
-### 4.2. 🟡 Lógica de unicidade copiada
-- **Problema:** `garantirUnicidade` e `garantirUnicidadeEntreAtivos` (clientes) repetem o mesmo laço; representadas tem padrão parecido.
-- **Ação:**
-  - [ ] Extrair função pura de domínio, ex.: `detectarConflito(lista, dados) => Conflito | null`, testável sem Dexie.
-  - [ ] Adapter apenas busca candidatos e traduz o conflito em erro.
+### 4.2. 🟡 Lógica de unicidade copiada ✅
+- [x] `detectarConflito` e `detectarHomonimos` puros em `src/shared/domain/unicidade.ts`, com testes; cada módulo expõe seu `detectarConflito*`/`detectarHomonimos*`.
+- [x] Adapters só buscam candidatos e traduzem o conflito em erro.
 
-### 4.3. 🔴 Verificação de unicidade fora de transação (produtos)
-- **Problema:** `ProdutoDexieAdapter.criar` (e `atualizar`/`reativar`) verificam a unicidade e depois gravam sem `db.transaction`. Dois envios rápidos podem duplicar o registro.
-- **Ação:**
-  - [ ] Envolver verificação + escrita em `transaction("rw", [produtos, representadas], ...)`, como em clientes.
-  - [ ] Conferir o mesmo em representadas.
+### 4.3. 🔴 Verificação de unicidade fora de transação (produtos) ✅
+- [x] `criar`/`atualizar`/`reativar` (e `inativar`) dentro de `transaction("rw", [produtos, representadas])`; teste de duas criações concorrentes.
+- [x] Representadas conferidas (já eram transacionais).
 
-### 4.4. 🟢 Consultas por varredura
-- **Problema:** as listagens e verificações usam `.where("tenant_id").filter(...)`, carregando o tenant inteiro, mesmo com índices compostos disponíveis (`[tenant_id+cnpj_cpf]`).
-- **Ação:**
-  - [ ] Usar os índices compostos nas verificações de unicidade.
-  - [ ] Medir a busca do catálogo com alguns milhares de SKUs; avaliar índice de prefixo por SKU/descrição normalizados se necessário.
+### 4.4. 🟢 Consultas por varredura (parcial)
+- [x] Unicidade usa índices compostos: `[tenant_id+cnpj_cpf]`, `[tenant_id+cnpj]`, `[tenant_id+representada_id+sku]`.
+- [ ] Medir a busca do catálogo com alguns milhares de SKUs **no navegador** (o `fake-indexeddb` não é representativo) e avaliar índice de prefixo se necessário.
 
-### 4.5. 🟡 Regra de infraestrutura vs `dexie-react-hooks`
-- **Problema:** o `AGENTS.md` proíbe Dexie em `hooks/`, mas os hooks importam `useLiveQuery` de `dexie-react-hooks`. O `DevSeedButton` importa `db` direto em `shared/components`.
-- **Ação (escolher uma):**
-  - [ ] Atualizar o `AGENTS.md` permitindo explicitamente `useLiveQuery`, **ou**
-  - [ ] Criar wrapper `useLiveRepositoryQuery` em `shared/hooks/` e usá-lo nos módulos.
-  - [ ] Documentar a exceção do `DevSeedButton` (dev-only) ou movê-lo para trás de um serviço.
+### 4.5. 🟡 Regra de infraestrutura vs `dexie-react-hooks` ✅
+- [x] `useLiveRepositoryQuery` em `src/shared/hooks/`, usado por todos os hooks de módulo.
+- [x] Exceção do `DevSeedButton` documentada no `AGENTS.md`.
 
-### 4.6. 🟡 Type-assertion cega no formulário de produtos (Regra 1)
-- **Problema:** `src/modules/produtos/components/produto-form-view.tsx:178` faz `issue.path[0] as keyof ProdutoFormErrors`, violando a regra "proibido `as Type` sem validação". Se o Zod reportar um caminho que não é campo do formulário, o erro vai parar numa chave que a UI não exibe e se perde em silêncio.
-- **Ação:**
-  - [ ] Substituir por um type guard (ex.: `isCampoProdutoForm(chave): chave is keyof ProdutoFormErrors`) e mandar caminhos desconhecidos para o erro geral.
+### 4.6. 🟡 Type-assertion cega no formulário de produtos ✅
+- [x] Type guard `isCampoProdutoForm`; caminhos desconhecidos vão para o erro geral (`mapearIssues`).
 
-### 4.7. 🟡 Validação de formulário inconsistente entre módulos
-- **Problema:** Representadas tem a conversão e validação do formulário em função pura testada (`representada-form.ts` + `representada-form.spec.ts`). Clientes e Produtos fazem isso dentro do componente:
-  - `cliente-form-view.tsx` revalida campos **à mão** (`if (!razaoSocial.trim())…`), duplicando as regras do `ClienteInputSchema`. O e-mail do contato não é validado no formulário: um e-mail inválido chega ao repositório, o Zod lança `ZodError` e a UI mostra a **mensagem crua do Zod (JSON)** no alerta geral.
-  - `produto-form-view.tsx` usa `Number.parseInt`, que aceita `"12abc"` como 12 e `"1,5"` como 1. Quando o resultado é `NaN` (ex.: `"abc"`), troca em silêncio por `1` em vez de mostrar erro.
-- **Ação:**
-  - [ ] Criar `cliente-form.ts` e `produto-form.ts` no padrão de `representada-form.ts` (valores crus → `safeParse` → erros por campo), com testes.
-  - [ ] Validar o múltiplo de embalagem com regex `^\d+$` e devolver erro de campo em vez de usar `1` como padrão.
-  - [ ] Garantir que nenhum `ZodError` chegue cru à UI: mapear `issues` para erros de campo.
+### 4.7. 🟡 Validação de formulário inconsistente entre módulos ✅
+- [x] `cliente-form.ts` e `produto-form.ts` no padrão de `representada-form.ts`, com testes.
+- [x] Múltiplo de embalagem validado com `^\d+$` (vazio = padrão 1; `"12abc"`, `"1,5"` e `"abc"` viram erro de campo).
+- [x] Nenhum `ZodError` cru na UI: `mapearIssues` (erros por campo + geral) e `mensagemDeErro` nos `catch` de todas as telas. E-mail inválido do contato aparece no próprio campo.
 
 ---
 
-## 5. Higiene do Repositório
+## 5. Higiene do Repositório ✅
 
-- [ ] 🟢 Adicionar `supabase/.temp/` ao `.gitignore` e remover do índice (`git rm -r --cached supabase/.temp`).
-- [ ] 🟢 Remover `.oxlintrc.json` se o oxlint não for usado (o lint oficial é o Biome).
-- [ ] 🟢 Adicionar script `"test": "vitest"` (modo watch) ao `package.json` e atualizar o README.
-- [ ] 🟢 Não há `any` no código. Há **um** cast cego (ver 4.6); depois de corrigido, manter zero.
+- [x] `supabase/.temp/` já estava no `.gitignore`; removido do índice.
+- [x] `.oxlintrc.json` removido (o oxlint não é dependência; o lint oficial é o Biome).
+- [x] Script `"test": "vitest"` (watch) e README atualizado (`pnpm validate`).
+- [x] Zero `any` e zero casts cegos.
 
 ---
 
 ## 6. Pré-requisitos da Fase 2
 
-### 6.1. 🔴 Módulo de dinheiro com arredondamento *half-even*
-- **Problema:** exigido no `AGENTS.md`, mas ainda não implementado.
-- **Ação:**
-  - [ ] Criar `src/shared/domain/dinheiro.ts` com, por exemplo, `aplicarPercentual(centavos, centesimosPercentual)` e `arredondarHalfEven`, usando aritmética inteira (ou `BigInt` para evitar overflow).
-  - [ ] Testes: dízimas periódicas (1/3, 2/3), empates exatos (x,5 → par), valores grandes, zero e 100%.
+### 6.1. 🔴 Módulo de dinheiro com arredondamento *half-even* ✅
+- [x] `src/shared/domain/dinheiro.ts`: `dividirHalfEven`, `multiplicarPorFracao`, `aplicarPercentual`, `somarCentavos` (em `BigInt`).
+- [x] Testes: dízimas (1/3, 2/3), empates (x,5 → par), negativos, valores acima de 2^53 no intermediário, zero e 100%.
 
-### 6.2. 🟡 Estratégia de conflito na sincronização
-- **Problema:** cadastros editados offline em dois aparelhos vão conflitar; o outbox ainda não define a política.
-- **Ação:**
-  - [ ] Decidir a política (last-write-wins por `updated_at`, versão por registro, ou merge por campo) e registrar no PRD.
-  - [ ] Garantir que pedidos `emitido+` sejam imutáveis também no lado remoto.
+### 6.2. 🟡 Estratégia de conflito na sincronização (parcial)
+- [x] Política registrada no PRD 3.2 (proposta de LWW para cadastros de campo, a confirmar).
+- [ ] Trigger de imutabilidade de pedidos `emitido+` no PostgreSQL, a ser criado junto com a primeira migração Supabase de `pedidos` (ainda não há migrações).
 
 ---
 
-## Ordem Sugerida de Ataque
+## Pendências e Novos Achados
 
-1. **0.1** `.gitattributes` + renormalização para LF, até `pnpm validate` ficar verde
-2. **4.1** Normalização em `shared/`: pequeno, destrava os outros
-3. **1.1** SKU por representada + **4.3** transação em produtos
-4. **1.2** Unicidade de clientes + **4.2** função pura de conflito
-5. **3.1** `ativo` vs `deleted_at` + **2.2** tenant em produtos
-6. **2.1** `tenant_id` em tabelas filhas (migração Dexie)
-7. **1.3**, **3.2**, **3.3**, **3.4**: alinhamento de schemas com o PRD
-8. **4.6** + **4.7** Formulários de cliente/produto como funções puras testadas
-9. **6.1** Módulo de dinheiro (abre a Fase 2)
-10. Demais itens 🟡/🟢
+- [x] 🟡 **Filhos de cliente sem soft delete:** endereços e contatos ganharam `created_at`/`updated_at`/`deleted_at` (migração Dexie v5). `atualizar` agora reconcilia a coleção (`sincronizarFilhosCliente`): mantém os inalterados, atualiza os alterados, marca `deleted_at` nos removidos e ignora ids de outro cliente.
+- [x] 🟢 **Aviso de nomes a cada tecla:** `useHomonimosCliente` só consulta 400 ms depois que o usuário para de digitar (`useDebouncedValue`) e nunca com nomes vazios. Aviso removido de representadas.
+- [ ] 0.1, 4.4 e 6.2: itens externos listados acima.

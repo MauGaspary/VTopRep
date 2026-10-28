@@ -9,6 +9,7 @@
 		"lint": "biome check",
 		"preview": "vite preview",
 		"type-check": "tsc -b",
+		"test": "vitest",
 		"test:run": "vitest run",
 		"validate": "pnpm biome check && pnpm type-check && pnpm test:run"
 	},

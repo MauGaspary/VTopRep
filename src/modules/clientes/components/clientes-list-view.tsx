@@ -9,6 +9,7 @@ import {
 	SearchInput,
 } from "../../../shared/components/ui";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
+import { mensagemDeErro } from "../../../shared/domain/formulario";
 import type { Cliente } from "../domain/cliente.schema";
 import { useClienteActions, useTodosClientes } from "../hooks/use-clientes";
 
@@ -28,7 +29,7 @@ export function ClientesListView() {
 		try {
 			await inativar(cliente.id);
 		} catch (e) {
-			setErro(e instanceof Error ? e.message : "Erro ao inativar cliente");
+			setErro(mensagemDeErro(e, "Erro ao inativar cliente"));
 		}
 	};
 
@@ -37,7 +38,7 @@ export function ClientesListView() {
 		try {
 			await reativar(cliente.id);
 		} catch (e) {
-			setErro(e instanceof Error ? e.message : "Erro ao reativar cliente");
+			setErro(mensagemDeErro(e, "Erro ao reativar cliente"));
 		}
 	};
 
@@ -77,7 +78,7 @@ export function ClientesListView() {
 			{!isLoading && clientes.length > 0 && (
 				<ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
 					{clientes.map((c) => {
-						const isInativo = c.deleted_at !== null;
+						const isInativo = !c.ativo;
 						return (
 							<li
 								key={c.id}

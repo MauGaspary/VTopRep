@@ -1,3 +1,10 @@
+import { normalizarCnpj } from "../../../shared/domain/cnpj";
+import { garantirMesmoTenant } from "../../../shared/domain/tenant";
+import { normalizarTexto } from "../../../shared/domain/texto";
+import {
+	type ConflitoUnicidade,
+	detectarConflito,
+} from "../../../shared/domain/unicidade";
 import {
 	type Representada,
 	type RepresentadaInput,
@@ -14,52 +21,20 @@ export class RepresentadaNaoEncontradaError extends Error {
 
 export class CnpjDuplicadoError extends Error {
 	constructor() {
-		super("Já existe uma representada com este CNPJ");
+		super("Já existe uma representada ativa com este CNPJ");
 		this.name = "CnpjDuplicadoError";
-	}
-}
-
-export class RazaoSocialDuplicadaError extends Error {
-	constructor() {
-		super("Já existe uma representada com esta Razão Social");
-		this.name = "RazaoSocialDuplicadaError";
-	}
-}
-
-export class NomeFantasiaDuplicadoError extends Error {
-	constructor() {
-		super("Já existe uma representada com este Nome Fantasia");
-		this.name = "NomeFantasiaDuplicadoError";
 	}
 }
 
 export class RepresentadaInativaExistenteError extends Error {
 	readonly representadaInativa: Representada;
-	readonly campoConflito: "cnpj" | "razao_social" | "nome_fantasia";
 
-	constructor(
-		representadaInativa: Representada,
-		campoConflito: "cnpj" | "razao_social" | "nome_fantasia",
-	) {
-		const rotuloCampo =
-			campoConflito === "cnpj"
-				? "CNPJ"
-				: campoConflito === "razao_social"
-					? "Razão Social"
-					: "Nome Fantasia";
+	constructor(representadaInativa: Representada) {
 		super(
-			`Existe uma representada inativa com este mesmo ${rotuloCampo}: "${representadaInativa.nome_fantasia}". Deseja reativá-la?`,
+			`Existe uma representada inativa com este mesmo CNPJ: "${representadaInativa.nome_fantasia}". Deseja reativá-la?`,
 		);
 		this.name = "RepresentadaInativaExistenteError";
 		this.representadaInativa = representadaInativa;
-		this.campoConflito = campoConflito;
-	}
-}
-
-export class TenantDivergenteError extends Error {
-	constructor() {
-		super("Operação não permitida: registro pertence a outro tenant");
-		this.name = "TenantDivergenteError";
 	}
 }
 
@@ -82,16 +57,11 @@ export function criarRepresentada({
 		...dados,
 		id,
 		tenant_id: tenantId,
+		ativo: true,
 		created_at: agora,
 		updated_at: agora,
 		deleted_at: null,
 	});
-}
-
-function garantirMesmoTenant(representada: Representada, tenantId: string) {
-	if (representada.tenant_id !== tenantId) {
-		throw new TenantDivergenteError();
-	}
 }
 
 /** Aplica alterações preservando identidade, tenant e data de criação. */
@@ -110,26 +80,36 @@ export function atualizarRepresentada(
 	});
 }
 
-/** Soft delete: marca `deleted_at`. Idempotente. */
+/** Inativação (estado de negócio, reversível): marca `ativo = false`. Idempotente. */
 export function inativarRepresentada(
 	existente: Representada,
 	tenantId: string,
 	agora: string,
 ): Representada {
 	garantirMesmoTenant(existente, tenantId);
-	if (existente.deleted_at !== null) return existente;
-	return { ...existente, deleted_at: agora, updated_at: agora };
+	if (!existente.ativo) return existente;
+	return { ...existente, ativo: false, updated_at: agora };
 }
 
-/** Reativação de representada: limpa `deleted_at`. Idempotente. */
+/** Reativação: marca `ativo = true`. Idempotente. */
 export function reativarRepresentada(
 	existente: Representada,
 	tenantId: string,
 	agora: string,
 ): Representada {
 	garantirMesmoTenant(existente, tenantId);
-	if (existente.deleted_at === null) return existente;
-	return { ...existente, deleted_at: null, updated_at: agora };
+	if (existente.ativo) return existente;
+	return { ...existente, ativo: true, updated_at: agora };
+}
+
+/** Conflito bloqueante: outra representada (não excluída) com o mesmo CNPJ. */
+export function detectarConflitoCnpj(
+	candidatos: readonly Representada[],
+	cnpj: string,
+	idAtual?: string,
+): ConflitoUnicidade<Representada> | null {
+	const normalizado = normalizarCnpj(cnpj);
+	return detectarConflito(candidatos, (r) => r.cnpj === normalizado, idAtual);
 }
 
 /** Busca case/acento-insensível por razão social, nome fantasia ou CNPJ. */
@@ -137,17 +117,13 @@ export function correspondeBuscaRepresentada(
 	representada: Representada,
 	termo: string | undefined,
 ): boolean {
-	const termoNormalizado = normalizarTextoComparacao(termo ?? "");
+	const termoNormalizado = normalizarTexto(termo ?? "");
 	if (termoNormalizado === "") return true;
 
-	const termoCnpj = termoNormalizado.replace(/[.\-/\s]/g, "").toUpperCase();
+	const termoCnpj = normalizarCnpj(termoNormalizado);
 	return (
-		normalizarTextoComparacao(representada.razao_social).includes(
-			termoNormalizado,
-		) ||
-		normalizarTextoComparacao(representada.nome_fantasia).includes(
-			termoNormalizado,
-		) ||
+		normalizarTexto(representada.razao_social).includes(termoNormalizado) ||
+		normalizarTexto(representada.nome_fantasia).includes(termoNormalizado) ||
 		(termoCnpj !== "" && representada.cnpj.includes(termoCnpj))
 	);
 }
@@ -161,29 +137,17 @@ export function ordenarRepresentadas(lista: Representada[]): Representada[] {
 	);
 }
 
-/** Ordena lista colocando ativas primeiro (alfabético por nome fantasia) e inativas ao final (alfabético por nome fantasia). */
+/** Ordena lista colocando ativas primeiro e inativas ao final, ambas por nome fantasia. */
 export function ordenarRepresentadasComInativasNoFim(
 	lista: Representada[],
 ): Representada[] {
 	return [...lista].sort((a, b) => {
-		const aInativa = a.deleted_at !== null;
-		const bInativa = b.deleted_at !== null;
-
-		if (aInativa !== bInativa) {
-			return aInativa ? 1 : -1;
+		if (a.ativo !== b.ativo) {
+			return a.ativo ? -1 : 1;
 		}
 
 		return a.nome_fantasia.localeCompare(b.nome_fantasia, "pt-BR", {
 			sensitivity: "base",
 		});
 	});
-}
-
-/** Normaliza texto para comparações case/acento-insensíveis. */
-export function normalizarTextoComparacao(texto: string): string {
-	return texto
-		.normalize("NFD")
-		.replace(/[\u0300-\u036f]/g, "")
-		.toLowerCase()
-		.trim();
 }

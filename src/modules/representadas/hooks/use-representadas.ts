@@ -1,11 +1,11 @@
-import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
+import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
 import type { RepresentadaInput } from "../domain/representada.schema";
 import { representadaRepository } from "../repositories/representada-dexie.adapter";
 
 /** Lista reativa de representadas ativas do tenant. */
 export function useRepresentadas(tenantId: string, termoBusca?: string) {
-	const representadas = useLiveQuery(
+	const representadas = useLiveRepositoryQuery(
 		() => representadaRepository.listar(tenantId, termoBusca),
 		[tenantId, termoBusca],
 	);
@@ -18,7 +18,7 @@ export function useRepresentadas(tenantId: string, termoBusca?: string) {
 
 /** Lista reativa de todas as representadas do tenant (ativas e inativas). */
 export function useTodasRepresentadas(tenantId: string, termoBusca?: string) {
-	const representadas = useLiveQuery(
+	const representadas = useLiveRepositoryQuery(
 		() => representadaRepository.listarTodas(tenantId, termoBusca),
 		[tenantId, termoBusca],
 	);
@@ -38,7 +38,7 @@ export function useRepresentada(
 	id: string | undefined,
 	permitirInativo = false,
 ) {
-	const representada = useLiveQuery(async () => {
+	const representada = useLiveRepositoryQuery(async () => {
 		if (!id) return null;
 		return (
 			(await representadaRepository.obterPorId(

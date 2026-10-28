@@ -9,56 +9,20 @@ import {
 	InactiveRecoveryCard,
 	Input,
 } from "../../../shared/components/ui";
+import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
 import {
 	ProdutoInativoExistenteError,
 	SkuDuplicadoError,
 } from "../domain/produto";
+import { type Produto, UNIDADES_MEDIDA_PADRAO } from "../domain/produto.schema";
 import {
-	type Produto,
-	ProdutoInputSchema,
-	UNIDADES_MEDIDA_PADRAO,
-} from "../domain/produto.schema";
+	type ProdutoFormErros,
+	type ProdutoFormValues,
+	validarFormularioProduto,
+	valoresIniciaisProdutoForm,
+} from "../domain/produto-form";
 import { useProduto, useProdutoActions } from "../hooks/use-produtos";
-
-interface ProdutoFormValues {
-	representada_id: string;
-	sku: string;
-	descricao: string;
-	unidade_medida: string;
-	multiplo_embalagem: string;
-}
-
-interface ProdutoFormErrors {
-	representada_id?: string;
-	sku?: string;
-	descricao?: string;
-	unidade_medida?: string;
-	multiplo_embalagem?: string;
-}
-
-function valoresIniciais(
-	produto?: Produto,
-	defaultRepresentadaId = "",
-): ProdutoFormValues {
-	if (produto) {
-		return {
-			representada_id: produto.representada_id,
-			sku: produto.sku,
-			descricao: produto.descricao,
-			unidade_medida: produto.unidade_medida,
-			multiplo_embalagem: String(produto.multiplo_embalagem ?? 1),
-		};
-	}
-
-	return {
-		representada_id: defaultRepresentadaId,
-		sku: "",
-		descricao: "",
-		unidade_medida: "UN",
-		multiplo_embalagem: "1",
-	};
-}
 
 export function ProdutoFormView() {
 	const { id } = useParams();
@@ -121,9 +85,9 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 	const defaultRepId = representadas.length > 0 ? representadas[0].id : "";
 
 	const [valores, setValores] = useState<ProdutoFormValues>(() =>
-		valoresIniciais(produto, defaultRepId),
+		valoresIniciaisProdutoForm(produto, defaultRepId),
 	);
-	const [erros, setErros] = useState<ProdutoFormErrors>({});
+	const [erros, setErros] = useState<ProdutoFormErros>({});
 	const [erroGeral, setErroGeral] = useState<string | null>(null);
 	const [inativoConflitante, setInativoConflitante] = useState<Produto | null>(
 		null,
@@ -146,9 +110,7 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 			await reativar(inativoConflitante.id);
 			navigate("/catalogo");
 		} catch (err) {
-			setErroGeral(
-				err instanceof Error ? err.message : "Erro ao reativar produto",
-			);
+			setErroGeral(mensagemDeErro(err, "Erro ao reativar produto"));
 		} finally {
 			setSalvando(false);
 		}
@@ -159,28 +121,10 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 		setErroGeral(null);
 		setInativoConflitante(null);
 
-		const multiploNumero =
-			valores.multiplo_embalagem.trim() === ""
-				? 1
-				: Number.parseInt(valores.multiplo_embalagem, 10);
-
-		const validacao = ProdutoInputSchema.safeParse({
-			representada_id: valores.representada_id,
-			sku: valores.sku,
-			descricao: valores.descricao,
-			unidade_medida: valores.unidade_medida,
-			multiplo_embalagem: Number.isNaN(multiploNumero) ? 1 : multiploNumero,
-		});
-
+		const validacao = validarFormularioProduto(valores);
 		if (!validacao.success) {
-			const novosErros: ProdutoFormErrors = {};
-			for (const issue of validacao.error.issues) {
-				const campo = issue.path[0] as keyof ProdutoFormErrors;
-				if (campo && !novosErros[campo]) {
-					novosErros[campo] = issue.message;
-				}
-			}
-			setErros(novosErros);
+			setErros(validacao.erros);
+			setErroGeral(validacao.geral);
 			return;
 		}
 
@@ -199,9 +143,7 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 			} else if (err instanceof SkuDuplicadoError) {
 				setErros((atual) => ({ ...atual, sku: err.message }));
 			} else {
-				setErroGeral(
-					err instanceof Error ? err.message : "Erro ao salvar produto",
-				);
+				setErroGeral(mensagemDeErro(err, "Erro ao salvar produto"));
 			}
 		} finally {
 			setSalvando(false);
@@ -352,9 +294,7 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 						>
 							<Input
 								id="multiplo_embalagem"
-								type="number"
-								min={1}
-								step={1}
+								inputMode="numeric"
 								value={valores.multiplo_embalagem}
 								onChange={(e) => alterar("multiplo_embalagem", e.target.value)}
 								hasError={Boolean(erros.multiplo_embalagem)}

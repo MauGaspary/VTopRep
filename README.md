@@ -49,10 +49,12 @@ pnpm dev
 Executa a suíte de testes (com suporte ao Dexie em memória via fake-indexeddb):
 
 ```bash
+# Execução única (usada no pipeline de validação)
 pnpm test:run
-```
 
-*(Para modo watch no dia a dia do TDD, use o comando original do vitest ou adicione um script para `vitest`)*.
+# Modo watch, para o dia a dia do TDD
+pnpm test
+```
 
 ### 4. Code Quality (Lint e Tipagem)
 
@@ -82,5 +84,7 @@ pnpm build
 Se você é um contribuidor (ou IA), antes de dar commit na sua feature, sempre rode a validação completa do repositório garantindo que nenhum contrato foi quebrado:
 
 ```bash
-pnpm biome check --write && pnpm type-check && pnpm test:run
+pnpm validate
 ```
+
+O comando roda `biome check`, `tsc -b` e `vitest run`, nessa ordem, e falha no primeiro erro. Para corrigir automaticamente o que o Biome souber resolver (formatação, ordem de imports), rode `pnpm biome check --write` antes.

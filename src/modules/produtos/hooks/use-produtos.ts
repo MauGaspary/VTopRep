@@ -1,5 +1,5 @@
-import { useLiveQuery } from "dexie-react-hooks";
 import { useMemo } from "react";
+import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
 import type { ProdutoInput } from "../domain/produto.schema";
 import { produtoRepository } from "../repositories/produto-dexie.adapter";
 
@@ -9,7 +9,7 @@ export function useProdutos(
 	termoBusca?: string,
 	representadaId?: string,
 ) {
-	const produtos = useLiveQuery(() => {
+	const produtos = useLiveRepositoryQuery(() => {
 		if (!tenantId) return Promise.resolve([]);
 		return produtoRepository.listar(tenantId, termoBusca, representadaId);
 	}, [tenantId, termoBusca, representadaId]);
@@ -26,7 +26,7 @@ export function useTodosProdutos(
 	termoBusca?: string,
 	representadaId?: string,
 ) {
-	const produtos = useLiveQuery(() => {
+	const produtos = useLiveRepositoryQuery(() => {
 		if (!tenantId) return Promise.resolve([]);
 		return produtoRepository.listarTodos(tenantId, termoBusca, representadaId);
 	}, [tenantId, termoBusca, representadaId]);
@@ -46,7 +46,7 @@ export function useProduto(
 	id: string | undefined,
 	permitirInativo = false,
 ) {
-	const produto = useLiveQuery(async () => {
+	const produto = useLiveRepositoryQuery(async () => {
 		if (!tenantId || !id) return null;
 		return (
 			(await produtoRepository.obterPorId(tenantId, id, permitirInativo)) ??

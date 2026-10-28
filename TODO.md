@@ -54,9 +54,10 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ### 2.2. Motor Financeiro do Orçamento (Cálculos Puros)
-- [ ] **Cálculo de Itens:** Subtotais por item em centavos (`quantidade * preco_unitario - desconto_unitario`).
-- [ ] **Cálculo Global:** Totalizadores do orçamento/pedido e projeção de comissão do representante em centavos (`(total * comissao_padrao) / 10000`).
-- [ ] **Testes de Arredondamento:** Cobrir com Vitest casos de arredondamento bancário e centavos.
+- [x] **Base de Aritmética:** `src/shared/domain/dinheiro.ts` com `aplicarPercentual`, `multiplicarPorFracao`, `dividirHalfEven` e `somarCentavos` (inteiros/`BigInt`, half-even).
+- [ ] **Cálculo de Itens:** Preço líquido unitário em centavos a partir do `percentual_desconto` (centésimos de %, fonte da verdade): `preco_liquido = preco_unitario - aplicarPercentual(preco_unitario, percentual_desconto)`. Subtotal = `quantidade * preco_liquido`.
+- [ ] **Cálculo Global:** Totalizadores do orçamento/pedido e projeção de comissão do representante em centavos (`aplicarPercentual(total, comissao_padrao)`).
+- [ ] **Testes de Arredondamento:** Cobrir com Vitest casos de arredondamento bancário e centavos no motor do pedido.
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ### 2.3. Orçamento Ágil e Fechamento de Orçamento/Pedido

@@ -5,30 +5,37 @@ import {
 	Alert,
 	Button,
 	FormField,
+	HomonymWarning,
 	InactiveRecoveryCard,
 	Input,
 } from "../../../shared/components/ui";
+import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
+import { mensagemDeErro } from "../../../shared/domain/formulario";
 import {
-	formatarCpfCnpj,
-	isCpfOuCnpjValido,
-	normalizarCpfCnpj,
-} from "../../../shared/domain/cpf-cnpj";
-import {
+	type ClienteCompleto,
 	ClienteInativoExistenteError,
 	CpfCnpjDuplicadoError,
-	NomeFantasiaClienteDuplicadoError,
-	RazaoSocialClienteDuplicadaError,
 } from "../domain/cliente";
 import type { Cliente } from "../domain/cliente.schema";
+import { PAPEL_CONTATO } from "../domain/cliente-contato.schema";
+import { TIPO_ENDERECO } from "../domain/cliente-endereco.schema";
 import {
-	type ClienteContatoInput,
-	PAPEL_CONTATO,
-} from "../domain/cliente-contato.schema";
+	type CampoContatoForm,
+	type CampoEnderecoForm,
+	type ClienteFormErros,
+	type ClienteFormValues,
+	chaveErroContato,
+	chaveErroEndereco,
+	novoContatoForm,
+	novoEnderecoForm,
+	validarFormularioCliente,
+	valoresIniciaisClienteForm,
+} from "../domain/cliente-form";
 import {
-	type ClienteEnderecoInput,
-	TIPO_ENDERECO,
-} from "../domain/cliente-endereco.schema";
-import { useCliente, useClienteActions } from "../hooks/use-clientes";
+	useCliente,
+	useClienteActions,
+	useHomonimosCliente,
+} from "../hooks/use-clientes";
 
 export function ClienteFormView() {
 	const { id } = useParams();
@@ -58,120 +65,113 @@ export function ClienteFormView() {
 		<ClienteForm
 			key={dados?.cliente.id ?? "novo"}
 			tenantId={config.id}
-			clienteOriginal={dados?.cliente}
-			enderecosIniciais={dados?.enderecos}
-			contatosIniciais={dados?.contatos}
+			original={dados ?? undefined}
 		/>
 	);
 }
 
 interface ClienteFormProps {
 	tenantId: string;
-	clienteOriginal?: Cliente;
-	enderecosIniciais?: ClienteEnderecoInput[];
-	contatosIniciais?: ClienteContatoInput[];
+	original?: ClienteCompleto;
 }
 
-function ClienteForm({
-	tenantId,
-	clienteOriginal,
-	enderecosIniciais = [],
-	contatosIniciais = [],
-}: ClienteFormProps) {
+const gerarLocalId = () => crypto.randomUUID();
+
+function ClienteForm({ tenantId, original }: ClienteFormProps) {
 	const navigate = useNavigate();
 	const { criar, atualizar, reativar } = useClienteActions(tenantId);
+	const clienteOriginal = original?.cliente;
 
-	// Dados do Cliente
-	const [cnpjCpf, setCnpjCpf] = useState(
-		clienteOriginal ? formatarCpfCnpj(clienteOriginal.cnpj_cpf) : "",
+	const [valores, setValores] = useState<ClienteFormValues>(() =>
+		valoresIniciaisClienteForm(original),
 	);
-	const [razaoSocial, setRazaoSocial] = useState(
-		clienteOriginal?.razao_social ?? "",
-	);
-	const [nomeFantasia, setNomeFantasia] = useState(
-		clienteOriginal?.nome_fantasia ?? "",
-	);
-
-	// Endereços e Contatos
-	const [enderecos, setEnderecos] = useState<
-		Array<ClienteEnderecoInput & { localId: string }>
-	>(() =>
-		enderecosIniciais.map((e) => ({
-			...e,
-			localId: e.id ?? crypto.randomUUID(),
-		})),
-	);
-	const [contatos, setContatos] = useState<
-		Array<ClienteContatoInput & { localId: string }>
-	>(() =>
-		contatosIniciais.map((c) => ({
-			...c,
-			localId: c.id ?? crypto.randomUUID(),
-		})),
-	);
-
-	// Feedback
-	const [erros, setErros] = useState<Record<string, string>>({});
+	const [erros, setErros] = useState<ClienteFormErros>({});
 	const [erroGeral, setErroGeral] = useState<string | null>(null);
 	const [inativoConflitante, setInativoConflitante] = useState<Cliente | null>(
 		null,
 	);
 	const [salvando, setSalvando] = useState(false);
+	const homonimos = useHomonimosCliente(
+		tenantId,
+		{
+			razao_social: valores.razao_social,
+			nome_fantasia: valores.nome_fantasia,
+		},
+		clienteOriginal?.id,
+	);
 
 	const editando = clienteOriginal !== undefined;
 
+	const limparErro = (chave: string) =>
+		setErros((atual) => ({ ...atual, [chave]: undefined }));
+
+	const alterarCampo = (
+		campo: "cnpj_cpf" | "razao_social" | "nome_fantasia",
+		valor: string,
+	) => {
+		setValores((atual) => ({ ...atual, [campo]: valor }));
+		limparErro(campo);
+		setInativoConflitante(null);
+	};
+
 	// Gestão de Endereços
 	const adicionarEndereco = () => {
-		setEnderecos((prev) => [
-			...prev,
-			{
-				localId: crypto.randomUUID(),
-				tipo_endereco: "PRINCIPAL",
-				endereco_completo: "",
-			},
-		]);
+		setValores((atual) => ({
+			...atual,
+			enderecos: [...atual.enderecos, novoEnderecoForm(gerarLocalId)],
+		}));
 	};
 
 	const removerEndereco = (index: number) => {
-		setEnderecos((prev) => prev.filter((_, i) => i !== index));
+		setValores((atual) => ({
+			...atual,
+			enderecos: atual.enderecos.filter((_, i) => i !== index),
+		}));
+		setErros({});
 	};
 
 	const alterarEndereco = (
 		index: number,
-		campo: keyof ClienteEnderecoInput,
+		campo: CampoEnderecoForm,
 		valor: string,
 	) => {
-		setEnderecos((prev) =>
-			prev.map((end, i) => (i === index ? { ...end, [campo]: valor } : end)),
-		);
+		setValores((atual) => ({
+			...atual,
+			enderecos: atual.enderecos.map((end, i) =>
+				i === index ? { ...end, [campo]: valor } : end,
+			),
+		}));
+		limparErro(chaveErroEndereco(index, campo));
 	};
 
 	// Gestão de Contatos
 	const adicionarContato = () => {
-		setContatos((prev) => [
-			...prev,
-			{
-				localId: crypto.randomUUID(),
-				nome: "",
-				papel: "COMPRADOR",
-				telefone_whatsapp: "",
-				email: "",
-			},
-		]);
+		setValores((atual) => ({
+			...atual,
+			contatos: [...atual.contatos, novoContatoForm(gerarLocalId)],
+		}));
 	};
 
 	const removerContato = (index: number) => {
-		setContatos((prev) => prev.filter((_, i) => i !== index));
+		setValores((atual) => ({
+			...atual,
+			contatos: atual.contatos.filter((_, i) => i !== index),
+		}));
+		setErros({});
 	};
 
 	const alterarContato = (
 		index: number,
-		campo: keyof ClienteContatoInput,
+		campo: CampoContatoForm,
 		valor: string,
 	) => {
-		setContatos((prev) =>
-			prev.map((cont, i) => (i === index ? { ...cont, [campo]: valor } : cont)),
-		);
+		setValores((atual) => ({
+			...atual,
+			contatos: atual.contatos.map((cont, i) =>
+				i === index ? { ...cont, [campo]: valor } : cont,
+			),
+		}));
+		limparErro(chaveErroContato(index, campo));
 	};
 
 	const handleReativarExistente = async () => {
@@ -182,9 +182,7 @@ function ClienteForm({
 			await reativar(inativoConflitante.id);
 			navigate("/clientes");
 		} catch (err) {
-			setErroGeral(
-				err instanceof Error ? err.message : "Erro ao reativar cliente",
-			);
+			setErroGeral(mensagemDeErro(err, "Erro ao reativar cliente"));
 		} finally {
 			setSalvando(false);
 		}
@@ -192,82 +190,33 @@ function ClienteForm({
 
 	const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		setErros({});
 		setErroGeral(null);
 		setInativoConflitante(null);
 
-		const novosErros: Record<string, string> = {};
-
-		if (!razaoSocial.trim()) {
-			novosErros.razao_social = "Razão Social / Nome é obrigatório";
-		}
-
-		if (!cnpjCpf.trim()) {
-			novosErros.cnpj_cpf = "CPF ou CNPJ é obrigatório";
-		} else if (!isCpfOuCnpjValido(cnpjCpf)) {
-			novosErros.cnpj_cpf = "Documento (CPF ou CNPJ) inválido";
-		}
-
-		// Validação de endereços preenchidos
-		enderecos.forEach((end, idx) => {
-			if (!end.endereco_completo.trim()) {
-				novosErros[`endereco_${idx}`] = "Endereço completo não pode ser vazio";
-			}
-		});
-
-		// Validação de contatos preenchidos
-		contatos.forEach((cont, idx) => {
-			if (!cont.nome.trim()) {
-				novosErros[`contato_nome_${idx}`] = "Nome do contato é obrigatório";
-			}
-			if (!cont.telefone_whatsapp.trim()) {
-				novosErros[`contato_tel_${idx}`] = "Telefone é obrigatório";
-			}
-		});
-
-		if (Object.keys(novosErros).length > 0) {
-			setErros(novosErros);
+		const resultado = validarFormularioCliente(valores);
+		if (!resultado.success) {
+			setErros(resultado.erros);
+			setErroGeral(resultado.geral);
 			return;
 		}
+		setErros({});
 
 		setSalvando(true);
 		try {
-			const payload = {
-				cliente: {
-					cnpj_cpf: normalizarCpfCnpj(cnpjCpf),
-					razao_social: razaoSocial.trim(),
-					nome_fantasia: nomeFantasia.trim() || null,
-				},
-				enderecos: enderecos.filter((end) => end.endereco_completo.trim()),
-				contatos: contatos.filter((cont) => cont.nome.trim()),
-			};
-
 			if (clienteOriginal) {
-				await atualizar(clienteOriginal.id, payload);
+				await atualizar(clienteOriginal.id, resultado.data);
 			} else {
-				await criar(payload);
+				await criar(resultado.data);
 			}
 			navigate("/clientes");
 		} catch (err) {
 			if (err instanceof ClienteInativoExistenteError) {
 				setInativoConflitante(err.clienteInativo);
-				if (err.campoConflito === "cnpj_cpf") {
-					setErros((prev) => ({ ...prev, cnpj_cpf: err.message }));
-				} else if (err.campoConflito === "razao_social") {
-					setErros((prev) => ({ ...prev, razao_social: err.message }));
-				} else if (err.campoConflito === "nome_fantasia") {
-					setErros((prev) => ({ ...prev, nome_fantasia: err.message }));
-				}
+				setErros({ cnpj_cpf: err.message });
 			} else if (err instanceof CpfCnpjDuplicadoError) {
-				setErros((prev) => ({ ...prev, cnpj_cpf: err.message }));
-			} else if (err instanceof RazaoSocialClienteDuplicadaError) {
-				setErros((prev) => ({ ...prev, razao_social: err.message }));
-			} else if (err instanceof NomeFantasiaClienteDuplicadoError) {
-				setErros((prev) => ({ ...prev, nome_fantasia: err.message }));
+				setErros({ cnpj_cpf: err.message });
 			} else {
-				setErroGeral(
-					err instanceof Error ? err.message : "Erro ao salvar cliente",
-				);
+				setErroGeral(mensagemDeErro(err, "Erro ao salvar cliente"));
 			}
 		} finally {
 			setSalvando(false);
@@ -308,12 +257,8 @@ function ClienteForm({
 						>
 							<Input
 								id="cnpj_cpf"
-								value={cnpjCpf}
-								onChange={(e) => {
-									setCnpjCpf(e.target.value);
-									setErros((prev) => ({ ...prev, cnpj_cpf: "" }));
-									setInativoConflitante(null);
-								}}
+								value={valores.cnpj_cpf}
+								onChange={(e) => alterarCampo("cnpj_cpf", e.target.value)}
 								placeholder="000.000.000-00 ou 00.000.000/0000-00"
 								autoComplete="off"
 								hasError={Boolean(erros.cnpj_cpf)}
@@ -329,12 +274,8 @@ function ClienteForm({
 						>
 							<Input
 								id="razao_social"
-								value={razaoSocial}
-								onChange={(e) => {
-									setRazaoSocial(e.target.value);
-									setErros((prev) => ({ ...prev, razao_social: "" }));
-									setInativoConflitante(null);
-								}}
+								value={valores.razao_social}
+								onChange={(e) => alterarCampo("razao_social", e.target.value)}
 								autoComplete="off"
 								hasError={Boolean(erros.razao_social)}
 							/>
@@ -348,16 +289,25 @@ function ClienteForm({
 					>
 						<Input
 							id="nome_fantasia"
-							value={nomeFantasia}
-							onChange={(e) => {
-								setNomeFantasia(e.target.value);
-								setErros((prev) => ({ ...prev, nome_fantasia: "" }));
-								setInativoConflitante(null);
-							}}
+							value={valores.nome_fantasia}
+							onChange={(e) => alterarCampo("nome_fantasia", e.target.value)}
 							autoComplete="off"
 							hasError={Boolean(erros.nome_fantasia)}
 						/>
 					</FormField>
+
+					<HomonymWarning
+						title="Já existe cliente com este nome na carteira:"
+						description="Nomes repetidos são permitidos (ex.: filiais ou redes). Confira se não é um cadastro duplicado."
+						items={homonimos.map(({ registro }) => ({
+							id: registro.id,
+							nome: registro.nome_fantasia
+								? `${registro.razao_social} · ${registro.nome_fantasia}`
+								: registro.razao_social,
+							detalhe: formatarCpfCnpj(registro.cnpj_cpf),
+							inativo: !registro.ativo,
+						}))}
+					/>
 				</div>
 
 				{/* Endereços */}
@@ -374,54 +324,66 @@ function ClienteForm({
 						</Button>
 					</div>
 
-					{enderecos.length === 0 && (
+					{valores.enderecos.length === 0 && (
 						<p className="text-xs text-muted-foreground italic">
 							Nenhum endereço cadastrado no momento.
 						</p>
 					)}
 
-					{enderecos.map((end, idx) => (
-						<div
-							key={end.localId}
-							className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<select
-									value={end.tipo_endereco}
+					{valores.enderecos.map((end, idx) => {
+						const erroTipo = erros[chaveErroEndereco(idx, "tipo_endereco")];
+						const erroEndereco =
+							erros[chaveErroEndereco(idx, "endereco_completo")];
+						return (
+							<div
+								key={end.localId}
+								className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3"
+							>
+								<div className="flex items-center justify-between gap-2">
+									<select
+										aria-label="Tipo de endereço"
+										value={end.tipo_endereco}
+										onChange={(e) =>
+											alterarEndereco(idx, "tipo_endereco", e.target.value)
+										}
+										className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+									>
+										{TIPO_ENDERECO.map((tipo) => (
+											<option key={tipo} value={tipo}>
+												{tipo}
+											</option>
+										))}
+									</select>
+									<Button
+										variant="destructive"
+										size="sm"
+										onClick={() => removerEndereco(idx)}
+									>
+										Remover
+									</Button>
+								</div>
+								{erroTipo && (
+									<span role="alert" className="text-xs text-destructive">
+										{erroTipo}
+									</span>
+								)}
+								<Input
+									aria-label="Endereço completo"
+									value={end.endereco_completo}
 									onChange={(e) =>
-										alterarEndereco(idx, "tipo_endereco", e.target.value)
+										alterarEndereco(idx, "endereco_completo", e.target.value)
 									}
-									className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-								>
-									{TIPO_ENDERECO.map((tipo) => (
-										<option key={tipo} value={tipo}>
-											{tipo}
-										</option>
-									))}
-								</select>
-								<Button
-									variant="destructive"
-									size="sm"
-									onClick={() => removerEndereco(idx)}
-								>
-									Remover
-								</Button>
+									placeholder="Rua, número, complemento, bairro, cidade - UF"
+									hasError={Boolean(erroEndereco)}
+								/>
+								{erroEndereco && (
+									<span role="alert" className="text-xs text-destructive">
+										{erroEndereco}
+									</span>
+								)}
 							</div>
-							<Input
-								value={end.endereco_completo}
-								onChange={(e) =>
-									alterarEndereco(idx, "endereco_completo", e.target.value)
-								}
-								placeholder="Rua, número, complemento, bairro, cidade - UF"
-								hasError={Boolean(erros[`endereco_${idx}`])}
-							/>
-							{erros[`endereco_${idx}`] && (
-								<span role="alert" className="text-xs text-destructive">
-									{erros[`endereco_${idx}`]}
-								</span>
-							)}
-						</div>
-					))}
+						);
+					})}
 				</div>
 
 				{/* Contatos */}
@@ -438,81 +400,107 @@ function ClienteForm({
 						</Button>
 					</div>
 
-					{contatos.length === 0 && (
+					{valores.contatos.length === 0 && (
 						<p className="text-xs text-muted-foreground italic">
 							Nenhum contato cadastrado no momento.
 						</p>
 					)}
 
-					{contatos.map((cont, idx) => (
-						<div
-							key={cont.localId}
-							className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3"
-						>
-							<div className="flex items-center justify-between gap-2">
-								<select
-									value={cont.papel ?? "COMPRADOR"}
-									onChange={(e) => alterarContato(idx, "papel", e.target.value)}
-									className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
-								>
-									{PAPEL_CONTATO.map((papel) => (
-										<option key={papel} value={papel}>
-											{papel}
-										</option>
-									))}
-								</select>
-								<Button
-									variant="destructive"
-									size="sm"
-									onClick={() => removerContato(idx)}
-								>
-									Remover
-								</Button>
-							</div>
+					{valores.contatos.map((cont, idx) => {
+						const erroNome = erros[chaveErroContato(idx, "nome")];
+						const erroTelefone =
+							erros[chaveErroContato(idx, "telefone_whatsapp")];
+						const erroEmail = erros[chaveErroContato(idx, "email")];
+						const erroPapel = erros[chaveErroContato(idx, "papel")];
+						return (
+							<div
+								key={cont.localId}
+								className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3"
+							>
+								<div className="flex items-center justify-between gap-2">
+									<select
+										aria-label="Papel do contato"
+										value={cont.papel}
+										onChange={(e) =>
+											alterarContato(idx, "papel", e.target.value)
+										}
+										className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+									>
+										<option value="">SEM PAPEL</option>
+										{PAPEL_CONTATO.map((papel) => (
+											<option key={papel} value={papel}>
+												{papel}
+											</option>
+										))}
+									</select>
+									<Button
+										variant="destructive"
+										size="sm"
+										onClick={() => removerContato(idx)}
+									>
+										Remover
+									</Button>
+								</div>
+								{erroPapel && (
+									<span role="alert" className="text-xs text-destructive">
+										{erroPapel}
+									</span>
+								)}
 
-							<div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
-								<div>
-									<Input
-										value={cont.nome}
-										onChange={(e) =>
-											alterarContato(idx, "nome", e.target.value)
-										}
-										placeholder="Nome do contato"
-										hasError={Boolean(erros[`contato_nome_${idx}`])}
-									/>
-									{erros[`contato_nome_${idx}`] && (
-										<span role="alert" className="text-xs text-destructive">
-											{erros[`contato_nome_${idx}`]}
-										</span>
-									)}
-								</div>
-								<div>
-									<Input
-										value={cont.telefone_whatsapp}
-										onChange={(e) =>
-											alterarContato(idx, "telefone_whatsapp", e.target.value)
-										}
-										placeholder="Telefone / WhatsApp"
-										hasError={Boolean(erros[`contato_tel_${idx}`])}
-									/>
-									{erros[`contato_tel_${idx}`] && (
-										<span role="alert" className="text-xs text-destructive">
-											{erros[`contato_tel_${idx}`]}
-										</span>
-									)}
-								</div>
-								<div>
-									<Input
-										value={cont.email ?? ""}
-										onChange={(e) =>
-											alterarContato(idx, "email", e.target.value)
-										}
-										placeholder="E-mail (opcional)"
-									/>
+								<div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+									<div>
+										<Input
+											aria-label="Nome do contato"
+											value={cont.nome}
+											onChange={(e) =>
+												alterarContato(idx, "nome", e.target.value)
+											}
+											placeholder="Nome do contato"
+											hasError={Boolean(erroNome)}
+										/>
+										{erroNome && (
+											<span role="alert" className="text-xs text-destructive">
+												{erroNome}
+											</span>
+										)}
+									</div>
+									<div>
+										<Input
+											aria-label="Telefone / WhatsApp"
+											value={cont.telefone_whatsapp}
+											onChange={(e) =>
+												alterarContato(idx, "telefone_whatsapp", e.target.value)
+											}
+											placeholder="Telefone / WhatsApp"
+											hasError={Boolean(erroTelefone)}
+										/>
+										{erroTelefone && (
+											<span role="alert" className="text-xs text-destructive">
+												{erroTelefone}
+											</span>
+										)}
+									</div>
+									<div>
+										<Input
+											aria-label="E-mail"
+											type="email"
+											value={cont.email}
+											onChange={(e) =>
+												alterarContato(idx, "email", e.target.value)
+											}
+											placeholder="E-mail (opcional)"
+											hasError={Boolean(erroEmail)}
+										/>
+										{erroEmail && (
+											<span role="alert" className="text-xs text-destructive">
+												{erroEmail}
+											</span>
+										)}
+									</div>
 								</div>
 							</div>
-						</div>
-					))}
+						);
+					})}
 				</div>
 
 				{/* Alerta de inativo conflitante */}
