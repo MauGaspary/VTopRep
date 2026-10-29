@@ -19,7 +19,8 @@ const defaultMockConfig: TenantConfig = {
 		telefone: "(00) 0000-0000",
 	},
 	visual: {
-		primaryColorHsl: "234 56% 60%",
+		primaryColorHsl: "228, 60%, 34%",
+		secondaryColorHsl: "214, 26%, 53%",
 	},
 };
 
@@ -41,7 +42,8 @@ export function TenantProvider({ children }: TenantProviderProps) {
 			root.style.removeProperty("--primary");
 			root.style.removeProperty("--ring");
 		};
-	}, [config.visual.primaryColorHsl]);
+	}, [config.visual.primaryColorHsl] 
+	   [config.visual.secondaryColorHsl]);
 
 	return (
 		<TenantContext.Provider value={{ config }}>

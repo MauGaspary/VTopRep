@@ -12,6 +12,7 @@ export const tenantConfigSchema = z.object({
 	visual: z.object({
 		logoUrl: z.string().url().optional(),
 		primaryColorHsl: z.string().optional(),
+		secondaryColorHsl: z.string().optional(),
 	}),
 });
 
