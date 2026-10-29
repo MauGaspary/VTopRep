@@ -1,13 +1,19 @@
+import { Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
+import { Page } from "../../../shared/components/layout/Page";
 import {
 	Alert,
 	Button,
+	buttonClassName,
+	cardClassName,
 	FormField,
 	HomonymWarning,
 	InactiveRecoveryCard,
 	Input,
+	PageHeader,
+	Select,
 } from "../../../shared/components/ui";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
@@ -52,12 +58,12 @@ export function ClienteFormView() {
 
 	if (id && !dados) {
 		return (
-			<section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-4">
+			<Page width="narrow">
 				<p className="text-foreground">Cliente não encontrado.</p>
 				<Link to="/clientes" className="text-sm text-primary underline">
 					Voltar para a lista
 				</Link>
-			</section>
+			</Page>
 		);
 	}
 
@@ -224,28 +230,23 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 	};
 
 	return (
-		<section className="mx-auto flex w-full max-w-3xl flex-col gap-4 p-4">
-			<div>
-				<Link
-					to="/clientes"
-					className="text-sm text-muted-foreground hover:text-foreground"
-				>
-					← Clientes
-				</Link>
-				<h1 className="mt-1 text-2xl font-semibold text-foreground">
-					{editando ? "Editar Cliente" : "Novo Cliente"}
-				</h1>
-			</div>
+		<Page width="form">
+			<PageHeader
+				title={editando ? "Editar cliente" : "Novo cliente"}
+				back={{ to: "/clientes", label: "Clientes" }}
+			/>
 
 			<form
 				noValidate
 				onSubmit={handleSubmit}
-				className="flex flex-col gap-6 rounded-lg border border-border bg-card p-4 shadow-sm"
+				className={cardClassName({
+					className: "flex flex-col gap-8 p-4 md:p-6",
+				})}
 			>
 				{/* Dados Principais */}
 				<div className="flex flex-col gap-4">
-					<h2 className="text-lg font-medium text-foreground border-b border-border pb-2">
-						Dados Gerais
+					<h2 className="border-b border-border pb-2 text-sm font-semibold text-foreground">
+						Dados gerais
 					</h2>
 
 					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
@@ -313,14 +314,10 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 				{/* Endereços */}
 				<div className="flex flex-col gap-3">
 					<div className="flex items-center justify-between border-b border-border pb-2">
-						<h2 className="text-lg font-medium text-foreground">Endereços</h2>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={adicionarEndereco}
-							className="text-primary hover:text-primary"
-						>
-							+ Adicionar Endereço
+						<h2 className="text-sm font-semibold text-foreground">Endereços</h2>
+						<Button variant="ghost" size="sm" onClick={adicionarEndereco}>
+							<Plus aria-hidden="true" />
+							Adicionar endereço
 						</Button>
 					</div>
 
@@ -337,23 +334,24 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 						return (
 							<div
 								key={end.localId}
-								className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3"
+								className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-3"
 							>
 								<div className="flex items-center justify-between gap-2">
-									<select
+									<Select
+										size="sm"
 										aria-label="Tipo de endereço"
 										value={end.tipo_endereco}
 										onChange={(e) =>
 											alterarEndereco(idx, "tipo_endereco", e.target.value)
 										}
-										className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+										hasError={Boolean(erroTipo)}
 									>
 										{TIPO_ENDERECO.map((tipo) => (
 											<option key={tipo} value={tipo}>
 												{tipo}
 											</option>
 										))}
-									</select>
+									</Select>
 									<Button
 										variant="destructive"
 										size="sm"
@@ -389,14 +387,10 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 				{/* Contatos */}
 				<div className="flex flex-col gap-3">
 					<div className="flex items-center justify-between border-b border-border pb-2">
-						<h2 className="text-lg font-medium text-foreground">Contatos</h2>
-						<Button
-							variant="ghost"
-							size="sm"
-							onClick={adicionarContato}
-							className="text-primary hover:text-primary"
-						>
-							+ Adicionar Contato
+						<h2 className="text-sm font-semibold text-foreground">Contatos</h2>
+						<Button variant="ghost" size="sm" onClick={adicionarContato}>
+							<Plus aria-hidden="true" />
+							Adicionar contato
 						</Button>
 					</div>
 
@@ -415,16 +409,17 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 						return (
 							<div
 								key={cont.localId}
-								className="flex flex-col gap-2 rounded-lg border border-border bg-muted/20 p-3"
+								className="flex flex-col gap-2 rounded-lg border border-border bg-muted/50 p-3"
 							>
 								<div className="flex items-center justify-between gap-2">
-									<select
+									<Select
+										size="sm"
 										aria-label="Papel do contato"
 										value={cont.papel}
 										onChange={(e) =>
 											alterarContato(idx, "papel", e.target.value)
 										}
-										className="rounded border border-input bg-background px-2 py-1 text-xs text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+										hasError={Boolean(erroPapel)}
 									>
 										<option value="">SEM PAPEL</option>
 										{PAPEL_CONTATO.map((papel) => (
@@ -432,7 +427,7 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 												{papel}
 											</option>
 										))}
-									</select>
+									</Select>
 									<Button
 										variant="destructive"
 										size="sm"
@@ -516,15 +511,18 @@ function ClienteForm({ tenantId, original }: ClienteFormProps) {
 
 				{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
 
-				<div className="flex justify-end gap-2 pt-2 border-t border-border">
-					<Link to="/clientes">
-						<Button variant="ghost">Cancelar</Button>
+				<div className="flex justify-end gap-2 border-t border-border pt-4">
+					<Link
+						to="/clientes"
+						className={buttonClassName({ variant: "ghost" })}
+					>
+						Cancelar
 					</Link>
 					<Button type="submit" disabled={salvando}>
 						{salvando ? "Salvando..." : "Salvar"}
 					</Button>
 				</div>
 			</form>
-		</section>
+		</Page>
 	);
 }

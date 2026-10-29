@@ -5,6 +5,7 @@ import type { ClienteEndereco } from "../modules/clientes/domain/cliente-enderec
 import type { ClienteMetrica } from "../modules/clientes/domain/cliente-metrica.schema";
 import type { ItemPedido } from "../modules/pedidos/domain/item-pedido.schema";
 import type { Pedido } from "../modules/pedidos/domain/pedido.schema";
+import type { ClienteTabelaPreco } from "../modules/produtos/domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../modules/produtos/domain/item-preco.schema";
 import type { Produto } from "../modules/produtos/domain/produto.schema";
 import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
@@ -20,6 +21,7 @@ export class AppDatabase extends Dexie {
 	clientes_enderecos!: Table<ClienteEndereco, string>;
 	clientes_contatos!: Table<ClienteContato, string>;
 	clientes_metricas!: Table<ClienteMetrica, string>;
+	clientes_tabelas_preco!: Table<ClienteTabelaPreco, string>;
 	produtos!: Table<Produto, string>;
 	tabelas_preco!: Table<TabelaPreco, string>;
 	itens_preco!: Table<ItemPreco, string>;
@@ -76,6 +78,15 @@ export class AppDatabase extends Dexie {
 
 		// v5: timestamps e soft delete em endereços e contatos (sem mudar índices).
 		this.version(5).stores({}).upgrade(migrarParaV5);
+
+		// v6: tabela de preço padrão por cliente e representada; busca direta
+		// do preço de um produto numa tabela. Só cria estruturas, sem upgrade.
+		this.version(6).stores({
+			clientes_tabelas_preco:
+				"id, tenant_id, [tenant_id+cliente_id+representada_id]",
+			itens_preco:
+				"id, tenant_id, [tenant_id+tabela_id], [tenant_id+produto_id], [tenant_id+tabela_id+produto_id], [tenant_id+deleted_at]",
+		});
 	}
 }
 

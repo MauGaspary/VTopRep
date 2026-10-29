@@ -1,7 +1,9 @@
+import { Search } from "lucide-react";
 import { Input } from "./Input";
 
 export interface SearchInputProps {
 	id?: string;
+	/** Rótulo acessível. Fica visualmente oculto; o ícone e o placeholder dão o contexto. */
 	label?: string;
 	placeholder?: string;
 	value: string;
@@ -18,18 +20,21 @@ export function SearchInput({
 	className = "",
 }: SearchInputProps) {
 	return (
-		<div className={`flex flex-col gap-1 ${className}`}>
-			{label && (
-				<label htmlFor={id} className="text-sm font-medium text-foreground">
-					{label}
-				</label>
-			)}
+		<div className={`relative ${className}`}>
+			<label htmlFor={id} className="sr-only">
+				{label}
+			</label>
+			<Search
+				aria-hidden="true"
+				className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-subtle-foreground"
+			/>
 			<Input
 				id={id}
 				type="search"
 				placeholder={placeholder}
 				value={value}
 				onChange={(e) => onChange(e.target.value)}
+				className="pl-9"
 			/>
 		</div>
 	);

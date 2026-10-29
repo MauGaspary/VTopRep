@@ -19,7 +19,7 @@ const defaultMockConfig: TenantConfig = {
 		telefone: "(00) 0000-0000",
 	},
 	visual: {
-		primaryColorHsl: "210 100% 50%",
+		primaryColorHsl: "234 56% 60%",
 	},
 };
 

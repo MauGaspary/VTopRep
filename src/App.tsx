@@ -8,44 +8,35 @@ import { ProdutoFormView } from "./modules/produtos/components/produto-form-view
 import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
 import { RepresentadasListView } from "./modules/representadas/components/representadas-list-view";
 import { DevSeedButton } from "./shared/components/dev/DevSeedButton";
-import { Header } from "./shared/components/layout/Header";
+import { AppShell } from "./shared/components/layout/AppShell";
 
 function AppRoutes() {
 	const { config } = useTenant();
 
 	return (
-		<div className="flex min-h-svh flex-col">
-			<Header />
-			<main className="flex-1">
-				<Routes>
-					<Route path="/" element={<Navigate to="/catalogo" replace />} />
-					<Route
-						path="/catalogo"
-						element={<CatalogoView tenantId={config.id} />}
-					/>
-					<Route
-						path="/produtos"
-						element={<Navigate to="/catalogo" replace />}
-					/>
-					<Route path="/produtos/novo" element={<ProdutoFormView />} />
-					<Route path="/produtos/:id/editar" element={<ProdutoFormView />} />
-					<Route path="/representadas" element={<RepresentadasListView />} />
-					<Route
-						path="/representadas/nova"
-						element={<RepresentadaFormView />}
-					/>
-					<Route
-						path="/representadas/:id/editar"
-						element={<RepresentadaFormView />}
-					/>
-					<Route path="/clientes" element={<ClientesListView />} />
-					<Route path="/clientes/novo" element={<ClienteFormView />} />
-					<Route path="/clientes/:id/editar" element={<ClienteFormView />} />
-					<Route path="*" element={<Navigate to="/catalogo" replace />} />
-				</Routes>
-			</main>
+		<AppShell>
+			<Routes>
+				<Route path="/" element={<Navigate to="/catalogo" replace />} />
+				<Route
+					path="/catalogo"
+					element={<CatalogoView tenantId={config.id} />}
+				/>
+				<Route path="/produtos" element={<Navigate to="/catalogo" replace />} />
+				<Route path="/produtos/novo" element={<ProdutoFormView />} />
+				<Route path="/produtos/:id/editar" element={<ProdutoFormView />} />
+				<Route path="/representadas" element={<RepresentadasListView />} />
+				<Route path="/representadas/nova" element={<RepresentadaFormView />} />
+				<Route
+					path="/representadas/:id/editar"
+					element={<RepresentadaFormView />}
+				/>
+				<Route path="/clientes" element={<ClientesListView />} />
+				<Route path="/clientes/novo" element={<ClienteFormView />} />
+				<Route path="/clientes/:id/editar" element={<ClienteFormView />} />
+				<Route path="*" element={<Navigate to="/catalogo" replace />} />
+			</Routes>
 			<DevSeedButton tenantId={config.id} />
-		</div>
+		</AppShell>
 	);
 }
 

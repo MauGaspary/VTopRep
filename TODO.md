@@ -44,14 +44,20 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **UI:** Criar tela de listagem e formulário de cadastro de produtos.
 - [x] **Validação:** Rodar `pnpm validate`.
 
+### 1.8. Revisão da Fase 1
+- [x] **Melhorias:** Unicidade, isolamento de tenant, modelo de dados, formulários e módulo de dinheiro (detalhes e pendências em `MELHORIAS.md`).
+- [x] **Validação:** Rodar `pnpm validate`.
+
 ---
 
 ## Fase 2: Motor de Orçamentos, Vendas e Emissão de Pedidos
 
 ### 2.1. Tabelas de Preços e Resolução Dinâmica
-- [ ] **Lógica Pura:** Função de resolução de preço ativo baseada na tabela e vigência selecionadas.
-- [ ] **Repositório:** Adaptador Dexie para consulta rápida de preços (`tabelas_preco` e `itens_preco`).
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Lógica Pura:** Resolução de preço pela tabela selecionada e vigência (`src/modules/produtos/domain/preco.ts`), com motivo quando não há preço (`tabela_nao_encontrada`, `tabela_inativa`, `fora_de_vigencia`, `produto_sem_preco`).
+- [x] **Repositório:** `PrecoRepository` + adaptador Dexie (`preco-dexie.adapter.ts`), com índice `[tenant_id+tabela_id+produto_id]` (Dexie v6).
+- [x] **Tabela por Cliente:** `clientes_tabelas_preco` (tabela padrão por cliente e representada), usada para sugerir a tabela do pedido.
+- [ ] **UI:** Escolha da tabela padrão no cadastro do cliente e da tabela no orçamento (entra com a 2.3).
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.2. Motor Financeiro do Orçamento (Cálculos Puros)
 - [x] **Base de Aritmética:** `src/shared/domain/dinheiro.ts` com `aplicarPercentual`, `multiplicarPorFracao`, `dividirHalfEven` e `somarCentavos` (inteiros/`BigInt`, half-even).
@@ -61,13 +67,13 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ### 2.3. Orçamento Ágil e Fechamento de Orçamento/Pedido
-- [ ] **Contexto de Venda:** Seleção rápida de Cliente, Endereço de Entrega, Contato, Tipo de Frete (CIF/FOB) e Condição de Pagamento.
+- [ ] **Contexto de Venda:** Seleção rápida de Cliente, Endereço de Entrega, Contato, Tipo de Frete (CIF/FOB/FOB Redespacho, herdando o padrão da representada) e Condição de Pagamento.
 - [ ] **UI do Orçamento:** Grid/lista com adição rápida a partir do catálogo, edição ágil de quantidade e desconto sem travas obstrutivas.
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ### 2.4. Persistência Offline, Sincronização e Espelho PDF
 - [ ] **Gravação Transacional:** Salvar Orçamento/Pedido no Dexie com status (`rascunho` ou `emitido`) e `idempotency_key`.
-- [ ] **Fila Outbox:** Registrar mutações na fila local para sincronização em segundo plano.
+- [ ] **Fila Outbox:** Registrar mutações na fila local para sincronização em segundo plano. Conflitos de cadastros de campo seguem LWW por `updated_at`, registro a registro (PRD 3.2).
 - [ ] **Espelho PDF:** Gerar PDF profissional via `@react-pdf/renderer` para envio imediato ao cliente (WhatsApp/E-mail).
 - [ ] **Validação:** Rodar `pnpm validate`.
 
@@ -76,7 +82,8 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 ## Fase 3: Funil de Faturamento e Conciliação Financeira
 
 ### 3.1. Máquina de Estados do Pedido
-- [ ] **Atualização de Status:** Transições: `Emitido` -> `Faturado Parcial` -> `Faturado Total` -> `Liquidado`.
+- [ ] **Atualização de Status:** Transições: `Emitido` -> `Faturado Parcial` -> `Faturado Total` -> `Liquidado`. Antes, decidir se "Liquidado" é status do pedido (hoje não existe em `pedidos.status`) ou derivado das comissões (`MELHORIAS.md`, Pendências).
+- [ ] **Imutabilidade Remota:** Trigger no PostgreSQL bloqueando a edição de pedidos `emitido+` (`MELHORIAS.md` 6.2).
 - [ ] **UI de Acompanhamento:** Visão de pipeline do representante para acompanhamento dos pedidos.
 - [ ] **Validação:** Rodar `pnpm validate`.
 

@@ -1,10 +1,15 @@
+import { Factory, Plus } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
+import { Page } from "../../../shared/components/layout/Page";
 import {
 	Alert,
 	Badge,
 	Button,
+	buttonClassName,
+	Card,
+	EmptyState,
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
@@ -54,13 +59,14 @@ export function RepresentadasListView() {
 	};
 
 	return (
-		<section className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
+		<Page>
 			<PageHeader
 				title="Representadas"
 				description="Fábricas que você representa."
 				action={
-					<Link to="/representadas/nova">
-						<Button variant="primary">+ Nova representada</Button>
+					<Link to="/representadas/nova" className={buttonClassName()}>
+						<Plus aria-hidden="true" />
+						Nova representada
 					</Link>
 				}
 			/>
@@ -79,11 +85,14 @@ export function RepresentadasListView() {
 			)}
 
 			{!isLoading && representadas.length === 0 && (
-				<div className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
-					{termoBusca
-						? "Nenhuma representada encontrada para a busca."
-						: "Nenhuma representada cadastrada ainda."}
-				</div>
+				<EmptyState
+					icon={Factory}
+					title={
+						termoBusca
+							? "Nenhuma representada encontrada para a busca."
+							: "Nenhuma representada cadastrada ainda."
+					}
+				/>
 			)}
 
 			{!isLoading && representadas.length > 0 && (
@@ -91,18 +100,16 @@ export function RepresentadasListView() {
 					{representadas.map((r) => {
 						const isInativa = !r.ativo;
 						return (
-							<li
+							<Card
+								as="li"
 								key={r.id}
-								className={`flex flex-col gap-3 rounded-lg border p-4 shadow-sm transition-opacity ${
-									isInativa
-										? "border-dashed border-border bg-muted/40 opacity-70"
-										: "border-border bg-card"
-								}`}
+								inactive={isInativa}
+								className="flex flex-col gap-3 p-4"
 							>
 								<div className="flex items-start justify-between gap-2">
-									<div className="flex flex-col">
+									<div className="flex flex-col gap-0.5">
 										<div className="flex items-center gap-2">
-											<h2 className="font-semibold leading-tight text-card-foreground">
+											<h2 className="text-[15px] leading-tight font-medium text-foreground">
 												{r.nome_fantasia}
 											</h2>
 											{isInativa && (
@@ -120,31 +127,27 @@ export function RepresentadasListView() {
 
 								<dl className="grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm">
 									<div>
-										<dt className="text-xs uppercase tracking-wide text-muted-foreground">
-											Comissão
-										</dt>
-										<dd className="text-card-foreground">
+										<dt className="text-xs text-muted-foreground">Comissão</dt>
+										<dd className="font-medium tabular-nums">
 											{formatarCentesimosPercentual(
 												r.percentual_comissao_padrao,
 											)}
 										</dd>
 									</div>
 									<div>
-										<dt className="text-xs uppercase tracking-wide text-muted-foreground">
-											Ped. mínimo
+										<dt className="text-xs text-muted-foreground">
+											Pedido mínimo
 										</dt>
-										<dd className="text-card-foreground">
+										<dd className="font-medium tabular-nums">
 											{r.valor_pedido_minimo_centavos > 0
 												? formatarCentavos(r.valor_pedido_minimo_centavos)
 												: "—"}
 										</dd>
 									</div>
 									<div>
-										<dt className="text-xs uppercase tracking-wide text-muted-foreground">
-											Frete
-										</dt>
+										<dt className="text-xs text-muted-foreground">Frete</dt>
 										<dd
-											className="text-card-foreground"
+											className="font-medium"
 											title={ROTULOS_FRETE[r.regras_frete_padrao]}
 										>
 											{r.regras_frete_padrao.replace("_", " ")}
@@ -170,17 +173,21 @@ export function RepresentadasListView() {
 											Inativar
 										</Button>
 									)}
-									<Link to={`/representadas/${r.id}/editar`}>
-										<Button variant="secondary" size="sm">
-											Editar
-										</Button>
+									<Link
+										to={`/representadas/${r.id}/editar`}
+										className={buttonClassName({
+											variant: "secondary",
+											size: "sm",
+										})}
+									>
+										Editar
 									</Link>
 								</div>
-							</li>
+							</Card>
 						);
 					})}
 				</ul>
 			)}
-		</section>
+		</Page>
 	);
 }

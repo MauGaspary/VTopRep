@@ -1,9 +1,14 @@
+import { Package, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
+import { Page } from "../../../shared/components/layout/Page";
 import {
 	Alert,
 	Badge,
 	Button,
+	buttonClassName,
+	Card,
+	EmptyState,
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
@@ -61,13 +66,14 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 	};
 
 	return (
-		<div className="flex flex-col gap-4 p-4 w-full max-w-5xl mx-auto">
+		<Page>
 			<PageHeader
 				title="Catálogo de Produtos"
 				description="Consulta e gestão de produtos cadastrados offline."
 				action={
-					<Link to="/produtos/novo">
-						<Button>+ Novo Produto</Button>
+					<Link to="/produtos/novo" className={buttonClassName()}>
+						<Plus aria-hidden="true" />
+						Novo produto
 					</Link>
 				}
 			/>
@@ -83,17 +89,15 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 
 			<div className="flex flex-col gap-3">
 				{isLoading && (
-					<div className="text-muted-foreground py-6 text-center">
+					<p className="py-6 text-center text-muted-foreground">
 						Carregando catálogo...
-					</div>
+					</p>
 				)}
 				{!isLoading && produtos.length === 0 && (
-					<div className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
-						Nenhum produto encontrado.
-					</div>
+					<EmptyState icon={Package} title="Nenhum produto encontrado." />
 				)}
 				{!isLoading && (
-					<div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+					<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
 						{produtos.map((produto) => {
 							const isInativo = !produto.ativo;
 							const nomeRepresentada =
@@ -101,26 +105,23 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 								"Representada desconhecida";
 
 							return (
-								<div
+								<Card
 									key={produto.id}
-									className={`flex flex-col justify-between p-4 border rounded-lg shadow-sm transition-shadow ${
-										isInativo
-											? "border-dashed border-border bg-muted/40 opacity-75"
-											: "border-border bg-card hover:shadow-md"
-									}`}
+									inactive={isInativo}
+									className="flex flex-col justify-between p-4"
 								>
 									<div>
 										<div className="flex justify-between items-start gap-2">
 											<div className="flex flex-col">
 												<div className="flex items-center gap-2">
-													<h3 className="font-semibold text-card-foreground leading-tight">
+													<h3 className="text-[15px] leading-tight font-medium text-foreground">
 														{produto.descricao}
 													</h3>
 													{isInativo && (
 														<Badge variant="destructive">Inativo</Badge>
 													)}
 												</div>
-												<span className="text-xs text-muted-foreground mt-0.5">
+												<span className="mt-0.5 text-xs text-muted-foreground">
 													{nomeRepresentada}
 												</span>
 											</div>
@@ -129,27 +130,27 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 											</Badge>
 										</div>
 
-										<div className="mt-3 pt-3 border-t border-border text-sm text-muted-foreground grid grid-cols-2 gap-2">
+										<dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm">
 											<div className="flex flex-col">
-												<span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-													Unidade:
-												</span>
-												<span className="text-card-foreground font-medium">
+												<dt className="text-xs text-muted-foreground">
+													Unidade
+												</dt>
+												<dd className="font-medium">
 													{produto.unidade_medida}
-												</span>
+												</dd>
 											</div>
 											<div className="flex flex-col">
-												<span className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
-													Múltiplo:
-												</span>
-												<span className="text-card-foreground font-medium">
+												<dt className="text-xs text-muted-foreground">
+													Múltiplo
+												</dt>
+												<dd className="font-medium tabular-nums">
 													{produto.multiplo_embalagem ?? 1}
-												</span>
+												</dd>
 											</div>
-										</div>
+										</dl>
 									</div>
 
-									<div className="flex justify-end gap-2 pt-3 mt-3 border-t border-border">
+									<div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
 										{isInativo ? (
 											<Button
 												variant="secondary"
@@ -167,18 +168,22 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 												Inativar
 											</Button>
 										)}
-										<Link to={`/produtos/${produto.id}/editar`}>
-											<Button variant="outline" size="sm">
-												Editar
-											</Button>
+										<Link
+											to={`/produtos/${produto.id}/editar`}
+											className={buttonClassName({
+												variant: "secondary",
+												size: "sm",
+											})}
+										>
+											Editar
 										</Link>
 									</div>
-								</div>
+								</Card>
 							);
 						})}
 					</div>
 				)}
 			</div>
-		</div>
+		</Page>
 	);
 }

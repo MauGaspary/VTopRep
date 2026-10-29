@@ -31,7 +31,7 @@ export function DevSeedButton({ tenantId }: DevSeedButtonProps) {
 			type="button"
 			onClick={handleSeed}
 			disabled={isLoading}
-			className="fixed bottom-4 right-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded shadow-lg transition-colors z-50"
+			className="fixed right-4 bottom-20 md:bottom-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded shadow-lg transition-colors z-50"
 		>
 			{isLoading ? "Populando..." : "👾 Popular Banco de Dados"}
 		</button>

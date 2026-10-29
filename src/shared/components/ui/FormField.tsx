@@ -20,10 +20,13 @@ export function FormField({
 	className = "",
 }: FormFieldProps) {
 	return (
-		<div className={`flex flex-col gap-1 ${className}`}>
-			<label htmlFor={id} className="text-sm font-medium text-foreground">
+		<div className={`flex flex-col gap-1.5 ${className}`}>
+			<label
+				htmlFor={id}
+				className="text-[13px] leading-none font-medium text-foreground"
+			>
 				{label}
-				{required && <span className="text-destructive ml-1">*</span>}
+				{required && <span className="ml-0.5 text-destructive">*</span>}
 			</label>
 			{children}
 			{error ? (

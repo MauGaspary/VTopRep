@@ -17,7 +17,7 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 | Desconto do item (3.6) | **Percentual** em centésimos (0 a 10000) é a fonte da verdade; o preço líquido deriva dele com half-even. |
 | `ativo` × `deleted_at` (3.1) | `ativo` = estado de negócio reversível; `deleted_at` = tombstone de sincronização (some de tudo e não conta na unicidade). |
 | Hooks reativos (4.5) | Wrapper `useLiveRepositoryQuery` em `shared/hooks/`; `DevSeedButton` documentado como exceção dev-only no `AGENTS.md`. |
-| Conflito de sync (6.2) | **Proposta**, a confirmar: LWW por `updated_at` para edições de cadastros de campo; mestres da fábrica seguem server-wins. Registrado no PRD 3.2. |
+| Conflito de sync (6.2) | **Confirmado:** LWW por `updated_at`, registro a registro, para edições de cadastros de campo; mestres da fábrica seguem server-wins. Registrado no PRD 3.2. |
 
 ---
 
@@ -62,9 +62,9 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 ## 2. Isolamento de Tenant (Regra 4 do `AGENTS.md`)
 
 ### 2.1. 🔴 `tenant_id` em tabelas filhas ✅
-- [x] `tenant_id` em `ClienteEnderecoSchema` e `ClienteContatoSchema`, preenchido por `montarFilhosCliente`.
+- [x] `tenant_id` em `ClienteEnderecoSchema` e `ClienteContatoSchema`, preenchido por `sincronizarFilhosCliente`.
 - [x] Dexie v4 com `[tenant_id+cliente_id]`; `upgrade()` herda o tenant do cliente pai e remove órfãos (inalcançáveis pela UI).
-- [x] `obterPorId` e `atualizar` consultam/apagam filhos por `[tenant_id+cliente_id]`.
+- [x] `obterPorId` e `atualizar` consultam os filhos por `[tenant_id+cliente_id]` (sem exclusão física desde a v5, ver "Pendências e Novos Achados").
 - [x] Dicionário de dados do PRD atualizado.
 
 ### 2.2. 🟡 Tenant em `inativarProduto` / `reativarProduto` ✅
@@ -94,7 +94,7 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 - [x] `entity` derivado de `ENTIDADES_SINCRONIZAVEIS` (todas as tabelas de negócio).
 
 ### 3.4. 🟡 Datas sem formato validado ✅
-- [x] `TimestampSchema` (`z.iso.datetime()`) e `DataSchema` (`z.iso.date()`) em `src/shared/domain/datas.ts`; `CamposSincronizaveisSchema` reaproveitado por todas as entidades.
+- [x] `TimestampSchema` (`z.iso.datetime()`) e `DataSchema` (`z.iso.date()`) em `src/shared/domain/datas.ts`; `CamposSincronizaveisSchema` reaproveitado por todas as entidades, exceto `clientes_metricas` (ver "Pendências e Novos Achados").
 - [x] Vigências e `data_ultima_compra` como data pura; migração converte valores legados.
 
 ### 3.5. 🟡 Seed não passa pelos schemas ✅
@@ -114,7 +114,7 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 - [x] `normalizarCpfCnpj` delega para `normalizarCnpj` (uma única implementação); buscas por documento reutilizam essas funções.
 
 ### 4.2. 🟡 Lógica de unicidade copiada ✅
-- [x] `detectarConflito` e `detectarHomonimos` puros em `src/shared/domain/unicidade.ts`, com testes; cada módulo expõe seu `detectarConflito*`/`detectarHomonimos*`.
+- [x] `detectarConflito` e `detectarHomonimos` puros em `src/shared/domain/unicidade.ts`, com testes; cada módulo expõe seu `detectarConflito*` (documento/SKU), e clientes também `detectarHomonimosCliente`.
 - [x] Adapters só buscam candidatos e traduzem o conflito em erro.
 
 ### 4.3. 🔴 Verificação de unicidade fora de transação (produtos) ✅
@@ -155,7 +155,7 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 - [x] Testes: dízimas (1/3, 2/3), empates (x,5 → par), negativos, valores acima de 2^53 no intermediário, zero e 100%.
 
 ### 6.2. 🟡 Estratégia de conflito na sincronização (parcial)
-- [x] Política registrada no PRD 3.2 (proposta de LWW para cadastros de campo, a confirmar).
+- [x] Política registrada no PRD 3.2 e confirmada: LWW por `updated_at`, registro a registro, para cadastros de campo.
 - [ ] Trigger de imutabilidade de pedidos `emitido+` no PostgreSQL, a ser criado junto com a primeira migração Supabase de `pedidos` (ainda não há migrações).
 
 ---
@@ -165,3 +165,6 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 - [x] 🟡 **Filhos de cliente sem soft delete:** endereços e contatos ganharam `created_at`/`updated_at`/`deleted_at` (migração Dexie v5). `atualizar` agora reconcilia a coleção (`sincronizarFilhosCliente`): mantém os inalterados, atualiza os alterados, marca `deleted_at` nos removidos e ignora ids de outro cliente.
 - [x] 🟢 **Aviso de nomes a cada tecla:** `useHomonimosCliente` só consulta 400 ms depois que o usuário para de digitar (`useDebouncedValue`) e nunca com nomes vazios. Aviso removido de representadas.
 - [ ] 0.1, 4.4 e 6.2: itens externos listados acima.
+- [x] 🟡 **Confirmar a política de conflito (6.2):** LWW por `updated_at`, registro a registro, confirmado para cadastros de campo (PRD 3.2).
+- [ ] 🟡 **`clientes_metricas` sem campos de sincronização:** a tabela está em `ENTIDADES_SINCRONIZAVEIS`, mas não tem `created_at`/`updated_at`/`deleted_at`, o que contraria o "Soft Delete Universal" do PRD. Decidir na Fase 4: ou a métrica é calculada localmente e sai da lista de sincronizáveis, ou ganha os campos.
+- [ ] 🟢 **Status "Liquidado" do pedido:** o PRD (Fase 3) e o TODO 3.1 falam em `Faturado Total -> Liquidado`, mas `pedidos.status` não tem esse valor; a liquidação aparece em `extratos_comissao.status_comissao = 'paga'`. Decidir na Fase 3 se é status do pedido ou derivado das comissões.

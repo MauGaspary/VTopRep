@@ -46,6 +46,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
      +--- (N) >--- (1) Cliente (1) ----< (N) ClienteEndereco
      |                   |     (1) ----< (N) ClienteContato
      |                   +---- (1) ---- (1) ClienteMetrica
+     |                   +---- (1) ----< (N) ClienteTabelaPreco >---- (1) TabelaPreco
      |
      +--- (1) >--- (N) FaturamentoParcial (Notas Fiscais emitidas pela fábrica)
      |
@@ -140,6 +141,19 @@ Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
 
+#### `clientes_tabelas_preco`
+Tabela de preço padrão do cliente para cada representada. O pedido sugere essa tabela quando ela está vigente; senão, sugere a tabela vigente de início mais recente da representada. O representante pode trocar.
+* `id: UUID` (PK)
+* `tenant_id: UUID` (FK)
+* `cliente_id: UUID` (FK)
+* `representada_id: UUID` (FK; igual ao da tabela, para consulta por índice)
+* `tabela_id: UUID` (FK)
+* `created_at: timestamptz`
+* `updated_at: timestamptz`
+* `deleted_at: timestamptz (nullable)`
+
+No máximo uma associação viva por `tenant_id + cliente_id + representada_id`. Se a sincronização trouxer duas (criadas offline em aparelhos diferentes), vale a de `updated_at` mais recente, e a próxima definição marca as demais com `deleted_at`.
+
 #### `itens_preco`
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
@@ -231,7 +245,7 @@ export interface OutboxMutation {
 }
 ```
 
-Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `representadas`, `clientes`, `clientes_enderecos`, `clientes_contatos`, `clientes_metricas`, `produtos`, `tabelas_preco`, `itens_preco`, `pedidos` e `itens_pedido` (fonte: `ENTIDADES_SINCRONIZAVEIS` em `src/modules/sync/domain/outbox.schema.ts`).
+Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `representadas`, `clientes`, `clientes_enderecos`, `clientes_contatos`, `clientes_metricas`, `clientes_tabelas_preco`, `produtos`, `tabelas_preco`, `itens_preco`, `pedidos` e `itens_pedido` (fonte: `ENTIDADES_SINCRONIZAVEIS` em `src/modules/sync/domain/outbox.schema.ts`).
 
 ### 3.2. Estratégia de Resolução de Conflitos
 * **Entidades Transacionais Geradas em Campo (Pedidos, Itens, Clientes Novos):**
@@ -242,7 +256,7 @@ Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `
   * O backend é a fonte de autoridade. O cliente consome rotinas de *delta sync* consultando `updated_at > :ultimaSincronizacaoLocal`.
 * **Tratamento de Exclusões:**
   * O servidor envia registros com `deleted_at != null`. O Dexie.js atualiza o registro local marcando o soft-delete para removê-lo das telas sem perder integridade referencial com pedidos antigos já persistidos.
-* **Cadastros editados em campo (Clientes, Endereços, Contatos):**
+* **Cadastros editados em campo (Clientes, Endereços, Contatos, Tabela Padrão do Cliente):**
   * Edições do mesmo cliente em dois aparelhos offline seguem **Last-Write-Wins por `updated_at`**, registro a registro (sem merge por campo nesta fase).
 * **Imutabilidade remota de pedidos:**
   * Pedidos com `status` diferente de `rascunho` são somente-leitura também no PostgreSQL: a migração que criar `pedidos`/`itens_pedido` deve incluir um *trigger* que rejeite `UPDATE` de campos comerciais (exceto as transições de status do funil de faturamento).

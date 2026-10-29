@@ -1,10 +1,15 @@
+import { Plus, Users } from "lucide-react";
 import { useState } from "react";
 import { Link } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
+import { Page } from "../../../shared/components/layout/Page";
 import {
 	Alert,
 	Badge,
 	Button,
+	buttonClassName,
+	Card,
+	EmptyState,
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
@@ -43,13 +48,14 @@ export function ClientesListView() {
 	};
 
 	return (
-		<section className="mx-auto flex w-full max-w-5xl flex-col gap-4 p-4">
+		<Page>
 			<PageHeader
 				title="Carteira de Clientes"
 				description="Clientes cadastrados para cotações e emissão de pedidos."
 				action={
-					<Link to="/clientes/novo">
-						<Button variant="primary">+ Novo cliente</Button>
+					<Link to="/clientes/novo" className={buttonClassName()}>
+						<Plus aria-hidden="true" />
+						Novo cliente
 					</Link>
 				}
 			/>
@@ -68,11 +74,14 @@ export function ClientesListView() {
 			)}
 
 			{!isLoading && clientes.length === 0 && (
-				<div className="rounded-lg border border-dashed border-border py-10 text-center text-muted-foreground">
-					{termoBusca
-						? "Nenhum cliente encontrado para a busca."
-						: "Nenhum cliente cadastrado na carteira ainda."}
-				</div>
+				<EmptyState
+					icon={Users}
+					title={
+						termoBusca
+							? "Nenhum cliente encontrado para a busca."
+							: "Nenhum cliente cadastrado na carteira ainda."
+					}
+				/>
 			)}
 
 			{!isLoading && clientes.length > 0 && (
@@ -80,17 +89,15 @@ export function ClientesListView() {
 					{clientes.map((c) => {
 						const isInativo = !c.ativo;
 						return (
-							<li
+							<Card
+								as="li"
 								key={c.id}
-								className={`flex flex-col justify-between gap-3 rounded-lg border p-4 shadow-sm transition-opacity ${
-									isInativo
-										? "border-dashed border-border bg-muted/40 opacity-70"
-										: "border-border bg-card"
-								}`}
+								inactive={isInativo}
+								className="flex flex-col justify-between gap-3 p-4"
 							>
-								<div className="flex flex-col">
+								<div className="flex flex-col gap-0.5">
 									<div className="flex items-center gap-2">
-										<h2 className="font-semibold leading-tight text-card-foreground">
+										<h2 className="text-[15px] leading-tight font-medium text-foreground">
 											{c.razao_social}
 										</h2>
 										{isInativo && <Badge variant="destructive">Inativo</Badge>}
@@ -100,7 +107,7 @@ export function ClientesListView() {
 											{c.nome_fantasia}
 										</span>
 									)}
-									<span className="font-mono text-xs text-muted-foreground mt-1">
+									<span className="mt-1 font-mono text-xs text-muted-foreground">
 										Doc: {formatarCpfCnpj(c.cnpj_cpf)}
 									</span>
 								</div>
@@ -123,17 +130,21 @@ export function ClientesListView() {
 											Inativar
 										</Button>
 									)}
-									<Link to={`/clientes/${c.id}/editar`}>
-										<Button variant="secondary" size="sm">
-											Editar
-										</Button>
+									<Link
+										to={`/clientes/${c.id}/editar`}
+										className={buttonClassName({
+											variant: "secondary",
+											size: "sm",
+										})}
+									>
+										Editar
 									</Link>
 								</div>
-							</li>
+							</Card>
 						);
 					})}
 				</ul>
 			)}
-		</section>
+		</Page>
 	);
 }

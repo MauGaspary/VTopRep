@@ -8,22 +8,21 @@ export interface AlertProps {
 	className?: string;
 }
 
+const variantStyles: Record<AlertVariant, string> = {
+	destructive: "border-destructive/30 bg-destructive/8 text-destructive",
+	warning: "border-warning/30 bg-warning/8 text-warning",
+	info: "border-border bg-muted text-foreground",
+};
+
 export function Alert({
 	variant = "destructive",
 	children,
 	className = "",
 }: AlertProps) {
-	const variantStyles: Record<AlertVariant, string> = {
-		destructive: "border-destructive/40 bg-destructive/10 text-destructive",
-		warning:
-			"border-amber-500/40 bg-amber-500/10 text-amber-700 dark:text-amber-400",
-		info: "border-primary/40 bg-primary/10 text-primary",
-	};
-
 	return (
 		<div
 			role="alert"
-			className={`rounded-lg border px-3 py-2 text-sm ${variantStyles[variant]} ${className}`}
+			className={`rounded-lg border px-3 py-2.5 text-sm ${variantStyles[variant]} ${className}`}
 		>
 			{children}
 		</div>

@@ -1,13 +1,20 @@
+import { Factory } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
+import { Page } from "../../../shared/components/layout/Page";
 import {
 	Alert,
 	Badge,
 	Button,
+	buttonClassName,
+	cardClassName,
+	EmptyState,
 	FormField,
 	InactiveRecoveryCard,
 	Input,
+	PageHeader,
+	Select,
 } from "../../../shared/components/ui";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
@@ -45,12 +52,12 @@ export function ProdutoFormView() {
 
 	if (id && !produto) {
 		return (
-			<section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-4">
+			<Page width="narrow">
 				<p className="text-foreground">Produto não encontrado.</p>
 				<Link to="/catalogo" className="text-sm text-primary underline">
 					Voltar para o catálogo
 				</Link>
-			</section>
+			</Page>
 		);
 	}
 
@@ -151,38 +158,30 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 	};
 
 	return (
-		<section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
-			<div>
-				<Link
-					to="/catalogo"
-					className="text-sm text-muted-foreground hover:text-foreground"
-				>
-					← Catálogo
-				</Link>
-				<h1 className="mt-1 text-2xl font-semibold text-foreground">
-					{editando ? "Editar produto" : "Novo produto"}
-				</h1>
-			</div>
+		<Page width="narrow">
+			<PageHeader
+				title={editando ? "Editar produto" : "Novo produto"}
+				back={{ to: "/catalogo", label: "Catálogo" }}
+			/>
 
 			{representadas.length === 0 ? (
-				<Alert variant="warning">
-					<div className="flex flex-col gap-2">
-						<span>
-							Nenhuma representada ativa cadastrada. É obrigatório vincular o
-							produto a uma representada.
-						</span>
-						<div>
-							<Link to="/representadas/nova">
-								<Button size="sm">Cadastrar Representada</Button>
-							</Link>
-						</div>
-					</div>
-				</Alert>
+				<EmptyState
+					icon={Factory}
+					title="Nenhuma representada ativa cadastrada"
+					description="É obrigatório vincular o produto a uma representada."
+					action={
+						<Link to="/representadas/nova" className={buttonClassName()}>
+							Cadastrar representada
+						</Link>
+					}
+				/>
 			) : (
 				<form
 					noValidate
 					onSubmit={handleSubmit}
-					className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 shadow-sm"
+					className={cardClassName({
+						className: "flex flex-col gap-5 p-4 md:p-6",
+					})}
 				>
 					<FormField
 						id="representada_id"
@@ -190,13 +189,11 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 						error={erros.representada_id}
 						required
 					>
-						<select
+						<Select
 							id="representada_id"
 							value={valores.representada_id}
 							onChange={(e) => alterar("representada_id", e.target.value)}
-							className={`w-full rounded-lg border bg-background px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring text-sm ${
-								erros.representada_id ? "border-destructive" : "border-input"
-							}`}
+							hasError={Boolean(erros.representada_id)}
 						>
 							<option value="">Selecione a representada...</option>
 							{representadas.map((r) => (
@@ -204,7 +201,7 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 									{r.nome_fantasia}
 								</option>
 							))}
-						</select>
+						</Select>
 					</FormField>
 
 					<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
@@ -264,24 +261,23 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 									className="uppercase"
 								/>
 								<div className="flex flex-wrap gap-1">
-									{UNIDADES_MEDIDA_PADRAO.map((unidade) => (
-										<button
-											key={unidade}
-											type="button"
-											onClick={() => alterar("unidade_medida", unidade)}
-											className="cursor-pointer"
-										>
-											<Badge
-												variant={
-													valores.unidade_medida.toUpperCase() === unidade
-														? "default"
-														: "outline"
-												}
+									{UNIDADES_MEDIDA_PADRAO.map((unidade) => {
+										const selecionada =
+											valores.unidade_medida.toUpperCase() === unidade;
+										return (
+											<button
+												key={unidade}
+												type="button"
+												aria-pressed={selecionada}
+												onClick={() => alterar("unidade_medida", unidade)}
+												className="cursor-pointer rounded-md focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
 											>
-												{unidade}
-											</Badge>
-										</button>
-									))}
+												<Badge variant={selecionada ? "default" : "outline"}>
+													{unidade}
+												</Badge>
+											</button>
+										);
+									})}
 								</div>
 							</div>
 						</FormField>
@@ -313,16 +309,19 @@ function ProdutoForm({ tenantId, produto, representadas }: ProdutoFormProps) {
 
 					{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
 
-					<div className="flex justify-end gap-2 pt-2">
-						<Link to="/catalogo">
-							<Button variant="ghost">Cancelar</Button>
+					<div className="flex justify-end gap-2 border-t border-border pt-4">
+						<Link
+							to="/catalogo"
+							className={buttonClassName({ variant: "ghost" })}
+						>
+							Cancelar
 						</Link>
 						<Button type="submit" disabled={salvando}>
-							{salvando ? "Salvando..." : "Salvar Produto"}
+							{salvando ? "Salvando..." : "Salvar produto"}
 						</Button>
 					</div>
 				</form>
 			)}
-		</section>
+		</Page>
 	);
 }

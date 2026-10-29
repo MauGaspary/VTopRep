@@ -1,12 +1,17 @@
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
+import { Page } from "../../../shared/components/layout/Page";
 import {
 	Alert,
 	Button,
+	buttonClassName,
+	cardClassName,
 	FormField,
 	InactiveRecoveryCard,
 	Input,
+	PageHeader,
+	Select,
 } from "../../../shared/components/ui";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE, TIPOS_FRETE } from "../../../shared/domain/frete";
@@ -40,12 +45,12 @@ export function RepresentadaFormView() {
 
 	if (id && !representada) {
 		return (
-			<section className="mx-auto flex w-full max-w-2xl flex-col gap-3 p-4">
+			<Page width="narrow">
 				<p className="text-foreground">Representada não encontrada.</p>
 				<Link to="/representadas" className="text-sm text-primary underline">
 					Voltar para a lista
 				</Link>
-			</section>
+			</Page>
 		);
 	}
 
@@ -132,23 +137,18 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 	};
 
 	return (
-		<section className="mx-auto flex w-full max-w-2xl flex-col gap-4 p-4">
-			<div>
-				<Link
-					to="/representadas"
-					className="text-sm text-muted-foreground hover:text-foreground"
-				>
-					← Representadas
-				</Link>
-				<h1 className="mt-1 text-2xl font-semibold text-foreground">
-					{editando ? "Editar representada" : "Nova representada"}
-				</h1>
-			</div>
+		<Page width="narrow">
+			<PageHeader
+				title={editando ? "Editar representada" : "Nova representada"}
+				back={{ to: "/representadas", label: "Representadas" }}
+			/>
 
 			<form
 				noValidate
 				onSubmit={handleSubmit}
-				className="flex flex-col gap-4 rounded-lg border border-border bg-card p-4 shadow-sm"
+				className={cardClassName({
+					className: "flex flex-col gap-5 p-4 md:p-6",
+				})}
 			>
 				<FormField
 					id="nome_fantasia"
@@ -229,20 +229,18 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 					label="Frete padrão"
 					error={erros.regras_frete_padrao}
 				>
-					<select
+					<Select
 						id="regras_frete_padrao"
 						value={valores.regras_frete_padrao}
 						onChange={(e) => alterar("regras_frete_padrao", e.target.value)}
-						className={`w-full rounded-lg border bg-background px-3 py-2 text-foreground shadow-sm focus:outline-none focus:ring-2 focus:ring-ring text-sm ${
-							erros.regras_frete_padrao ? "border-destructive" : "border-input"
-						}`}
+						hasError={Boolean(erros.regras_frete_padrao)}
 					>
 						{TIPOS_FRETE.map((regra) => (
 							<option key={regra} value={regra}>
 								{ROTULOS_FRETE[regra]}
 							</option>
 						))}
-					</select>
+					</Select>
 				</FormField>
 
 				{inativaConflitante && (
@@ -257,15 +255,18 @@ function RepresentadaForm({ tenantId, representada }: RepresentadaFormProps) {
 
 				{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
 
-				<div className="flex justify-end gap-2 pt-2">
-					<Link to="/representadas">
-						<Button variant="ghost">Cancelar</Button>
+				<div className="flex justify-end gap-2 border-t border-border pt-4">
+					<Link
+						to="/representadas"
+						className={buttonClassName({ variant: "ghost" })}
+					>
+						Cancelar
 					</Link>
 					<Button type="submit" disabled={salvando}>
 						{salvando ? "Salvando..." : "Salvar"}
 					</Button>
 				</div>
 			</form>
-		</section>
+		</Page>
 	);
 }
