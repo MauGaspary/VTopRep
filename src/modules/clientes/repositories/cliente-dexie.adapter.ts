@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
+import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
 import {
 	atualizarClienteDados,
 	type ClienteCompleto,
@@ -101,19 +102,25 @@ export class ClienteDexieAdapter implements ClienteRepository {
 	): Promise<ClienteCompleto> {
 		const tenant = TenantIdSchema.parse(tenantId);
 
+		const instante = this.agora();
 		const completo = criarClienteCompleto({
 			tenantId: tenant,
 			clienteInput: dto.cliente,
 			enderecosInput: dto.enderecos,
 			contatosInput: dto.contatos,
 			clienteId: this.gerarId(),
-			agora: this.agora(),
+			agora: instante,
 			gerarId: this.gerarId,
 		});
 
 		await this.db.transaction(
 			"rw",
-			[this.db.clientes, this.db.clientes_enderecos, this.db.clientes_contatos],
+			[
+				this.db.clientes,
+				this.db.clientes_enderecos,
+				this.db.clientes_contatos,
+				this.db.outbox,
+			],
 			async () => {
 				await this.garantirDocumentoUnico(tenant, completo.cliente, {
 					oferecerReativacao: true,
@@ -127,6 +134,38 @@ export class ClienteDexieAdapter implements ClienteRepository {
 				if (completo.contatos.length > 0) {
 					await this.db.clientes_contatos.bulkAdd(completo.contatos);
 				}
+
+				const mutacoesOutbox = [
+					criarMutacaoParaRegistro({
+						tenantId: tenant,
+						entity: "clientes",
+						registro: completo.cliente,
+						existiaAntes: false,
+						agora: instante,
+						gerarId: this.gerarId,
+					}),
+					...completo.enderecos.map((endereco) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes_enderecos",
+							registro: endereco,
+							existiaAntes: false,
+							agora: instante,
+							gerarId: this.gerarId,
+						}),
+					),
+					...completo.contatos.map((contato) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes_contatos",
+							registro: contato,
+							existiaAntes: false,
+							agora: instante,
+							gerarId: this.gerarId,
+						}),
+					),
+				];
+				await this.db.outbox.bulkAdd(mutacoesOutbox);
 			},
 		);
 
@@ -143,7 +182,12 @@ export class ClienteDexieAdapter implements ClienteRepository {
 
 		return this.db.transaction(
 			"rw",
-			[this.db.clientes, this.db.clientes_enderecos, this.db.clientes_contatos],
+			[
+				this.db.clientes,
+				this.db.clientes_enderecos,
+				this.db.clientes_contatos,
+				this.db.outbox,
+			],
 			async () => {
 				const existente = await this.obterCliente(tenant, idValido, false);
 				if (!existente) {
@@ -166,20 +210,59 @@ export class ClienteDexieAdapter implements ClienteRepository {
 
 				// Endereços e contatos: grava só novos, alterados e removidos
 				// (tombstone), para o delta sync enxergar cada mudança.
+				const existentesFilhos = await this.obterFilhosVivos(tenant, idValido);
+				const idsEnderecosExistentes = new Set(
+					existentesFilhos.enderecos.map((e) => e.id),
+				);
+				const idsContatosExistentes = new Set(
+					existentesFilhos.contatos.map((c) => c.id),
+				);
 				const filhos = sincronizarFilhosCliente({
 					tenantId: tenant,
 					clienteId: idValido,
 					agora,
 					enderecosInput: dto.enderecos,
 					contatosInput: dto.contatos,
-					existentes: await this.obterFilhosVivos(tenant, idValido),
+					existentes: existentesFilhos,
 					gerarId: this.gerarId,
 				});
+
+				const mutacoesOutbox = [
+					criarMutacaoParaRegistro({
+						tenantId: tenant,
+						entity: "clientes",
+						registro: atualizado,
+						existiaAntes: true,
+						agora,
+						gerarId: this.gerarId,
+					}),
+					...filhos.gravar.enderecos.map((endereco) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes_enderecos",
+							registro: endereco,
+							existiaAntes: idsEnderecosExistentes.has(endereco.id),
+							agora,
+							gerarId: this.gerarId,
+						}),
+					),
+					...filhos.gravar.contatos.map((contato) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes_contatos",
+							registro: contato,
+							existiaAntes: idsContatosExistentes.has(contato.id),
+							agora,
+							gerarId: this.gerarId,
+						}),
+					),
+				];
 
 				await Promise.all([
 					this.db.clientes.put(atualizado),
 					this.db.clientes_enderecos.bulkPut(filhos.gravar.enderecos),
 					this.db.clientes_contatos.bulkPut(filhos.gravar.contatos),
+					this.db.outbox.bulkAdd(mutacoesOutbox),
 				]);
 
 				return {
@@ -195,33 +278,66 @@ export class ClienteDexieAdapter implements ClienteRepository {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const idValido = IdSchema.parse(id);
 
-		await this.db.transaction("rw", this.db.clientes, async () => {
-			const existente = await this.obterCliente(tenant, idValido, false);
-			if (!existente) {
-				throw new ClienteNaoEncontradoError(idValido);
-			}
-			await this.db.clientes.put(
-				inativarCliente(existente, tenant, this.agora()),
-			);
-		});
+		await this.db.transaction(
+			"rw",
+			[this.db.clientes, this.db.outbox],
+			async () => {
+				const existente = await this.obterCliente(tenant, idValido, false);
+				if (!existente) {
+					throw new ClienteNaoEncontradoError(idValido);
+				}
+				const agora = this.agora();
+				const inativado = inativarCliente(existente, tenant, agora);
+				await Promise.all([
+					this.db.clientes.put(inativado),
+					this.db.outbox.add(
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes",
+							registro: inativado,
+							existiaAntes: true,
+							agora,
+							gerarId: this.gerarId,
+						}),
+					),
+				]);
+			},
+		);
 	}
 
 	async reativar(tenantId: string, id: string): Promise<void> {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const idValido = IdSchema.parse(id);
 
-		await this.db.transaction("rw", this.db.clientes, async () => {
-			const existente = await this.obterCliente(tenant, idValido, true);
-			if (!existente) {
-				throw new ClienteNaoEncontradoError(idValido);
-			}
-			const reativado = reativarCliente(existente, tenant, this.agora());
-			// Ao reativar, só importa o conflito com outro ATIVO de mesmo documento.
-			await this.garantirDocumentoUnico(tenant, reativado, {
-				oferecerReativacao: false,
-			});
-			await this.db.clientes.put(reativado);
-		});
+		await this.db.transaction(
+			"rw",
+			[this.db.clientes, this.db.outbox],
+			async () => {
+				const existente = await this.obterCliente(tenant, idValido, true);
+				if (!existente) {
+					throw new ClienteNaoEncontradoError(idValido);
+				}
+				const agora = this.agora();
+				const reativado = reativarCliente(existente, tenant, agora);
+				// Ao reativar, só importa o conflito com outro ATIVO de mesmo documento.
+				await this.garantirDocumentoUnico(tenant, reativado, {
+					oferecerReativacao: false,
+				});
+				await Promise.all([
+					this.db.clientes.put(reativado),
+					this.db.outbox.add(
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes",
+							registro: reativado,
+							existiaAntes: true,
+							agora,
+							gerarId: this.gerarId,
+						}),
+					),
+				]);
+			},
+		);
 	}
 
 	/** Endereços e contatos do cliente no tenant, sem os excluídos (tombstones). */

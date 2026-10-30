@@ -73,10 +73,10 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.4. Persistência Offline, Sincronização e Espelho PDF
-- [ ] **Gravação Transacional:** Salvar Orçamento/Pedido no Dexie com status (`rascunho` ou `emitido`) e `idempotency_key`.
-- [ ] **Fila Outbox:** Registrar mutações na fila local para sincronização em segundo plano. Conflitos de cadastros de campo seguem LWW por `updated_at`, registro a registro (PRD 3.2).
-- [ ] **Espelho PDF:** Gerar PDF profissional via `@react-pdf/renderer` para envio imediato ao cliente (WhatsApp/E-mail).
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Gravação Transacional:** Salvar Orçamento/Pedido no Dexie com status (`rascunho` ou `emitido`) e `idempotency_key`.
+- [x] **Fila Outbox:** Registrar mutações na fila local para sincronização em segundo plano. Conflitos de cadastros de campo seguem LWW por `updated_at`, registro a registro (PRD 3.2).
+- [x] **Espelho PDF:** Gerar PDF profissional via `@react-pdf/renderer` para envio imediato ao cliente (WhatsApp/E-mail).
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 

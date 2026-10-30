@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
 import { DataSchema } from "../../../shared/domain/datas";
+import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
 import type { ClienteTabelaPreco } from "../domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../domain/item-preco.schema";
 import {
@@ -232,7 +233,12 @@ export class PrecoDexieAdapter implements PrecoRepository {
 
 		return this.db.transaction(
 			"rw",
-			[this.db.clientes_tabelas_preco, this.db.tabelas_preco, this.db.clientes],
+			[
+				this.db.clientes_tabelas_preco,
+				this.db.tabelas_preco,
+				this.db.clientes,
+				this.db.outbox,
+			],
 			async () => {
 				const cliente = await this.db.clientes.get(cliId);
 				if (
@@ -270,7 +276,22 @@ export class PrecoDexieAdapter implements PrecoRepository {
 				);
 				if (associacao !== existente) alteradas.push(associacao);
 				if (alteradas.length > 0) {
-					await this.db.clientes_tabelas_preco.bulkPut(alteradas);
+					const mutacoesOutbox = alteradas.map((item) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "clientes_tabelas_preco",
+							registro: item,
+							existiaAntes:
+								(existente !== null && item.id === existente.id) ||
+								duplicadas.some((d) => d.id === item.id),
+							agora,
+							gerarId: this.gerarId,
+						}),
+					);
+					await Promise.all([
+						this.db.clientes_tabelas_preco.bulkPut(alteradas),
+						this.db.outbox.bulkAdd(mutacoesOutbox),
+					]);
 				}
 				return associacao;
 			},
@@ -288,7 +309,7 @@ export class PrecoDexieAdapter implements PrecoRepository {
 
 		return this.db.transaction(
 			"rw",
-			this.db.clientes_tabelas_preco,
+			[this.db.clientes_tabelas_preco, this.db.outbox],
 			async () => {
 				const vivas = await this.associacoesVivas(tenant, cliId, repId);
 				if (vivas.length === 0) return null;
@@ -297,7 +318,20 @@ export class PrecoDexieAdapter implements PrecoRepository {
 				const removidas = vivas.map((a) =>
 					removerTabelaPadrao(a, tenant, agora),
 				);
-				await this.db.clientes_tabelas_preco.bulkPut(removidas);
+				const mutacoesOutbox = removidas.map((item) =>
+					criarMutacaoParaRegistro({
+						tenantId: tenant,
+						entity: "clientes_tabelas_preco",
+						registro: item,
+						existiaAntes: true,
+						agora,
+						gerarId: this.gerarId,
+					}),
+				);
+				await Promise.all([
+					this.db.clientes_tabelas_preco.bulkPut(removidas),
+					this.db.outbox.bulkAdd(mutacoesOutbox),
+				]);
 				return removidas[0] ?? null;
 			},
 		);

@@ -1,3 +1,5 @@
+import { useTenant } from "../../../config/tenant/useTenant";
+import { useOutboxResumo } from "../../../modules/sync/hooks/use-outbox";
 import { useOnlineStatus } from "../../hooks/use-online-status";
 
 interface ConnectionStatusProps {
@@ -7,7 +9,25 @@ interface ConnectionStatusProps {
 
 export function ConnectionStatus({ compact = false }: ConnectionStatusProps) {
 	const online = useOnlineStatus();
-	const rotulo = online ? "Online" : "Offline — alterações salvas no aparelho";
+	const { config } = useTenant();
+	const { resumo } = useOutboxResumo(config.id);
+
+	const sufixoFila =
+		resumo.falhas > 0
+			? ` · ${resumo.falhas} falha(s) na fila`
+			: resumo.pendentes > 0
+				? ` · ${resumo.pendentes} na fila`
+				: "";
+
+	const rotulo = online
+		? `Online${sufixoFila}`
+		: `Offline — alterações salvas no aparelho${sufixoFila}`;
+
+	const corIndicador = !online
+		? "bg-warning"
+		: resumo.falhas > 0
+			? "bg-destructive"
+			: "bg-success";
 
 	return (
 		<div
@@ -17,7 +37,7 @@ export function ConnectionStatus({ compact = false }: ConnectionStatusProps) {
 		>
 			<span
 				aria-hidden="true"
-				className={`size-2 shrink-0 rounded-full ${online ? "bg-success" : "bg-warning"}`}
+				className={`size-2 shrink-0 rounded-full ${corIndicador}`}
 			/>
 			<span className={compact ? "sr-only" : "truncate"}>{rotulo}</span>
 		</div>

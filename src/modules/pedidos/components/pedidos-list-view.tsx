@@ -1,4 +1,4 @@
-import { FileText, Plus } from "lucide-react";
+import { Download, FileText, Plus } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
@@ -26,6 +26,7 @@ import {
 	type StatusPedido,
 } from "../domain/pedido.schema";
 import { usePedidoActions, usePedidos } from "../hooks/use-pedidos";
+import { baixarEspelhoPedidoPdf } from "./espelho-pedido-pdf";
 
 type FiltroStatus = "todos" | "rascunho" | "emitido";
 
@@ -46,6 +47,7 @@ export function PedidosListView() {
 	const [termoBusca, setTermoBusca] = useState("");
 	const [filtroStatus, setFiltroStatus] = useState<FiltroStatus>("todos");
 	const [erro, setErro] = useState<string | null>(null);
+	const [gerandoPdfId, setGerandoPdfId] = useState<string | null>(null);
 
 	const { pedidos, isLoading: carregandoPedidos } = usePedidos(config.id);
 	const { clientes, isLoading: carregandoClientes } = useTodosClientes(
@@ -53,7 +55,7 @@ export function PedidosListView() {
 	);
 	const { representadas, isLoading: carregandoRepresentadas } =
 		useTodasRepresentadas(config.id);
-	const { excluirRascunho } = usePedidoActions(config.id);
+	const { excluirRascunho, obterEspelhoPorId } = usePedidoActions(config.id);
 
 	const clientesPorId = useMemo(() => {
 		const mapa = new Map<string, string>();
@@ -112,6 +114,23 @@ export function PedidosListView() {
 			await excluirRascunho(pedido.id);
 		} catch (e) {
 			setErro(mensagemDeErro(e, "Erro ao excluir rascunho de orçamento"));
+		}
+	};
+
+	const handleBaixarPdf = async (pedidoId: string) => {
+		setErro(null);
+		setGerandoPdfId(pedidoId);
+		try {
+			const espelho = await obterEspelhoPorId(pedidoId, config.empresa);
+			if (!espelho) {
+				setErro("Não foi possível carregar os dados do espelho para o PDF.");
+				return;
+			}
+			await baixarEspelhoPedidoPdf(espelho);
+		} catch (e) {
+			setErro(mensagemDeErro(e, "Erro ao gerar o espelho PDF"));
+		} finally {
+			setGerandoPdfId(null);
 		}
 	};
 
@@ -244,7 +263,7 @@ export function PedidosListView() {
 									</dl>
 								</div>
 
-								<div className="flex justify-end gap-2 border-t border-border pt-3">
+								<div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
 									{rascunho && (
 										<Button
 											variant="destructive"
@@ -254,6 +273,15 @@ export function PedidosListView() {
 											Excluir rascunho
 										</Button>
 									)}
+									<Button
+										variant="secondary"
+										size="sm"
+										disabled={gerandoPdfId === pedido.id}
+										onClick={() => void handleBaixarPdf(pedido.id)}
+									>
+										<Download aria-hidden="true" />
+										{gerandoPdfId === pedido.id ? "Gerando..." : "PDF"}
+									</Button>
 									<Link
 										to={`/pedidos/${pedido.id}`}
 										className={buttonClassName({

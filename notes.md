@@ -1,0 +1,2 @@
+1. catálogo precisa ter uma seleção de produtos por representada, não ter tudo junto.
+Pensei em uma aba lateral, como um sub-menu com o nome da representada, talvez uma cor para ela e ao clicar na aba dela, aparecer apenas os produtos dela.

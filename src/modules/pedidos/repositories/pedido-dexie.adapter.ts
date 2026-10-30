@@ -1,5 +1,12 @@
 import { z } from "zod";
+import type { TenantConfig } from "../../../config/tenant/tenant.schema";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
+import type { Produto } from "../../produtos/domain/produto.schema";
+import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
+import {
+	type EspelhoPedidoDados,
+	montarEspelhoPedido,
+} from "../domain/espelho-pedido";
 import type { ItemPedido } from "../domain/item-pedido.schema";
 import {
 	atualizarPedidoCompleto,
@@ -63,6 +70,65 @@ export class PedidoDexieAdapter implements PedidoRepository {
 		return { pedido, itens };
 	}
 
+	async obterEspelhoPorId(
+		tenantId: string,
+		id: string,
+		empresa: TenantConfig["empresa"],
+	): Promise<EspelhoPedidoDados | undefined> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const pedidoId = IdSchema.parse(id);
+
+		const pedidoCompleto = await this.obterPorId(tenant, pedidoId);
+		if (!pedidoCompleto) return undefined;
+
+		const { pedido, itens } = pedidoCompleto;
+		const idsProdutos = [...new Set(itens.map((i) => i.produto_id))];
+
+		const [cliente, representada, tabelaPreco, endereco, contato, produtos] =
+			await Promise.all([
+				this.db.clientes.get(pedido.cliente_id),
+				this.db.representadas.get(pedido.representada_id),
+				this.db.tabelas_preco.get(pedido.tabela_id),
+				pedido.endereco_entrega_id
+					? this.db.clientes_enderecos.get(pedido.endereco_entrega_id)
+					: Promise.resolve(undefined),
+				pedido.contato_id
+					? this.db.clientes_contatos.get(pedido.contato_id)
+					: Promise.resolve(undefined),
+				this.db.produtos.bulkGet(idsProdutos),
+			]);
+
+		if (
+			!cliente ||
+			cliente.tenant_id !== tenant ||
+			!representada ||
+			representada.tenant_id !== tenant
+		) {
+			return undefined;
+		}
+
+		const produtosPorId = new Map<string, Produto>();
+		for (const p of produtos) {
+			if (p && p.tenant_id === tenant) {
+				produtosPorId.set(p.id, p);
+			}
+		}
+
+		return montarEspelhoPedido({
+			tenantId: tenant,
+			empresa,
+			pedidoCompleto,
+			cliente,
+			representada,
+			tabelaPreco:
+				tabelaPreco && tabelaPreco.tenant_id === tenant ? tabelaPreco : null,
+			enderecoEntrega:
+				endereco && endereco.tenant_id === tenant ? endereco : null,
+			contato: contato && contato.tenant_id === tenant ? contato : null,
+			produtosPorId,
+		});
+	}
+
 	async salvarRascunho(
 		tenantId: string,
 		input: PedidoInput,
@@ -85,25 +151,48 @@ export class PedidoDexieAdapter implements PedidoRepository {
 
 		await this.db.transaction(
 			"rw",
-			[this.db.pedidos, this.db.itens_pedido],
+			[this.db.pedidos, this.db.itens_pedido, this.db.outbox],
 			async () => {
 				const existente = await this.obterPedidoVivo(tenant, pedidoId);
 				if (!existente) {
 					throw new PedidoNaoEncontradoError(pedidoId);
 				}
 				const itensExistentes = await this.obterItensVivos(tenant, pedidoId);
+				const agora = this.agora();
 				const { pedido, itens } = excluirRascunhoPedido({
 					existente,
 					itensExistentes,
 					tenantId: tenant,
-					agora: this.agora(),
+					agora,
 				});
+
+				const mutacoesOutbox = [
+					criarMutacaoParaRegistro({
+						tenantId: tenant,
+						entity: "pedidos",
+						registro: pedido,
+						existiaAntes: true,
+						agora,
+						gerarId: this.gerarId,
+					}),
+					...itens.map((item) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "itens_pedido",
+							registro: item,
+							existiaAntes: true,
+							agora,
+							gerarId: this.gerarId,
+						}),
+					),
+				];
 
 				await Promise.all([
 					this.db.pedidos.put(pedido),
 					itens.length > 0
 						? this.db.itens_pedido.bulkPut(itens)
 						: Promise.resolve(),
+					this.db.outbox.bulkAdd(mutacoesOutbox),
 				]);
 			},
 		);
@@ -124,6 +213,7 @@ export class PedidoDexieAdapter implements PedidoRepository {
 			[
 				this.db.pedidos,
 				this.db.itens_pedido,
+				this.db.outbox,
 				this.db.clientes,
 				this.db.representadas,
 				this.db.tabelas_preco,
@@ -142,6 +232,9 @@ export class PedidoDexieAdapter implements PedidoRepository {
 						throw new PedidoNaoEncontradoError(pedidoId);
 					}
 					const itensExistentes = await this.obterItensVivos(tenant, pedidoId);
+					const idsItensExistentes = new Set(itensExistentes.map((i) => i.id));
+					const novaIdempotencyKey = this.gerarId();
+
 					const atualizado = atualizarPedidoCompleto({
 						existente,
 						itensExistentes,
@@ -150,16 +243,41 @@ export class PedidoDexieAdapter implements PedidoRepository {
 						percentualComissaoPadrao,
 						status,
 						idempotencyKey:
-							status === "emitido" ? this.gerarId() : existente.idempotency_key,
+							status === "emitido"
+								? novaIdempotencyKey
+								: existente.idempotency_key,
 						agora,
 						gerarId: this.gerarId,
 					});
+
+					const mutacoesOutbox = [
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "pedidos",
+							registro: atualizado.pedido,
+							existiaAntes: true,
+							idempotencyKey: novaIdempotencyKey,
+							agora,
+							gerarId: this.gerarId,
+						}),
+						...atualizado.gravarItens.map((item) =>
+							criarMutacaoParaRegistro({
+								tenantId: tenant,
+								entity: "itens_pedido",
+								registro: item,
+								existiaAntes: idsItensExistentes.has(item.id),
+								agora,
+								gerarId: this.gerarId,
+							}),
+						),
+					];
 
 					await Promise.all([
 						this.db.pedidos.put(atualizado.pedido),
 						atualizado.gravarItens.length > 0
 							? this.db.itens_pedido.bulkPut(atualizado.gravarItens)
 							: Promise.resolve(),
+						this.db.outbox.bulkAdd(mutacoesOutbox),
 					]);
 
 					return { pedido: atualizado.pedido, itens: atualizado.itens };
@@ -176,9 +294,32 @@ export class PedidoDexieAdapter implements PedidoRepository {
 					gerarId: this.gerarId,
 				});
 
+				const mutacoesOutbox = [
+					criarMutacaoParaRegistro({
+						tenantId: tenant,
+						entity: "pedidos",
+						registro: criado.pedido,
+						existiaAntes: false,
+						idempotencyKey: criado.pedido.idempotency_key,
+						agora,
+						gerarId: this.gerarId,
+					}),
+					...criado.itens.map((item) =>
+						criarMutacaoParaRegistro({
+							tenantId: tenant,
+							entity: "itens_pedido",
+							registro: item,
+							existiaAntes: false,
+							agora,
+							gerarId: this.gerarId,
+						}),
+					),
+				];
+
 				await Promise.all([
 					this.db.pedidos.add(criado.pedido),
 					this.db.itens_pedido.bulkAdd(criado.itens),
+					this.db.outbox.bulkAdd(mutacoesOutbox),
 				]);
 
 				return criado;

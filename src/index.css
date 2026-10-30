@@ -3,7 +3,7 @@
 
 /*
  * Design tokens do tema (HSL sem o wrapper `hsl()`), baseados no design system
- * Linear (~/.claude/design-md/linear.app/DESIGN.md):
+ * Linear (./DESIGN.md):
  * - superfícies em escada (sidebar → background → card → muted) com bordas
  *   finas no lugar de sombras;
  * - uma única cor cromática (`--primary`), reservada a CTA, foco, item ativo e

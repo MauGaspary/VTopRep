@@ -1,4 +1,5 @@
 import { useMemo } from "react";
+import type { TenantConfig } from "../../../config/tenant/tenant.schema";
 import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
 import type { PedidoInput, StatusPedido } from "../domain/pedido.schema";
 import { pedidoRepository } from "../repositories/pedido-dexie.adapter";
@@ -27,6 +28,31 @@ export function usePedido(tenantId: string, id: string | undefined) {
 	};
 }
 
+export function useEspelhoPedido(
+	tenantId: string,
+	id: string | undefined,
+	empresa: TenantConfig["empresa"],
+) {
+	const espelho = useLiveRepositoryQuery(async () => {
+		if (!id) return null;
+		return (
+			(await pedidoRepository.obterEspelhoPorId(tenantId, id, empresa)) ?? null
+		);
+	}, [
+		tenantId,
+		id,
+		empresa.nomeFantasia,
+		empresa.razaoSocial,
+		empresa.cnpj,
+		empresa.telefone,
+	]);
+
+	return {
+		espelho,
+		isLoading: espelho === undefined,
+	};
+}
+
 export function usePedidoActions(tenantId: string) {
 	return useMemo(
 		() => ({
@@ -36,6 +62,8 @@ export function usePedidoActions(tenantId: string) {
 				pedidoRepository.emitir(tenantId, input, id),
 			excluirRascunho: (id: string) =>
 				pedidoRepository.excluirRascunho(tenantId, id),
+			obterEspelhoPorId: (id: string, empresa: TenantConfig["empresa"]) =>
+				pedidoRepository.obterEspelhoPorId(tenantId, id, empresa),
 		}),
 		[tenantId],
 	);

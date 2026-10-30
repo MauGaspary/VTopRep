@@ -59,7 +59,12 @@ import {
 	validarFormularioPedido,
 	valoresIniciaisPedidoForm,
 } from "../domain/pedido-form";
-import { usePedido, usePedidoActions } from "../hooks/use-pedidos";
+import {
+	useEspelhoPedido,
+	usePedido,
+	usePedidoActions,
+} from "../hooks/use-pedidos";
+import { EspelhoPedidoActionsBar } from "./espelho-pedido-pdf";
 
 export function OrcamentoFormView() {
 	const { id } = useParams();
@@ -132,7 +137,13 @@ function OrcamentoForm({
 }: OrcamentoFormProps) {
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
+	const { config } = useTenant();
 	const { salvarRascunho, emitir } = usePedidoActions(tenantId);
+	const { espelho } = useEspelhoPedido(
+		tenantId,
+		original?.pedido.id,
+		config.empresa,
+	);
 	const hoje = dataLocal(new Date());
 
 	const produtoQueryId = searchParams.get("produtoId");
@@ -445,11 +456,12 @@ function OrcamentoForm({
 		setSalvando(true);
 		try {
 			if (destinoStatus === "emitido") {
-				await emitir(validacao.data, original?.pedido.id);
+				const resultado = await emitir(validacao.data, original?.pedido.id);
+				navigate(`/pedidos/${resultado.pedido.id}`);
 			} else {
 				await salvarRascunho(validacao.data, original?.pedido.id);
+				navigate("/pedidos");
 			}
-			navigate("/pedidos");
 		} catch (e) {
 			setErroGeral(
 				mensagemDeErro(
@@ -534,6 +546,8 @@ function OrcamentoForm({
 					preservar a integridade comercial.
 				</Alert>
 			)}
+
+			{espelho && <EspelhoPedidoActionsBar espelho={espelho} />}
 
 			<form noValidate onSubmit={handleSubmit} className="flex flex-col gap-5">
 				{/* 1. Contexto de Venda */}

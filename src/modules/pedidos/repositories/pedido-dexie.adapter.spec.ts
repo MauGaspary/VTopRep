@@ -4,6 +4,7 @@ import type { Cliente } from "../../clientes/domain/cliente.schema";
 import type { Produto } from "../../produtos/domain/produto.schema";
 import type { TabelaPreco } from "../../produtos/domain/tabela-preco.schema";
 import type { Representada } from "../../representadas/domain/representada.schema";
+import { gerarBlobEspelhoPedidoPdf } from "../components/espelho-pedido-pdf";
 import {
 	ContextoVendaInvalidoError,
 	PedidoImutavelError,
@@ -90,6 +91,7 @@ describe("PedidoDexieAdapter", () => {
 		await Promise.all([
 			db.pedidos.clear(),
 			db.itens_pedido.clear(),
+			db.outbox.clear(),
 			db.clientes.clear(),
 			db.representadas.clear(),
 			db.tabelas_preco.clear(),
@@ -165,6 +167,22 @@ describe("PedidoDexieAdapter", () => {
 		expect(buscado?.pedido.status).toBe("emitido");
 		expect(buscado?.itens).toHaveLength(2);
 
+		const espelho = await adapter.obterEspelhoPorId(TENANT, emitido.pedido.id, {
+			nomeFantasia: "Vinitop RS",
+			razaoSocial: "Vinitop RS Ltda",
+			cnpj: "00.000.000/0001-00",
+			telefone: "(51) 3333-0000",
+		});
+		expect(espelho).toBeDefined();
+		expect(espelho?.totais.valorTotalFormatado).toBe("R$ 230,00");
+		expect(espelho?.itens).toHaveLength(2);
+
+		if (espelho) {
+			const blob = await gerarBlobEspelhoPedidoPdf(espelho);
+			expect(blob.type).toBe("application/pdf");
+			expect(blob.size).toBeGreaterThan(500);
+		}
+
 		// Impede edição ou exclusão após emissão
 		await expect(
 			adapter.salvarRascunho(
@@ -233,6 +251,29 @@ describe("PedidoDexieAdapter", () => {
 			await adapter.obterPorId(TENANT, rascunho.pedido.id),
 		).toBeUndefined();
 		expect(await adapter.listar(TENANT)).toEqual([emitido.pedido]);
+
+		const filaOutbox = await db.outbox
+			.where("tenant_id")
+			.equals(TENANT)
+			.toArray();
+		// rascunho (1 pedido + 1 item INSERT) + emitido (1 pedido + 1 item INSERT) + exclusão rascunho (1 pedido + 1 item DELETE) = 6 mutações
+		expect(filaOutbox).toHaveLength(6);
+		expect(
+			filaOutbox.some(
+				(m) =>
+					m.entity === "pedidos" &&
+					m.action === "INSERT" &&
+					m.idempotency_key === emitido.pedido.idempotency_key,
+			),
+		).toBe(true);
+		expect(
+			filaOutbox.some(
+				(m) =>
+					m.entity === "pedidos" &&
+					m.action === "DELETE" &&
+					m.payload.id === rascunho.pedido.id,
+			),
+		).toBe(true);
 	});
 
 	it("rejeita vínculos de outro tenant ou de outra representada", async () => {

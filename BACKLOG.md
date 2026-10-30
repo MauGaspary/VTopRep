@@ -43,3 +43,11 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 ### 2.2. Inteligência de Recompra e Curva ABC Preditiva (Fase 4)
 - Algoritmo de cálculo de ciclo médio de recompra por cliente.
 - Ficha Raio-X pré-visita com histórico de itens não explorados.
+
+## 3 Interface e suas lógicas
+
+## 3.1 Cliente fazer um carrinho sem ver os preços para solicitar um orçamento
+- Possibilidade de colocar produtos de mais de uma representada no carrinho
+- Ser possível fazer um orçamento para mais de uma representada, criando um orçamento individual para cada uma mas sendo "único" para o cliente (explorar melhor essa ideia)
+
+## 3.2 Inserir qual transportadora no pedido (Cadastrar transportadoras?)
