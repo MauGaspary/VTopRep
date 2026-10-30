@@ -134,6 +134,7 @@ describe("OutboxDexieAdapter", () => {
 			cnpj_cpf: "11222333000181",
 			razao_social: "Mercado Local T2",
 			nome_fantasia: "Local",
+			tipo_cliente: "REVENDA",
 			ativo: true,
 			created_at: T1,
 			updated_at: T2,

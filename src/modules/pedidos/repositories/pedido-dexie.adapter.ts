@@ -16,6 +16,7 @@ import {
 	ordenarPedidosPorDataDesc,
 	type PedidoCompleto,
 	PedidoNaoEncontradoError,
+	resolverPercentualComissaoPedido,
 } from "../domain/pedido";
 import {
 	type Pedido,
@@ -384,7 +385,7 @@ export class PedidoDexieAdapter implements PedidoRepository {
 			}
 		}
 
-		return representada.percentual_comissao_padrao;
+		return resolverPercentualComissaoPedido(representada, cliente.tipo_cliente);
 	}
 
 	private async obterPedidoVivo(

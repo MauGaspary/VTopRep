@@ -20,6 +20,7 @@ const formValido = (
 	cnpj_cpf: "529.982.247-25",
 	razao_social: "  João da Silva  ",
 	nome_fantasia: "",
+	tipo_cliente: "REVENDA",
 	enderecos: [
 		{
 			...novoEnderecoForm(gerarId),
@@ -47,6 +48,7 @@ describe("validarFormularioCliente", () => {
 			cnpj_cpf: "52998224725",
 			razao_social: "João da Silva",
 			nome_fantasia: null,
+			tipo_cliente: "REVENDA",
 		});
 		expect(resultado.data.enderecos).toEqual([
 			{
@@ -176,6 +178,7 @@ describe("valoresIniciaisClienteForm", () => {
 			cnpj_cpf: "",
 			razao_social: "",
 			nome_fantasia: "",
+			tipo_cliente: "REVENDA",
 			enderecos: [],
 			contatos: [],
 		});
@@ -188,6 +191,7 @@ describe("valoresIniciaisClienteForm", () => {
 				cnpj_cpf: "11222333000181",
 				razao_social: "Padaria Ltda",
 				nome_fantasia: "Pão Quente",
+				tipo_cliente: "FABRICA",
 			},
 			enderecosInput: [
 				{
@@ -205,11 +209,13 @@ describe("valoresIniciaisClienteForm", () => {
 
 		const valores = valoresIniciaisClienteForm(completo);
 		expect(valores.cnpj_cpf).toBe("11.222.333/0001-81");
+		expect(valores.tipo_cliente).toBe("FABRICA");
 		expect(valores.contatos[0].papel).toBe("");
 
 		const resultado = validarFormularioCliente(valores);
 		expect(resultado.success).toBe(true);
 		if (resultado.success) {
+			expect(resultado.data.cliente.tipo_cliente).toBe("FABRICA");
 			expect(resultado.data.enderecos[0]).toMatchObject({
 				id: completo.enderecos[0].id,
 				latitude: -30.03,
@@ -224,6 +230,7 @@ describe("valoresIniciaisClienteForm", () => {
 			cnpj_cpf: "11.222.333/0001-81",
 			razao_social: "",
 			nome_fantasia: "",
+			tipo_cliente: "REVENDA",
 			enderecos: [],
 			contatos: [],
 		});
@@ -232,6 +239,7 @@ describe("valoresIniciaisClienteForm", () => {
 			cnpj_cpf: "",
 			razao_social: "Mercado Central",
 			nome_fantasia: "Mercado Central",
+			tipo_cliente: "REVENDA",
 			enderecos: [],
 			contatos: [],
 		});

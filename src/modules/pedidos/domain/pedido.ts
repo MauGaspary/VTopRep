@@ -4,6 +4,11 @@ import {
 	somarCentavos,
 } from "../../../shared/domain/dinheiro";
 import { garantirMesmoTenant } from "../../../shared/domain/tenant";
+import type { TipoCliente } from "../../clientes/domain/cliente.schema";
+import {
+	type ComissaoRepresentadaConfig,
+	resolverPercentualComissaoRepresentada,
+} from "../../representadas/domain/representada";
 import {
 	type ItemPedido,
 	type ItemPedidoCalculoInput,
@@ -177,6 +182,19 @@ export function criarItemPedido({
 		updated_at: agora,
 		deleted_at: null,
 	});
+}
+
+/**
+ * Resolve o percentual de comissão aplicável ao pedido cruzando a representada
+ * e o segmento do cliente (`REVENDA` vs. `FABRICA`).
+ */
+export function resolverPercentualComissaoPedido(
+	representada: ComissaoRepresentadaConfig,
+	tipoCliente?: TipoCliente | null,
+): number {
+	return PercentualComissaoSchema.parse(
+		resolverPercentualComissaoRepresentada(representada, tipoCliente),
+	);
 }
 
 /**

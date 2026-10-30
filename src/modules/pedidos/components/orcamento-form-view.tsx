@@ -38,6 +38,10 @@ import {
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE, TIPOS_FRETE } from "../../../shared/domain/frete";
 import { ClienteQuickCreateDialog } from "../../clientes/components/cliente-quick-create-dialog";
+import {
+	type Cliente,
+	ROTULOS_TIPO_CLIENTE,
+} from "../../clientes/domain/cliente.schema";
 import { useCliente, useClientes } from "../../clientes/hooks/use-clientes";
 import { escolherTabelaSugerida } from "../../produtos/domain/preco";
 import { correspondeBuscaProduto } from "../../produtos/domain/produto";
@@ -49,13 +53,17 @@ import {
 	useTabelasVigentes,
 } from "../../produtos/hooks/use-precos";
 import { useTodosProdutos } from "../../produtos/hooks/use-produtos";
-import { obterCorRepresentada } from "../../representadas/domain/representada";
+import {
+	formatarResumoComissaoRepresentada,
+	obterCorRepresentada,
+} from "../../representadas/domain/representada";
 import type { Representada } from "../../representadas/domain/representada.schema";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
 import {
 	escolherContatoPadrao,
 	escolherEnderecoEntregaPadrao,
 	type PedidoCompleto,
+	resolverPercentualComissaoPedido,
 } from "../domain/pedido";
 import {
 	CONDICOES_PAGAMENTO_PADRAO,
@@ -131,12 +139,12 @@ export function OrcamentoFormView() {
 interface OrcamentoFormProps {
 	tenantId: string;
 	original?: PedidoCompleto;
-	clientes: Array<{
-		id: string;
-		razao_social: string;
-		nome_fantasia?: string | null;
-		cnpj_cpf: string;
-	}>;
+	clientes: ReadonlyArray<
+		Pick<
+			Cliente,
+			"id" | "razao_social" | "nome_fantasia" | "cnpj_cpf" | "tipo_cliente"
+		>
+	>;
 	representadas: readonly Representada[];
 	todosProdutos: readonly Produto[];
 }
@@ -321,21 +329,32 @@ function OrcamentoForm({
 		[representadas, valores.representada_id],
 	);
 
+	const clienteSelecionado = useMemo(
+		() =>
+			clienteCompleto?.cliente ??
+			clientes.find((c) => c.id === valores.cliente_id),
+		[clienteCompleto?.cliente, clientes, valores.cliente_id],
+	);
+
 	const opcoesClientes = useMemo<OpcaoCombobox[]>(
 		() =>
-			clientes.map((c) => ({
-				id: c.id,
-				label: c.nome_fantasia
-					? `${c.nome_fantasia} (${c.razao_social})`
-					: c.razao_social,
-				sublabel: `Doc: ${formatarCpfCnpj(c.cnpj_cpf)}`,
-				keywords: [
-					c.cnpj_cpf,
-					formatarCpfCnpj(c.cnpj_cpf),
-					c.razao_social,
-					c.nome_fantasia ?? "",
-				],
-			})),
+			clientes.map((c) => {
+				const tipo = c.tipo_cliente ?? "REVENDA";
+				return {
+					id: c.id,
+					label: c.nome_fantasia
+						? `${c.nome_fantasia} (${c.razao_social})`
+						: c.razao_social,
+					sublabel: `${ROTULOS_TIPO_CLIENTE[tipo]} · Doc: ${formatarCpfCnpj(c.cnpj_cpf)}`,
+					keywords: [
+						c.cnpj_cpf,
+						formatarCpfCnpj(c.cnpj_cpf),
+						c.razao_social,
+						c.nome_fantasia ?? "",
+						ROTULOS_TIPO_CLIENTE[tipo],
+					],
+				};
+			}),
 		[clientes],
 	);
 
@@ -344,7 +363,7 @@ function OrcamentoForm({
 			representadas.map((r) => ({
 				id: r.id,
 				label: r.nome_fantasia,
-				sublabel: `${r.razao_social} · Com. ${formatarCentesimosPercentual(r.percentual_comissao_padrao)}`,
+				sublabel: `${r.razao_social} · Com. ${formatarResumoComissaoRepresentada(r)}`,
 				keywords: [r.cnpj, formatarCnpj(r.cnpj), r.razao_social],
 				dados: r,
 			})),
@@ -403,12 +422,22 @@ function OrcamentoForm({
 		return mapa;
 	}, [valores.itens]);
 
-	const percentualComissaoPadrao =
-		representadaSelecionada?.percentual_comissao_padrao ?? 0;
+	const tipoClienteAtivo = clienteSelecionado?.tipo_cliente ?? null;
+
+	const percentualComissaoAtivo = useMemo(
+		() =>
+			representadaSelecionada
+				? resolverPercentualComissaoPedido(
+						representadaSelecionada,
+						tipoClienteAtivo,
+					)
+				: 0,
+		[representadaSelecionada, tipoClienteAtivo],
+	);
 
 	const previaTotais = useMemo(
-		() => calcularPreviaTotaisForm(valores.itens, percentualComissaoPadrao),
-		[valores.itens, percentualComissaoPadrao],
+		() => calcularPreviaTotaisForm(valores.itens, percentualComissaoAtivo),
+		[valores.itens, percentualComissaoAtivo],
 	);
 
 	const limparErro = (chave: string) => {
@@ -615,7 +644,11 @@ function OrcamentoForm({
 					<div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
 						<FormField
 							id="orcamento-cliente"
-							label="Cliente"
+							label={
+								tipoClienteAtivo
+									? `Cliente · ${ROTULOS_TIPO_CLIENTE[tipoClienteAtivo]}`
+									: "Cliente"
+							}
 							error={erros.cliente_id}
 							required
 						>
@@ -1356,7 +1389,11 @@ function OrcamentoForm({
 								</div>
 								<div>
 									<span className="text-muted-foreground">
-										Comissão (
+										Comissão{" "}
+										{tipoClienteAtivo
+											? ROTULOS_TIPO_CLIENTE[tipoClienteAtivo]
+											: "base"}{" "}
+										(
 										{formatarCentesimosPercentual(
 											previaTotais.percentual_comissao_padrao,
 										)}

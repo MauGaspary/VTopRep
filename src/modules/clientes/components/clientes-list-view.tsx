@@ -14,7 +14,7 @@ import {
 } from "../../../shared/components/ui";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
-import type { Cliente } from "../domain/cliente.schema";
+import { type Cliente, ROTULOS_TIPO_CLIENTE } from "../domain/cliente.schema";
 import { useClienteActions, useTodosClientes } from "../hooks/use-clientes";
 
 export function ClientesListView() {
@@ -120,7 +120,7 @@ export function ClientesListView() {
 							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
 								<th className="px-3.5 py-2.5">Cliente</th>
 								<th className="hidden px-3 py-2.5 sm:table-cell">Documento</th>
-								<th className="hidden px-3 py-2.5 md:table-cell">Tipo</th>
+								<th className="px-3 py-2.5">Segmento</th>
 								<th className="px-3.5 py-2.5 text-right">Ações</th>
 							</tr>
 						</thead>
@@ -128,6 +128,7 @@ export function ClientesListView() {
 							{clientes.map((c) => {
 								const isInativo = !c.ativo;
 								const isPj = c.cnpj_cpf.length === 14;
+								const tipoCliente = c.tipo_cliente ?? "REVENDA";
 								return (
 									<tr
 										key={c.id}
@@ -163,10 +164,19 @@ export function ClientesListView() {
 											{formatarCpfCnpj(c.cnpj_cpf)}
 										</td>
 
-										<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap md:table-cell">
-											<span className="inline-flex h-5 items-center rounded border border-border bg-muted/50 px-1.5 font-mono text-[11px] text-muted-foreground">
-												{isPj ? "PJ · CNPJ" : "PF · CPF"}
-											</span>
+										<td className="px-3 py-2.5 align-middle whitespace-nowrap">
+											<div className="inline-flex items-center gap-1.5">
+												<Badge
+													variant={
+														tipoCliente === "FABRICA" ? "outline" : "secondary"
+													}
+												>
+													{ROTULOS_TIPO_CLIENTE[tipoCliente]}
+												</Badge>
+												<span className="hidden h-5 items-center rounded border border-border bg-muted/50 px-1.5 font-mono text-[11px] text-muted-foreground md:inline-flex">
+													{isPj ? "PJ" : "PF"}
+												</span>
+											</div>
 										</td>
 
 										<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">

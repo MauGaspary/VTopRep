@@ -72,19 +72,21 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 	const representadas = [
 		{
 			sufixo: "Indústria e Comércio Ltda",
-			comissao: 500,
+			comissaoRevenda: 500,
+			comissaoFabrica: 350,
 			minimo: 150000,
 			cor: "indigo" as const,
 			frete: "CIF" as const,
 		},
 		{
 			sufixo: "S/A",
-			comissao: 750,
+			comissaoRevenda: 750,
+			comissaoFabrica: 500,
 			minimo: 300000,
 			cor: "emerald" as const,
 			frete: "FOB" as const,
 		},
-	].map(({ sufixo, comissao, minimo, cor, frete }) =>
+	].map(({ sufixo, comissaoRevenda, comissaoFabrica, minimo, cor, frete }) =>
 		criarRepresentada({
 			tenantId,
 			id: faker.string.uuid(),
@@ -93,7 +95,9 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 				razao_social: `${faker.company.name()} ${sufixo}`,
 				nome_fantasia: faker.company.name(),
 				cnpj: documentos.cnpj(),
-				percentual_comissao_padrao: comissao,
+				percentual_comissao_padrao: comissaoRevenda,
+				percentual_comissao_revenda: comissaoRevenda,
+				percentual_comissao_fabrica: comissaoFabrica,
 				valor_pedido_minimo_centavos: minimo,
 				regras_frete_padrao: frete,
 				cor,
@@ -158,7 +162,7 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 		});
 	});
 
-	const clientes = Array.from({ length: 5 }, () =>
+	const clientes = Array.from({ length: 5 }, (_, idx) =>
 		criarClienteCompleto({
 			tenantId,
 			agora: agora(),
@@ -170,6 +174,7 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 				nome_fantasia: faker.helpers.maybe(() => faker.company.name(), {
 					probability: 0.7,
 				}),
+				tipo_cliente: idx % 2 === 1 ? "FABRICA" : "REVENDA",
 			},
 			enderecosInput: [
 				{

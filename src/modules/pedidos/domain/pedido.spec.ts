@@ -13,6 +13,7 @@ import {
 	excluirRascunhoPedido,
 	ordenarPedidosPorDataDesc,
 	PedidoImutavelError,
+	resolverPercentualComissaoPedido,
 	sincronizarItensPedido,
 } from "./pedido";
 
@@ -191,6 +192,35 @@ describe("calcularComissaoProjetada", () => {
 		expect(() => calcularComissaoProjetada(-1, 500)).toThrow();
 		expect(() => calcularComissaoProjetada(1000, -10)).toThrow();
 		expect(() => calcularComissaoProjetada(1000, 10001)).toThrow();
+	});
+
+	it("resolve a comissão diferenciada por segmento (Revenda vs. Fábrica) com half-even", () => {
+		const configRep = {
+			percentual_comissao_padrao: 625, // 6,25%
+			percentual_comissao_revenda: 625, // 6,25%
+			percentual_comissao_fabrica: 375, // 3,75%
+		};
+		const comissaoRevenda = resolverPercentualComissaoPedido(
+			configRep,
+			"REVENDA",
+		);
+		const comissaoFabrica = resolverPercentualComissaoPedido(
+			configRep,
+			"FABRICA",
+		);
+		expect(comissaoRevenda).toBe(625);
+		expect(comissaoFabrica).toBe(375);
+
+		// R$ 0,40 (40 centavos):
+		// Revenda 6,25% de 40 = 2,5 => 2 centavos (half-even par)
+		// Fábrica 3,75% de 40 = 1,5 => 2 centavos (half-even par)
+		expect(calcularComissaoProjetada(40, comissaoRevenda)).toBe(2);
+		expect(calcularComissaoProjetada(40, comissaoFabrica)).toBe(2);
+
+		// R$ 1.000,00 (100000 centavos):
+		// Revenda 6,25% = 6250 centavos; Fábrica 3,75% = 3750 centavos
+		expect(calcularComissaoProjetada(100000, comissaoRevenda)).toBe(6250);
+		expect(calcularComissaoProjetada(100000, comissaoFabrica)).toBe(3750);
 	});
 });
 

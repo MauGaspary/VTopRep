@@ -19,6 +19,7 @@ import {
 	calcularItemPedido,
 	calcularTotaisPedido,
 	type PedidoCompleto,
+	resolverPercentualComissaoPedido,
 } from "./pedido";
 import { ROTULOS_STATUS_PEDIDO, type StatusPedido } from "./pedido.schema";
 
@@ -184,7 +185,7 @@ export function montarEspelhoPedido({
 
 	const totaisCalculados = calcularTotaisPedido(
 		itensVivos,
-		representada.percentual_comissao_padrao,
+		resolverPercentualComissaoPedido(representada, cliente.tipo_cliente),
 	);
 
 	const dataEmissaoIso = pedido.data_emissao.slice(0, 10);

@@ -13,6 +13,7 @@ import type { Representada } from "../modules/representadas/domain/representada.
 import type { OutboxMutation } from "../modules/sync/domain/outbox.schema";
 import { migrarParaV4 } from "./migrations/v4";
 import { migrarParaV5 } from "./migrations/v5";
+import { migrarParaV7 } from "./migrations/v7";
 
 export const NOME_BANCO_PADRAO = "VTop_Rep_DB";
 
@@ -87,6 +88,10 @@ export class AppDatabase extends Dexie {
 			itens_preco:
 				"id, tenant_id, [tenant_id+tabela_id], [tenant_id+produto_id], [tenant_id+tabela_id+produto_id], [tenant_id+deleted_at]",
 		});
+
+		// v7: segmentação de cliente (`tipo_cliente`: REVENDA | FABRICA) e
+		// alíquotas de comissão por segmento nas representadas.
+		this.version(7).stores({}).upgrade(migrarParaV7);
 	}
 }
 

@@ -22,7 +22,10 @@ export interface RepresentadaFormValues {
 	razao_social: string;
 	nome_fantasia: string;
 	cnpj: string;
+	/** Comissão obrigatória aplicável a clientes do segmento Fábrica (e padrão da representada). */
 	percentual_comissao: string;
+	/** Comissão opcional aplicável a clientes do segmento Revenda. */
+	percentual_comissao_revenda?: string;
 	valor_pedido_minimo: string;
 	regras_frete_padrao: string;
 	cor?: string;
@@ -45,17 +48,24 @@ export function valoresIniciaisFormulario(
 			nome_fantasia: "",
 			cnpj: "",
 			percentual_comissao: "",
+			percentual_comissao_revenda: "",
 			valor_pedido_minimo: "",
 			regras_frete_padrao: "CIF",
 		};
 	}
+	const comissaoFabrica =
+		representada.percentual_comissao_fabrica ??
+		representada.percentual_comissao_padrao;
 	return {
 		razao_social: representada.razao_social,
 		nome_fantasia: representada.nome_fantasia,
 		cnpj: formatarCnpj(representada.cnpj),
-		percentual_comissao: formatarInteiroComoDecimalBr(
-			representada.percentual_comissao_padrao,
-		),
+		percentual_comissao: formatarInteiroComoDecimalBr(comissaoFabrica),
+		percentual_comissao_revenda:
+			representada.percentual_comissao_revenda !== undefined &&
+			representada.percentual_comissao_revenda !== null
+				? formatarInteiroComoDecimalBr(representada.percentual_comissao_revenda)
+				: "",
 		valor_pedido_minimo: formatarInteiroComoDecimalBr(
 			representada.valor_pedido_minimo_centavos,
 		),
@@ -69,6 +79,8 @@ const CAMPO_POR_PATH: Record<string, keyof RepresentadaFormValues> = {
 	nome_fantasia: "nome_fantasia",
 	cnpj: "cnpj",
 	percentual_comissao_padrao: "percentual_comissao",
+	percentual_comissao_fabrica: "percentual_comissao",
+	percentual_comissao_revenda: "percentual_comissao_revenda",
 	valor_pedido_minimo_centavos: "valor_pedido_minimo",
 	regras_frete_padrao: "regras_frete_padrao",
 	cor: "cor",
@@ -87,10 +99,20 @@ export function validarFormularioRepresentada(
 ): ResultadoFormulario {
 	const errosConversao: RepresentadaFormErros = {};
 
-	const percentual = parseDecimalBrParaInteiro(valores.percentual_comissao);
-	if (percentual === null) {
+	const percentualFabrica = parseDecimalBrParaInteiro(
+		valores.percentual_comissao,
+	);
+	if (percentualFabrica === null) {
 		errosConversao.percentual_comissao =
 			"Informe um percentual válido (ex: 5,00)";
+	}
+
+	const textoRevenda = valores.percentual_comissao_revenda?.trim() ?? "";
+	const percentualRevenda =
+		textoRevenda === "" ? undefined : parseDecimalBrParaInteiro(textoRevenda);
+	if (textoRevenda !== "" && percentualRevenda === null) {
+		errosConversao.percentual_comissao_revenda =
+			"Informe um percentual válido (ex: 7,50)";
 	}
 
 	const pedidoMinimo =
@@ -108,7 +130,11 @@ export function validarFormularioRepresentada(
 		razao_social: valores.razao_social,
 		nome_fantasia: valores.nome_fantasia,
 		cnpj: valores.cnpj,
-		percentual_comissao_padrao: percentual ?? 0,
+		percentual_comissao_padrao: percentualFabrica ?? 0,
+		percentual_comissao_fabrica: percentualFabrica ?? 0,
+		...(percentualRevenda !== undefined && percentualRevenda !== null
+			? { percentual_comissao_revenda: percentualRevenda }
+			: {}),
 		valor_pedido_minimo_centavos: pedidoMinimo ?? 0,
 		regras_frete_padrao: valores.regras_frete_padrao,
 		...(corLimpa !== "" ? { cor: corLimpa } : {}),

@@ -32,7 +32,11 @@ import {
 	ClienteInativoExistenteError,
 	CpfCnpjDuplicadoError,
 } from "../domain/cliente";
-import type { Cliente } from "../domain/cliente.schema";
+import {
+	type Cliente,
+	ROTULOS_TIPO_CLIENTE,
+	TIPOS_CLIENTE,
+} from "../domain/cliente.schema";
 import { PAPEL_CONTATO } from "../domain/cliente-contato.schema";
 import { TIPO_ENDERECO } from "../domain/cliente-endereco.schema";
 import {
@@ -154,7 +158,7 @@ function ClienteForm({
 		setErros((atual) => ({ ...atual, [chave]: undefined }));
 
 	const alterarCampo = (
-		campo: "cnpj_cpf" | "razao_social" | "nome_fantasia",
+		campo: "cnpj_cpf" | "razao_social" | "nome_fantasia" | "tipo_cliente",
 		valor: string,
 	) => {
 		setValores((atual) => ({ ...atual, [campo]: valor }));
@@ -329,19 +333,65 @@ function ClienteForm({
 						</FormField>
 					</div>
 
-					<FormField
-						id="nome_fantasia"
-						label="Nome Fantasia (Opcional)"
-						error={erros.nome_fantasia}
-					>
-						<Input
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+						<FormField
 							id="nome_fantasia"
-							value={valores.nome_fantasia}
-							onChange={(e) => alterarCampo("nome_fantasia", e.target.value)}
-							autoComplete="off"
-							hasError={Boolean(erros.nome_fantasia)}
-						/>
-					</FormField>
+							label="Nome Fantasia (Opcional)"
+							error={erros.nome_fantasia}
+						>
+							<Input
+								id="nome_fantasia"
+								value={valores.nome_fantasia}
+								onChange={(e) => alterarCampo("nome_fantasia", e.target.value)}
+								autoComplete="off"
+								hasError={Boolean(erros.nome_fantasia)}
+							/>
+						</FormField>
+
+						<fieldset className="flex flex-col gap-1.5">
+							<legend className="text-xs font-medium text-muted-foreground">
+								Segmento comercial (comissão){" "}
+								<span className="text-destructive">*</span>
+							</legend>
+							<div className="grid grid-cols-2 gap-2">
+								{TIPOS_CLIENTE.map((tipo) => {
+									const selecionado = valores.tipo_cliente === tipo;
+									return (
+										<label
+											key={tipo}
+											className={`flex h-9 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors select-none ${
+												selecionado
+													? "border-primary bg-primary/10 text-foreground"
+													: "border-border bg-secondary/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+											}`}
+										>
+											<input
+												type="radio"
+												name="tipo_cliente"
+												value={tipo}
+												checked={selecionado}
+												onChange={(e) =>
+													alterarCampo("tipo_cliente", e.target.value)
+												}
+												className="size-3.5 accent-primary"
+											/>
+											{ROTULOS_TIPO_CLIENTE[tipo]}
+										</label>
+									);
+								})}
+							</div>
+							{erros.tipo_cliente ? (
+								<span role="alert" className="text-xs text-destructive">
+									{erros.tipo_cliente}
+								</span>
+							) : (
+								<span className="text-xs text-muted-foreground">
+									Define automaticamente a alíquota de comissão nas
+									representadas.
+								</span>
+							)}
+						</fieldset>
+					</div>
 
 					<HomonymWarning
 						title="Já existe cliente com este nome na carteira:"

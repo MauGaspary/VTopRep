@@ -32,10 +32,48 @@ describe("validarFormularioRepresentada", () => {
 				nome_fantasia: "ACME",
 				cnpj: "11222333000181",
 				percentual_comissao_padrao: 525,
+				percentual_comissao_fabrica: 525,
 				valor_pedido_minimo_centavos: 150000,
 				regras_frete_padrao: "FOB",
 			},
 		});
+	});
+
+	it("permite informar comissões distintas (Fábrica obrigatória e Revenda opcional)", () => {
+		const resultado = validarFormularioRepresentada(
+			formValido({
+				percentual_comissao: "3,50",
+				percentual_comissao_revenda: "6,00",
+			}),
+		);
+		expect(resultado.success).toBe(true);
+		if (resultado.success) {
+			expect(resultado.data.percentual_comissao_padrao).toBe(350);
+			expect(resultado.data.percentual_comissao_fabrica).toBe(350);
+			expect(resultado.data.percentual_comissao_revenda).toBe(600);
+		}
+	});
+
+	it("retorna erro quando a comissão de revenda opcional é inválida ou maior que 100%", () => {
+		const invalida = validarFormularioRepresentada(
+			formValido({ percentual_comissao_revenda: "abc" }),
+		);
+		expect(invalida.success).toBe(false);
+		if (!invalida.success) {
+			expect(invalida.erros.percentual_comissao_revenda).toContain(
+				"percentual",
+			);
+		}
+
+		const acimaDeCem = validarFormularioRepresentada(
+			formValido({ percentual_comissao_revenda: "100,01" }),
+		);
+		expect(acimaDeCem.success).toBe(false);
+		if (!acimaDeCem.success) {
+			expect(acimaDeCem.erros.percentual_comissao_revenda).toBe(
+				"Comissão não pode exceder 100%",
+			);
+		}
 	});
 
 	it("trata pedido mínimo vazio como zero", () => {
@@ -117,6 +155,7 @@ describe("valoresIniciaisFormulario", () => {
 			nome_fantasia: "",
 			cnpj: "",
 			percentual_comissao: "",
+			percentual_comissao_revenda: "",
 			valor_pedido_minimo: "",
 			regras_frete_padrao: "CIF",
 		});

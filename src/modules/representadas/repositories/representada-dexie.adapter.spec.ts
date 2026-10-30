@@ -358,6 +358,7 @@ describe("RepresentadaDexieAdapter", () => {
 				nome_fantasia: "Outra",
 				razao_social: "Outra Razão Ltda",
 				percentual_comissao_padrao: 500,
+				percentual_comissao_fabrica: 500,
 				valor_pedido_minimo_centavos: 100000,
 				regras_frete_padrao: "CIF",
 				ativo: true,

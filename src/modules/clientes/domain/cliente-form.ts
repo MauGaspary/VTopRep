@@ -40,6 +40,7 @@ export interface ClienteFormValues {
 	cnpj_cpf: string;
 	razao_social: string;
 	nome_fantasia: string;
+	tipo_cliente: string;
 	enderecos: EnderecoFormValues[];
 	contatos: ContatoFormValues[];
 }
@@ -47,7 +48,7 @@ export interface ClienteFormValues {
 export type CampoEnderecoForm = "tipo_endereco" | "endereco_completo";
 export type CampoContatoForm = "nome" | "papel" | "telefone_whatsapp" | "email";
 
-/** Chaves: `cnpj_cpf`, `razao_social`, `nome_fantasia`, `enderecos.<i>.<campo>`, `contatos.<i>.<campo>`. */
+/** Chaves: `cnpj_cpf`, `razao_social`, `nome_fantasia`, `tipo_cliente`, `enderecos.<i>.<campo>`, `contatos.<i>.<campo>`. */
 export type ClienteFormErros = Partial<Record<string, string>>;
 
 export interface ClienteFormDados {
@@ -74,7 +75,12 @@ export function chaveErroContato(
 	return `contatos.${indice}.${campo}`;
 }
 
-const CAMPOS_CLIENTE = new Set(["cnpj_cpf", "razao_social", "nome_fantasia"]);
+const CAMPOS_CLIENTE = new Set([
+	"cnpj_cpf",
+	"razao_social",
+	"nome_fantasia",
+	"tipo_cliente",
+]);
 const CAMPOS_ENDERECO = new Set<string>(["tipo_endereco", "endereco_completo"]);
 const CAMPOS_CONTATO = new Set<string>([
 	"nome",
@@ -132,6 +138,7 @@ export function valoresIniciaisClienteForm(
 			cnpj_cpf: "",
 			razao_social: "",
 			nome_fantasia: "",
+			tipo_cliente: "REVENDA",
 			enderecos: [],
 			contatos: [],
 		};
@@ -141,6 +148,7 @@ export function valoresIniciaisClienteForm(
 		cnpj_cpf: formatarCpfCnpj(dados.cliente.cnpj_cpf),
 		razao_social: dados.cliente.razao_social,
 		nome_fantasia: dados.cliente.nome_fantasia ?? "",
+		tipo_cliente: dados.cliente.tipo_cliente ?? "REVENDA",
 		enderecos: dados.enderecos.map((e) => ({
 			localId: e.id,
 			id: e.id,
@@ -178,6 +186,7 @@ export function valoresIniciaisCadastroRapidoCliente(
 			cnpj_cpf: limpo,
 			razao_social: "",
 			nome_fantasia: "",
+			tipo_cliente: "REVENDA",
 			enderecos: [],
 			contatos: [],
 		};
@@ -186,6 +195,7 @@ export function valoresIniciaisCadastroRapidoCliente(
 		cnpj_cpf: "",
 		razao_social: limpo,
 		nome_fantasia: limpo,
+		tipo_cliente: "REVENDA",
 		enderecos: [],
 		contatos: [],
 	};
@@ -205,6 +215,8 @@ export function validarFormularioCliente(
 			cnpj_cpf: valores.cnpj_cpf,
 			razao_social: valores.razao_social,
 			nome_fantasia: valores.nome_fantasia,
+			tipo_cliente:
+				valores.tipo_cliente.trim() === "" ? "REVENDA" : valores.tipo_cliente,
 		},
 		enderecos: valores.enderecos.map((e) => ({
 			id: e.id,

@@ -29,6 +29,7 @@ const clienteBase: Cliente = {
 	cnpj_cpf: "11222333000181",
 	razao_social: "Mercado Bom Preço Ltda",
 	nome_fantasia: "Bom Preço",
+	tipo_cliente: "REVENDA",
 	ativo: true,
 	created_at: CRIADO_EM,
 	updated_at: CRIADO_EM,
@@ -42,6 +43,8 @@ const representadaBase: Representada = {
 	nome_fantasia: "Vinitop",
 	cnpj: "11222333000181",
 	percentual_comissao_padrao: 750, // 7,50%
+	percentual_comissao_revenda: 750, // 7,50%
+	percentual_comissao_fabrica: 400, // 4,00%
 	valor_pedido_minimo_centavos: 150000,
 	regras_frete_padrao: "CIF",
 	ativo: true,
@@ -321,5 +324,34 @@ describe("PedidoDexieAdapter", () => {
 		await expect(
 			adapter.excluirRascunho(TENANT, crypto.randomUUID()),
 		).rejects.toThrow(PedidoNaoEncontradoError);
+	});
+
+	it("aplica a comissão de fábrica quando o cliente é do segmento FABRICA", async () => {
+		const clienteFabricaId = "99999999-9999-4999-a999-999999999999";
+		await db.clientes.add({
+			...clienteBase,
+			id: clienteFabricaId,
+			cnpj_cpf: "52998224725",
+			razao_social: "Indústria Sul S/A",
+			tipo_cliente: "FABRICA",
+		});
+
+		const pedidoFabrica = await adapter.salvarRascunho(TENANT, {
+			cliente_id: clienteFabricaId,
+			representada_id: REPRESENTADA,
+			tabela_id: TABELA,
+			condicao_pagamento: "30 dias",
+			tipo_frete: "CIF",
+			itens: [
+				{
+					produto_id: PRODUTO_A,
+					quantidade: 1,
+					preco_unitario_tabela_centavos: 10000, // R$ 100,00 -> 4,00% = R$ 4,00 (400 centavos)
+				},
+			],
+		});
+
+		expect(pedidoFabrica.pedido.valor_total_centavos).toBe(10000);
+		expect(pedidoFabrica.pedido.comissao_projetada_centavos).toBe(400);
 	});
 });

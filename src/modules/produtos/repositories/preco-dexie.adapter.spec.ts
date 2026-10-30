@@ -57,6 +57,7 @@ const cliente = (overrides: Partial<Cliente> = {}): Cliente => ({
 	cnpj_cpf: "11222333000181",
 	razao_social: "Mercado Bom Preço Ltda",
 	nome_fantasia: null,
+	tipo_cliente: "REVENDA",
 	ativo: true,
 	created_at: CRIADO_EM,
 	updated_at: CRIADO_EM,

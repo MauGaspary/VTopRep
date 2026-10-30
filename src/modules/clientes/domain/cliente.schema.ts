@@ -5,6 +5,19 @@ import {
 } from "../../../shared/domain/cpf-cnpj";
 import { CamposSincronizaveisSchema } from "../../../shared/domain/datas";
 
+export const TIPOS_CLIENTE = ["REVENDA", "FABRICA"] as const;
+
+export const TipoClienteSchema = z.enum(TIPOS_CLIENTE, {
+	error: "Selecione o segmento do cliente (Revenda ou Fábrica)",
+});
+
+export type TipoCliente = z.infer<typeof TipoClienteSchema>;
+
+export const ROTULOS_TIPO_CLIENTE: Record<TipoCliente, string> = {
+	REVENDA: "Revenda",
+	FABRICA: "Fábrica",
+};
+
 const DocumentoCpfCnpjSchema = z
 	.string()
 	.transform(normalizarCpfCnpj)
@@ -25,6 +38,8 @@ export const ClienteSchema = z
 		/** Pode repetir (filiais): a UI apenas avisa. */
 		razao_social: z.string().trim().min(1, "Razão social / Nome é obrigatório"),
 		nome_fantasia: z.string().trim().nullable().optional(),
+		/** Segmento comercial que determina a alíquota de comissão na representada. */
+		tipo_cliente: TipoClienteSchema.default("REVENDA"),
 		/** Estado de negócio (reversível). Inativos aparecem na lista de inativos. */
 		ativo: z.boolean(),
 	})
@@ -41,6 +56,7 @@ export const ClienteInputSchema = z.object({
 		.optional()
 		.nullable()
 		.transform((val) => (val && val.length > 0 ? val : null)),
+	tipo_cliente: TipoClienteSchema.default("REVENDA"),
 });
 
 export type ClienteInput = z.input<typeof ClienteInputSchema>;

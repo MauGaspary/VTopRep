@@ -274,10 +274,10 @@ function RepresentadaForm({
 						/>
 					</FormField>
 
-					<div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+					<div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
 						<FormField
 							id="percentual_comissao"
-							label="Comissão padrão (%)"
+							label="Comissão p/ Fábrica (%)"
 							error={erros.percentual_comissao}
 							required
 						>
@@ -288,6 +288,24 @@ function RepresentadaForm({
 								inputMode="decimal"
 								placeholder="5,00"
 								hasError={Boolean(erros.percentual_comissao)}
+							/>
+						</FormField>
+
+						<FormField
+							id="percentual_comissao_revenda"
+							label="Comissão p/ Revenda (%)"
+							error={erros.percentual_comissao_revenda}
+							help="Opcional. Se vazio, usa a de Fábrica."
+						>
+							<Input
+								id="percentual_comissao_revenda"
+								value={valores.percentual_comissao_revenda ?? ""}
+								onChange={(e) =>
+									alterar("percentual_comissao_revenda", e.target.value)
+								}
+								inputMode="decimal"
+								placeholder={valores.percentual_comissao.trim() || "7,50"}
+								hasError={Boolean(erros.percentual_comissao_revenda)}
 							/>
 						</FormField>
 

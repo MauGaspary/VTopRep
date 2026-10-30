@@ -24,6 +24,12 @@ const CnpjNormalizadoSchema = z
 	.regex(/^[A-Z0-9]{12}\d{2}$/, "CNPJ deve conter 14 caracteres")
 	.refine(isCnpjValido, "CNPJ inválido");
 
+export const PercentualComissaoRepresentadaSchema = z
+	.number()
+	.int("Comissão deve ser um inteiro em centésimos de percentual")
+	.min(0, "Comissão não pode ser negativa")
+	.max(CEM_POR_CENTO_CENTESIMOS, "Comissão não pode exceder 100%");
+
 /** Entidade persistida (Dexie / Supabase). */
 export const RepresentadaSchema = z
 	.object({
@@ -32,12 +38,13 @@ export const RepresentadaSchema = z
 		razao_social: z.string().trim().min(1, "Razão social é obrigatória"),
 		nome_fantasia: z.string().trim().min(1, "Nome fantasia é obrigatório"),
 		cnpj: CnpjNormalizadoSchema,
-		/** Centésimos de %, ex: 500 = 5,00% */
-		percentual_comissao_padrao: z
-			.number()
-			.int()
-			.min(0, "Comissão não pode ser negativa")
-			.max(CEM_POR_CENTO_CENTESIMOS, "Comissão não pode exceder 100%"),
+		/** Centésimos de %, ex: 500 = 5,00% (alíquota padrão / base) */
+		percentual_comissao_padrao: PercentualComissaoRepresentadaSchema,
+		/** Centésimos de %, aplicável quando `clientes.tipo_cliente = 'FABRICA'` (obrigatório) */
+		percentual_comissao_fabrica: PercentualComissaoRepresentadaSchema,
+		/** Centésimos de %, aplicável quando `clientes.tipo_cliente = 'REVENDA'` (opcional) */
+		percentual_comissao_revenda:
+			PercentualComissaoRepresentadaSchema.nullable().optional(),
 		/** Apenas informativo nesta fase (trava de pedido mínimo está no BACKLOG). */
 		valor_pedido_minimo_centavos: z
 			.number()
@@ -53,16 +60,48 @@ export const RepresentadaSchema = z
 
 export type Representada = z.infer<typeof RepresentadaSchema>;
 
-/** Dados editáveis pelo usuário. O CNPJ é normalizado antes da validação. */
-export const RepresentadaInputSchema = RepresentadaSchema.pick({
-	razao_social: true,
-	nome_fantasia: true,
-	percentual_comissao_padrao: true,
-	valor_pedido_minimo_centavos: true,
-	regras_frete_padrao: true,
-	cor: true,
-}).extend({
+const RepresentadaInputBaseSchema = z.object({
+	razao_social: RepresentadaSchema.shape.razao_social,
+	nome_fantasia: RepresentadaSchema.shape.nome_fantasia,
 	cnpj: z.string().transform(normalizarCnpj).pipe(CnpjNormalizadoSchema),
+	percentual_comissao_padrao: PercentualComissaoRepresentadaSchema.optional(),
+	percentual_comissao_fabrica: PercentualComissaoRepresentadaSchema.optional(),
+	percentual_comissao_revenda:
+		PercentualComissaoRepresentadaSchema.nullable().optional(),
+	valor_pedido_minimo_centavos:
+		RepresentadaSchema.shape.valor_pedido_minimo_centavos,
+	regras_frete_padrao: RepresentadaSchema.shape.regras_frete_padrao,
+	cor: RepresentadaSchema.shape.cor,
+});
+
+/** Dados editáveis pelo usuário. O CNPJ é normalizado antes da validação. */
+export const RepresentadaInputSchema = RepresentadaInputBaseSchema.superRefine(
+	(dados, ctx) => {
+		if (
+			dados.percentual_comissao_fabrica === undefined &&
+			dados.percentual_comissao_padrao === undefined
+		) {
+			ctx.addIssue({
+				code: "custom",
+				path: ["percentual_comissao_fabrica"],
+				message: "Informe a comissão para fábrica",
+			});
+		}
+	},
+).transform((dados) => {
+	const fabrica =
+		dados.percentual_comissao_fabrica ?? dados.percentual_comissao_padrao ?? 0;
+	const padrao = dados.percentual_comissao_padrao ?? fabrica;
+	const { percentual_comissao_revenda, ...resto } = dados;
+	return {
+		...resto,
+		percentual_comissao_padrao: padrao,
+		percentual_comissao_fabrica: fabrica,
+		...(percentual_comissao_revenda !== undefined &&
+		percentual_comissao_revenda !== null
+			? { percentual_comissao_revenda }
+			: {}),
+	};
 });
 
 export type RepresentadaInput = z.input<typeof RepresentadaInputSchema>;

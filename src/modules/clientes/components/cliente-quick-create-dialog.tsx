@@ -14,7 +14,11 @@ import {
 	ClienteInativoExistenteError,
 	CpfCnpjDuplicadoError,
 } from "../domain/cliente";
-import type { Cliente } from "../domain/cliente.schema";
+import {
+	type Cliente,
+	ROTULOS_TIPO_CLIENTE,
+	TIPOS_CLIENTE,
+} from "../domain/cliente.schema";
 import {
 	type ClienteFormErros,
 	type ClienteFormValues,
@@ -121,7 +125,7 @@ export function ClienteQuickCreateDialog({
 	});
 
 	const alterarCampo = (
-		campo: "cnpj_cpf" | "razao_social" | "nome_fantasia",
+		campo: "cnpj_cpf" | "razao_social" | "nome_fantasia" | "tipo_cliente",
 		valor: string,
 	) => {
 		setValores((atual) => ({ ...atual, [campo]: valor }));
@@ -292,6 +296,39 @@ export function ClienteQuickCreateDialog({
 						hasError={Boolean(erros.razao_social)}
 					/>
 				</FormField>
+
+				<fieldset className="flex flex-col gap-1.5">
+					<legend className="text-xs font-medium text-muted-foreground">
+						Segmento comercial (comissão)
+					</legend>
+					<div className="grid grid-cols-2 gap-2">
+						{TIPOS_CLIENTE.map((tipo) => {
+							const selecionado = valores.tipo_cliente === tipo;
+							return (
+								<label
+									key={tipo}
+									className={`flex h-8 cursor-pointer items-center justify-center gap-2 rounded-lg border px-3 text-xs font-medium transition-colors select-none ${
+										selecionado
+											? "border-primary bg-primary/10 text-foreground"
+											: "border-border bg-secondary/50 text-muted-foreground hover:bg-muted hover:text-foreground"
+									}`}
+								>
+									<input
+										type="radio"
+										name="quick_tipo_cliente"
+										value={tipo}
+										checked={selecionado}
+										onChange={(e) =>
+											alterarCampo("tipo_cliente", e.target.value)
+										}
+										className="size-3.5 accent-primary"
+									/>
+									{ROTULOS_TIPO_CLIENTE[tipo]}
+								</label>
+							);
+						})}
+					</div>
+				</fieldset>
 
 				<HomonymWarning
 					title="Já existe cliente com este nome na carteira:"

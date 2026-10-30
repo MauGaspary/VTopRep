@@ -83,10 +83,10 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 ## Fase 2.5: Refinamento Operacional de Campo, Comissões por Segmento e Cotação Multi-Representada
 
 ### 2.5.1. Segmentação de Clientes (Fábrica vs. Revenda) e Comissão Diferenciada
-- [ ] **Contrato & Migração Dexie:** Adicionar `tipo_cliente: 'REVENDA' | 'FABRICA'` no `ClienteSchema` (padrão `'REVENDA'` na migração para registros existentes) e `percentual_comissao_revenda` / `percentual_comissao_fabrica` na `RepresentadaSchema`.
-- [ ] **Lógica Pura de Comissão:** Resolver automaticamente o percentual de comissão aplicável ao pedido cruzando a `Representada` e o `tipo_cliente` do `Cliente` selecionado, mantendo testes em `BigInt` / *half-even*.
-- [ ] **UI nos Cadastros e Orçamento:** Seletor `Revenda / Fábrica` no formulário e lista de Clientes; campos de Comissão p/ Revenda e Comissão p/ Fábrica na Representada; exibição clara de qual alíquota está ativa no Orçamento.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Contrato & Migração Dexie:** Adicionar `tipo_cliente: 'REVENDA' | 'FABRICA'` no `ClienteSchema` (padrão `'REVENDA'` na migração para registros existentes) e `percentual_comissao_revenda` / `percentual_comissao_fabrica` na `RepresentadaSchema`. Deixar `percentual_comissao_revenda` como opcional e `percentual_comissao_fabrica` como obrigatório.
+- [x] **Lógica Pura de Comissão:** Resolver automaticamente o percentual de comissão aplicável ao pedido cruzando a `Representada` e o `tipo_cliente` do `Cliente` selecionado, mantendo testes em `BigInt` / *half-even*.
+- [x] **UI nos Cadastros e Orçamento:** Seletor `Revenda / Fábrica` no formulário e lista de Clientes; campos de Comissão p/ Revenda e Comissão p/ Fábrica na Representada; exibição clara de qual alíquota está ativa no Orçamento.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.5.2. Seletores Digitáveis (Combobox) sem Pré-seleção e Cadastro Rápido de Cliente
 - [x] **Componente Compartilhado `Combobox`:** Criar `src/shared/components/ui/Combobox.tsx` com busca por digitação (nome, razão social, CNPJ/CPF), navegação por teclado e suporte a ação de rodapé.

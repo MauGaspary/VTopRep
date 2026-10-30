@@ -30,7 +30,10 @@ import {
 } from "../../../shared/domain/decimal-br";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE } from "../../../shared/domain/frete";
-import { obterCorRepresentada } from "../../representadas/domain/representada";
+import {
+	formatarResumoComissaoRepresentada,
+	obterCorRepresentada,
+} from "../../representadas/domain/representada";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
 import type { Produto } from "../domain/produto.schema";
 import { descreverVigencia } from "../domain/tabela-preco";
@@ -329,9 +332,7 @@ export function CatalogoView({
 										<span className="font-mono text-[11px] tabular-nums">
 											Comissão{" "}
 											<strong className="font-medium text-foreground">
-												{formatarCentesimosPercentual(
-													representadaAtiva.percentual_comissao_padrao,
-												)}
+												{formatarResumoComissaoRepresentada(representadaAtiva)}
 											</strong>
 										</span>
 										{representadaAtiva.valor_pedido_minimo_centavos > 0 && (

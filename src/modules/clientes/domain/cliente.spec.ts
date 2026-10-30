@@ -44,11 +44,25 @@ describe("criarClienteCompleto", () => {
 
 		expect(completo.cliente.tenant_id).toBe(TENANT);
 		expect(completo.cliente.cnpj_cpf).toBe("52998224725");
+		expect(completo.cliente.tipo_cliente).toBe("REVENDA");
 		expect(completo.cliente.ativo).toBe(true);
 		expect(completo.enderecos).toHaveLength(1);
 		expect(completo.enderecos[0].cliente_id).toBe(completo.cliente.id);
 		expect(completo.contatos).toHaveLength(1);
 		expect(completo.contatos[0].cliente_id).toBe(completo.cliente.id);
+	});
+
+	it("permite classificar o cliente como FABRICA", () => {
+		const completo = criarClienteCompleto({
+			tenantId: TENANT,
+			clienteInput: {
+				cnpj_cpf: "11222333000181",
+				razao_social: "Indústria Metalúrgica Sul S/A",
+				tipo_cliente: "FABRICA",
+			},
+			agora: AGORA,
+		});
+		expect(completo.cliente.tipo_cliente).toBe("FABRICA");
 	});
 
 	it("propaga o tenant_id do cliente para endereços e contatos", () => {

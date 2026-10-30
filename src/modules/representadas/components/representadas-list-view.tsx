@@ -14,13 +14,13 @@ import {
 	SearchInput,
 } from "../../../shared/components/ui";
 import { formatarCnpj } from "../../../shared/domain/cnpj";
-import {
-	formatarCentavos,
-	formatarCentesimosPercentual,
-} from "../../../shared/domain/decimal-br";
+import { formatarCentavos } from "../../../shared/domain/decimal-br";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE } from "../../../shared/domain/frete";
-import { obterCorRepresentada } from "../domain/representada";
+import {
+	formatarResumoComissaoRepresentada,
+	obterCorRepresentada,
+} from "../domain/representada";
 import type { Representada } from "../domain/representada.schema";
 import {
 	useRepresentadaActions,
@@ -175,9 +175,7 @@ export function RepresentadasListView() {
 										</td>
 
 										<td className="px-3 py-2.5 text-right font-mono text-xs font-medium text-foreground tabular-nums whitespace-nowrap">
-											{formatarCentesimosPercentual(
-												r.percentual_comissao_padrao,
-											)}
+											{formatarResumoComissaoRepresentada(r)}
 										</td>
 
 										<td className="hidden px-3 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap sm:table-cell">

@@ -5,11 +5,13 @@ import {
 	correspondeBuscaRepresentada,
 	criarRepresentada,
 	detectarConflitoCnpj,
+	formatarResumoComissaoRepresentada,
 	inativarRepresentada,
 	obterCorRepresentada,
 	ordenarRepresentadas,
 	ordenarRepresentadasComInativasNoFim,
 	reativarRepresentada,
+	resolverPercentualComissaoRepresentada,
 } from "./representada";
 import {
 	CORES_REPRESENTADA,
@@ -54,6 +56,7 @@ describe("criarRepresentada", () => {
 			nome_fantasia: "Calçados Sul",
 			cnpj: "11222333000181",
 			percentual_comissao_padrao: 500,
+			percentual_comissao_fabrica: 500,
 			valor_pedido_minimo_centavos: 150000,
 			regras_frete_padrao: "CIF",
 			ativo: true,
@@ -61,6 +64,28 @@ describe("criarRepresentada", () => {
 			updated_at: AGORA,
 			deleted_at: null,
 		});
+	});
+
+	it("permite configurar comissões distintas (Fábrica obrigatória e Revenda opcional)", () => {
+		const r = criar({
+			percentual_comissao_fabrica: 350,
+			percentual_comissao_revenda: 600,
+		});
+		expect(r.percentual_comissao_fabrica).toBe(350);
+		expect(r.percentual_comissao_revenda).toBe(600);
+		expect(resolverPercentualComissaoRepresentada(r, "FABRICA")).toBe(350);
+		expect(resolverPercentualComissaoRepresentada(r, "REVENDA")).toBe(600);
+		expect(resolverPercentualComissaoRepresentada(r, null)).toBe(350);
+		expect(formatarResumoComissaoRepresentada(r)).toBe(
+			"Fáb. 3,50% · Rev. 6,00%",
+		);
+
+		const semRevenda = criar({ percentual_comissao_fabrica: 500 });
+		expect(semRevenda.percentual_comissao_revenda).toBeUndefined();
+		expect(resolverPercentualComissaoRepresentada(semRevenda, "REVENDA")).toBe(
+			500,
+		);
+		expect(formatarResumoComissaoRepresentada(semRevenda)).toBe("5,00%");
 	});
 
 	it("remove espaços extras de razão social e nome fantasia", () => {

@@ -1,10 +1,12 @@
 import { normalizarCnpj } from "../../../shared/domain/cnpj";
+import { formatarCentesimosPercentual } from "../../../shared/domain/decimal-br";
 import { garantirMesmoTenant } from "../../../shared/domain/tenant";
 import { normalizarTexto } from "../../../shared/domain/texto";
 import {
 	type ConflitoUnicidade,
 	detectarConflito,
 } from "../../../shared/domain/unicidade";
+import type { TipoCliente } from "../../clientes/domain/cliente.schema";
 import {
 	CORES_REPRESENTADA,
 	type CorRepresentada,
@@ -13,6 +15,59 @@ import {
 	RepresentadaInputSchema,
 	RepresentadaSchema,
 } from "./representada.schema";
+
+export type ComissaoRepresentadaConfig = Pick<
+	Representada,
+	"percentual_comissao_padrao"
+> &
+	Partial<
+		Pick<
+			Representada,
+			"percentual_comissao_revenda" | "percentual_comissao_fabrica"
+		>
+	>;
+
+/**
+ * Resolve o percentual de comissão aplicável (em centésimos de %) cruzando a
+ * representada com o segmento comercial do cliente (`REVENDA` vs. `FABRICA`).
+ * - Para `FABRICA` (ou quando nenhum cliente foi selecionado ainda), usa
+ *   `percentual_comissao_fabrica` (ou `percentual_comissao_padrao`).
+ * - Para `REVENDA`, usa `percentual_comissao_revenda` quando definido, caindo
+ *   em `percentual_comissao_fabrica` / `percentual_comissao_padrao` caso a
+ *   comissão de revenda não tenha sido preenchida.
+ */
+export function resolverPercentualComissaoRepresentada(
+	representada: ComissaoRepresentadaConfig,
+	tipoCliente?: TipoCliente | null,
+): number {
+	const comissaoFabrica =
+		representada.percentual_comissao_fabrica ??
+		representada.percentual_comissao_padrao;
+	if (tipoCliente === "REVENDA") {
+		return representada.percentual_comissao_revenda ?? comissaoFabrica;
+	}
+	return comissaoFabrica;
+}
+
+/**
+ * Formata um resumo conciso das alíquotas de comissão da representada:
+ * - Se não houver comissão diferenciada de Revenda (ou se for igual à de Fábrica),
+ *   exibe apenas a alíquota de Fábrica (ex: `5,00%`).
+ * - Se forem distintas, exibe `Fáb. 5,00% · Rev. 7,50%`.
+ */
+export function formatarResumoComissaoRepresentada(
+	representada: ComissaoRepresentadaConfig,
+): string {
+	const fabrica = resolverPercentualComissaoRepresentada(
+		representada,
+		"FABRICA",
+	);
+	const revenda = representada.percentual_comissao_revenda;
+	if (revenda === undefined || revenda === null || revenda === fabrica) {
+		return formatarCentesimosPercentual(fabrica);
+	}
+	return `Fáb. ${formatarCentesimosPercentual(fabrica)} · Rev. ${formatarCentesimosPercentual(revenda)}`;
+}
 
 export const ROTULOS_COR_REPRESENTADA: Record<CorRepresentada, string> = {
 	indigo: "Índigo",
@@ -103,7 +158,11 @@ export function atualizarRepresentada(
 ): Representada {
 	garantirMesmoTenant(existente, tenantId);
 	const dados = RepresentadaInputSchema.parse(input);
-	const { cor: _corAnterior, ...restoExistente } = existente;
+	const {
+		cor: _corAnterior,
+		percentual_comissao_revenda: _revendaAnterior,
+		...restoExistente
+	} = existente;
 	return RepresentadaSchema.parse({
 		...restoExistente,
 		...dados,
