@@ -20,7 +20,21 @@ const PRODUTO_B = "66666666-6666-4666-a666-666666666666";
 const AGORA = "2026-10-29T12:00:00.000Z";
 
 describe("valoresIniciaisPedidoForm", () => {
-	it("preenche defaults em novo orçamento", () => {
+	it("inicia sem cliente, representada ou condição pré-selecionados quando não há defaults", () => {
+		expect(valoresIniciaisPedidoForm()).toEqual({
+			cliente_id: "",
+			representada_id: "",
+			tabela_id: "",
+			endereco_entrega_id: "",
+			contato_id: "",
+			condicao_pagamento: "",
+			tipo_frete: "CIF",
+			observacoes: "",
+			itens: [],
+		});
+	});
+
+	it("preenche defaults em novo orçamento quando informados por atalho", () => {
 		const inicial = valoresIniciaisPedidoForm(undefined, {
 			clienteId: CLIENTE,
 			representadaId: REPRESENTADA,

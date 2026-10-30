@@ -160,6 +160,37 @@ export function valoresIniciaisClienteForm(
 	};
 }
 
+const PARECE_DOCUMENTO = /^[\d.\-/\s]+$/;
+
+/**
+ * Valores iniciais para o cadastro rápido de cliente dentro do orçamento,
+ * reaproveitando o texto que o representante já havia digitado no Combobox.
+ */
+export function valoresIniciaisCadastroRapidoCliente(
+	termoDigitado?: string,
+): ClienteFormValues {
+	const limpo = termoDigitado?.trim() ?? "";
+	if (limpo === "") {
+		return valoresIniciaisClienteForm();
+	}
+	if (PARECE_DOCUMENTO.test(limpo) && /\d/.test(limpo)) {
+		return {
+			cnpj_cpf: limpo,
+			razao_social: "",
+			nome_fantasia: "",
+			enderecos: [],
+			contatos: [],
+		};
+	}
+	return {
+		cnpj_cpf: "",
+		razao_social: limpo,
+		nome_fantasia: limpo,
+		enderecos: [],
+		contatos: [],
+	};
+}
+
 /** Converte e valida o formulário completo (cliente + endereços + contatos). */
 export function validarFormularioCliente(
 	valores: ClienteFormValues,

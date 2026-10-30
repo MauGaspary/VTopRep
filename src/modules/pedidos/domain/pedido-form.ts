@@ -112,7 +112,7 @@ export function valoresIniciaisPedidoForm(
 		tabela_id: defaults.tabelaId ?? "",
 		endereco_entrega_id: "",
 		contato_id: "",
-		condicao_pagamento: defaults.condicaoPagamento ?? "30 dias",
+		condicao_pagamento: defaults.condicaoPagamento ?? "",
 		tipo_frete: defaults.tipoFrete ?? "CIF",
 		observacoes: "",
 		itens: [],

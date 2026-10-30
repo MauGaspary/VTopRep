@@ -6,7 +6,6 @@ import {
 	Package,
 	Plus,
 	Trash2,
-	Users,
 } from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
@@ -17,15 +16,19 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
+	Combobox,
 	cardClassName,
 	EmptyState,
 	FormField,
 	Input,
+	type OpcaoCombobox,
 	PageHeader,
 	RepresentadaBadge,
+	RepresentadaDot,
 	SearchInput,
 	Select,
 } from "../../../shared/components/ui";
+import { formatarCnpj } from "../../../shared/domain/cnpj";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
 import { dataLocal, formatarDataBr } from "../../../shared/domain/datas";
 import {
@@ -34,6 +37,7 @@ import {
 } from "../../../shared/domain/decimal-br";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE, TIPOS_FRETE } from "../../../shared/domain/frete";
+import { ClienteQuickCreateDialog } from "../../clientes/components/cliente-quick-create-dialog";
 import { useCliente, useClientes } from "../../clientes/hooks/use-clientes";
 import { escolherTabelaSugerida } from "../../produtos/domain/preco";
 import { correspondeBuscaProduto } from "../../produtos/domain/produto";
@@ -167,15 +171,11 @@ function OrcamentoForm({
 	);
 
 	const clienteInicialId =
-		searchParams.get("clienteId") ??
-		searchParams.get("cliente") ??
-		clientes[0]?.id ??
-		"";
+		searchParams.get("clienteId") ?? searchParams.get("cliente") ?? "";
 	const representadaInicialId =
 		produtoPreSelecionado?.representada_id ??
 		searchParams.get("representadaId") ??
 		searchParams.get("representada") ??
-		representadas[0]?.id ??
 		"";
 	const representadaInicial = representadas.find(
 		(r) => r.id === representadaInicialId,
@@ -188,6 +188,10 @@ function OrcamentoForm({
 			tipoFrete: representadaInicial?.regras_frete_padrao ?? "CIF",
 		}),
 	);
+
+	const [modalNovoClienteAberto, setModalNovoClienteAberto] = useState(false);
+	const [termoCadastroRapidoCliente, setTermoCadastroRapidoCliente] =
+		useState("");
 
 	// Rastreia se o usuário escolheu manualmente endereço, contato ou tabela
 	const [enderecoManual, setEnderecoManual] = useState<boolean>(
@@ -315,6 +319,59 @@ function OrcamentoForm({
 	const representadaSelecionada = useMemo(
 		() => representadas.find((r) => r.id === valores.representada_id),
 		[representadas, valores.representada_id],
+	);
+
+	const opcoesClientes = useMemo<OpcaoCombobox[]>(
+		() =>
+			clientes.map((c) => ({
+				id: c.id,
+				label: c.nome_fantasia
+					? `${c.nome_fantasia} (${c.razao_social})`
+					: c.razao_social,
+				sublabel: `Doc: ${formatarCpfCnpj(c.cnpj_cpf)}`,
+				keywords: [
+					c.cnpj_cpf,
+					formatarCpfCnpj(c.cnpj_cpf),
+					c.razao_social,
+					c.nome_fantasia ?? "",
+				],
+			})),
+		[clientes],
+	);
+
+	const opcoesRepresentadas = useMemo<OpcaoCombobox<Representada>[]>(
+		() =>
+			representadas.map((r) => ({
+				id: r.id,
+				label: r.nome_fantasia,
+				sublabel: `${r.razao_social} · Com. ${formatarCentesimosPercentual(r.percentual_comissao_padrao)}`,
+				keywords: [r.cnpj, formatarCnpj(r.cnpj), r.razao_social],
+				dados: r,
+			})),
+		[representadas],
+	);
+
+	const opcoesTabelas = useMemo<OpcaoCombobox[]>(
+		() =>
+			tabelasVigentes.map((t) => ({
+				id: t.id,
+				label:
+					t.id === tabelaPadraoDoClienteId
+						? `${t.nome_tabela} ★ Padrão do cliente`
+						: t.nome_tabela,
+				sublabel: `Vigência: ${descreverVigencia(t)}`,
+				keywords: [t.nome_tabela],
+			})),
+		[tabelasVigentes, tabelaPadraoDoClienteId],
+	);
+
+	const opcoesCondicoesPagamento = useMemo<OpcaoCombobox[]>(
+		() =>
+			CONDICOES_PAGAMENTO_PADRAO.map((condicao) => ({
+				id: condicao,
+				label: condicao,
+			})),
+		[],
 	);
 
 	const produtosPorId = useMemo(() => {
@@ -498,27 +555,6 @@ function OrcamentoForm({
 		void salvarOuEmitir("emitido");
 	};
 
-	if (clientes.length === 0 && !original) {
-		return (
-			<Page width="narrow">
-				<PageHeader
-					title="Novo orçamento"
-					back={{ to: "/pedidos", label: "Orçamentos e Pedidos" }}
-				/>
-				<EmptyState
-					icon={Users}
-					title="Nenhum cliente ativo na carteira"
-					description="Cadastre pelo menos um cliente antes de iniciar um orçamento."
-					action={
-						<Link to="/clientes/novo" className={buttonClassName()}>
-							Cadastrar cliente
-						</Link>
-					}
-				/>
-			</Page>
-		);
-	}
-
 	const pedidoMinimoCentavos =
 		representadaSelecionada?.valor_pedido_minimo_centavos ?? 0;
 	const atingiuPedidoMinimo =
@@ -583,23 +619,31 @@ function OrcamentoForm({
 							error={erros.cliente_id}
 							required
 						>
-							<Select
+							<Combobox
 								id="orcamento-cliente"
 								name="cliente_id"
 								value={valores.cliente_id}
-								onChange={(e) => handleTrocarCliente(e.target.value)}
+								onChange={handleTrocarCliente}
+								options={opcoesClientes}
+								placeholder="Digite nome ou CPF/CNPJ..."
+								emptyMessage="Nenhum cliente encontrado."
+								disabled={somenteLeitura}
 								hasError={Boolean(erros.cliente_id)}
-							>
-								<option value="">Selecione o cliente...</option>
-								{clientes.map((c) => (
-									<option key={c.id} value={c.id}>
-										{c.nome_fantasia
-											? `${c.nome_fantasia} (${c.razao_social})`
-											: c.razao_social}{" "}
-										— {formatarCpfCnpj(c.cnpj_cpf)}
-									</option>
-								))}
-							</Select>
+								footerAction={
+									!somenteLeitura
+										? {
+												label: (termo) =>
+													termo
+														? `Cadastrar novo cliente "${termo}"`
+														: "Cadastrar novo cliente",
+												onAction: (termo) => {
+													setTermoCadastroRapidoCliente(termo);
+													setModalNovoClienteAberto(true);
+												},
+											}
+										: undefined
+								}
+							/>
 						</FormField>
 
 						<FormField
@@ -608,22 +652,37 @@ function OrcamentoForm({
 							error={erros.representada_id}
 							required
 						>
-							<Select
+							<Combobox
 								id="orcamento-representada"
 								name="representada_id"
 								value={valores.representada_id}
-								onChange={(e) => handleTrocarRepresentada(e.target.value)}
+								onChange={handleTrocarRepresentada}
+								options={opcoesRepresentadas}
+								placeholder="Digite o nome da fábrica..."
+								emptyMessage="Nenhuma representada encontrada."
+								disabled={somenteLeitura}
 								hasError={Boolean(erros.representada_id)}
-							>
-								<option value="">Selecione a representada...</option>
-								{representadas.map((r) => (
-									<option key={r.id} value={r.id}>
-										{r.nome_fantasia} (Com.{" "}
-										{formatarCentesimosPercentual(r.percentual_comissao_padrao)}
-										)
-									</option>
-								))}
-							</Select>
+								renderOption={(opcao) => (
+									<div className="flex min-w-0 flex-1 items-center gap-2">
+										{opcao.dados && (
+											<RepresentadaDot
+												cor={obterCorRepresentada(opcao.dados)}
+												size="sm"
+											/>
+										)}
+										<div className="min-w-0 flex-1">
+											<div className="truncate font-medium text-foreground">
+												{opcao.label}
+											</div>
+											{opcao.sublabel && (
+												<div className="truncate text-[11px] text-muted-foreground">
+													{opcao.sublabel}
+												</div>
+											)}
+										</div>
+									</div>
+								)}
+							/>
 						</FormField>
 
 						<FormField
@@ -636,27 +695,28 @@ function OrcamentoForm({
 							error={erros.tabela_id}
 							required
 						>
-							<Select
+							<Combobox
 								id="orcamento-tabela"
 								name="tabela_id"
 								value={tabelaEfetivaId}
-								onChange={(e) => handleTrocarTabela(e.target.value)}
+								onChange={handleTrocarTabela}
+								options={opcoesTabelas}
+								placeholder={
+									!valores.representada_id
+										? "Selecione a fábrica primeiro..."
+										: tabelasVigentes.length === 0
+											? "Nenhuma tabela vigente"
+											: "Digite ou selecione a tabela..."
+								}
+								emptyMessage="Nenhuma tabela vigente encontrada."
+								disabled={
+									somenteLeitura ||
+									!valores.representada_id ||
+									carregandoTabelas ||
+									tabelasVigentes.length === 0
+								}
 								hasError={Boolean(erros.tabela_id)}
-								disabled={carregandoTabelas || tabelasVigentes.length === 0}
-							>
-								{tabelasVigentes.length === 0 ? (
-									<option value="">Nenhuma tabela vigente disponível</option>
-								) : (
-									tabelasVigentes.map((t) => (
-										<option key={t.id} value={t.id}>
-											{t.nome_tabela} ({descreverVigencia(t)})
-											{t.id === tabelaPadraoDoClienteId
-												? " ★ Padrão do cliente"
-												: ""}
-										</option>
-									))
-								)}
-							</Select>
+							/>
 						</FormField>
 
 						<FormField
@@ -665,19 +725,22 @@ function OrcamentoForm({
 							error={erros.condicao_pagamento}
 							required
 						>
-							<Input
+							<Combobox
 								id="orcamento-condicao"
 								name="condicao_pagamento"
 								value={valores.condicao_pagamento}
-								onChange={(e) => {
+								onChange={(novaCondicao) => {
 									setValores((atual) => ({
 										...atual,
-										condicao_pagamento: e.target.value,
+										condicao_pagamento: novaCondicao,
 									}));
 									limparErro("condicao_pagamento");
 								}}
-								placeholder="Ex: 30/60/90 dias, À vista..."
-								autoComplete="off"
+								options={opcoesCondicoesPagamento}
+								allowCustomValue
+								placeholder="Digite ex: 30/60 dias, À vista..."
+								emptyMessage="Pressione Enter para manter a condição digitada."
+								disabled={somenteLeitura}
 								hasError={Boolean(erros.condicao_pagamento)}
 							/>
 						</FormField>
@@ -1351,6 +1414,17 @@ function OrcamentoForm({
 					</div>
 				</div>
 			</form>
+
+			<ClienteQuickCreateDialog
+				open={modalNovoClienteAberto}
+				tenantId={tenantId}
+				termoInicial={termoCadastroRapidoCliente}
+				onClose={() => setModalNovoClienteAberto(false)}
+				onClienteCriado={(novoClienteId) => {
+					setModalNovoClienteAberto(false);
+					handleTrocarCliente(novoClienteId);
+				}}
+			/>
 		</Page>
 	);
 }

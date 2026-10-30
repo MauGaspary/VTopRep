@@ -7,6 +7,7 @@ import {
 	novoContatoForm,
 	novoEnderecoForm,
 	validarFormularioCliente,
+	valoresIniciaisCadastroRapidoCliente,
 	valoresIniciaisClienteForm,
 } from "./cliente-form";
 
@@ -216,5 +217,23 @@ describe("valoresIniciaisClienteForm", () => {
 			});
 			expect(resultado.data.contatos[0].id).toBe(completo.contatos[0].id);
 		}
+	});
+
+	it("pré-preenche documento ou nome no cadastro rápido conforme o termo digitado", () => {
+		expect(valoresIniciaisCadastroRapidoCliente("11.222.333/0001-81")).toEqual({
+			cnpj_cpf: "11.222.333/0001-81",
+			razao_social: "",
+			nome_fantasia: "",
+			enderecos: [],
+			contatos: [],
+		});
+
+		expect(valoresIniciaisCadastroRapidoCliente("Mercado Central")).toEqual({
+			cnpj_cpf: "",
+			razao_social: "Mercado Central",
+			nome_fantasia: "Mercado Central",
+			enderecos: [],
+			contatos: [],
+		});
 	});
 });

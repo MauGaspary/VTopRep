@@ -89,10 +89,10 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [ ] **Validação:** Rodar `pnpm validate`.
 
 ### 2.5.2. Seletores Digitáveis (Combobox) sem Pré-seleção e Cadastro Rápido de Cliente
-- [ ] **Componente Compartilhado `Combobox`:** Criar `src/shared/components/ui/Combobox.tsx` com busca por digitação (nome, razão social, CNPJ/CPF), navegação por teclado e suporte a ação de rodapé.
-- [ ] **Sem Escolha Padrão no Novo Orçamento:** Ao abrir `/pedidos/novo` sem parâmetros de atalho, iniciar Cliente e Representada vazios para que o representante digite e selecione com precisão.
-- [ ] **Cadastro Rápido de Cliente Inline:** Incluir a ação `+ Cadastrar novo cliente` diretamente dentro do `Combobox` de Cliente no orçamento (via Modal/Drawer enxuto), salvando e selecionando o cliente sem sair da tela de cotação.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Componente Compartilhado `Combobox`:** Criar `src/shared/components/ui/Combobox.tsx` com busca por digitação (nome, razão social, CNPJ/CPF), navegação por teclado e suporte a ação de rodapé.
+- [x] **Sem Escolha Padrão no Novo Orçamento:** Ao abrir `/pedidos/novo` sem parâmetros de atalho, iniciar Cliente e Representada vazios para que o representante digite e selecione com precisão.
+- [x] **Cadastro Rápido de Cliente Inline:** Incluir a ação `+ Cadastrar novo cliente` diretamente dentro do `Combobox` de Cliente no orçamento (via Modal/Drawer enxuto), salvando e selecionando o cliente sem sair da tela de cotação.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.5.3. Módulo de Transportadoras e Vínculo Logístico
 - [ ] **Contrato, Lógica e Persistência (Dexie):** Criar módulo `src/modules/transportadoras/` com schema Zod (`nome_fantasia`, `razao_social` opcional, `cnpj` opcional validado, `telefone`, `cidade_uf`, `ativo` + campos sincronizáveis) e repositório Dexie com Outbox.

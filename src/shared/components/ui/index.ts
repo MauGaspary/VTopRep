@@ -2,6 +2,7 @@ export * from "./Alert";
 export * from "./Badge";
 export * from "./Button";
 export * from "./Card";
+export * from "./Combobox";
 export * from "./EmptyState";
 export * from "./FormField";
 export * from "./HomonymWarning";
