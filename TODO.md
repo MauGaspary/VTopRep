@@ -56,20 +56,21 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Lógica Pura:** Resolução de preço pela tabela selecionada e vigência (`src/modules/produtos/domain/preco.ts`), com motivo quando não há preço (`tabela_nao_encontrada`, `tabela_inativa`, `fora_de_vigencia`, `produto_sem_preco`).
 - [x] **Repositório:** `PrecoRepository` + adaptador Dexie (`preco-dexie.adapter.ts`), com índice `[tenant_id+tabela_id+produto_id]` (Dexie v6).
 - [x] **Tabela por Cliente:** `clientes_tabelas_preco` (tabela padrão por cliente e representada), usada para sugerir a tabela do pedido.
-- [ ] **UI:** Escolha da tabela padrão no cadastro do cliente e da tabela no orçamento (entra com a 2.3).
+- [x] **UI de Tabelas e Preços:** Criação automática de *Tabela Padrão* e gestão de tabelas no cadastro da representada, preços por tabela no formulário do produto e exibição do preço vigente no catálogo.
+- [x] **UI de Vínculo:** Escolha da tabela padrão no cadastro do cliente e da tabela no orçamento (entra com a 2.3).
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.2. Motor Financeiro do Orçamento (Cálculos Puros)
 - [x] **Base de Aritmética:** `src/shared/domain/dinheiro.ts` com `aplicarPercentual`, `multiplicarPorFracao`, `dividirHalfEven` e `somarCentavos` (inteiros/`BigInt`, half-even).
-- [ ] **Cálculo de Itens:** Preço líquido unitário em centavos a partir do `percentual_desconto` (centésimos de %, fonte da verdade): `preco_liquido = preco_unitario - aplicarPercentual(preco_unitario, percentual_desconto)`. Subtotal = `quantidade * preco_liquido`.
-- [ ] **Cálculo Global:** Totalizadores do orçamento/pedido e projeção de comissão do representante em centavos (`aplicarPercentual(total, comissao_padrao)`).
-- [ ] **Testes de Arredondamento:** Cobrir com Vitest casos de arredondamento bancário e centavos no motor do pedido.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Cálculo de Itens:** Preço líquido unitário em centavos a partir do `percentual_desconto` (centésimos de %, fonte da verdade): `preco_liquido = preco_unitario - aplicarPercentual(preco_unitario, percentual_desconto)`. Subtotal = `quantidade * preco_liquido`.
+- [x] **Cálculo Global:** Totalizadores do orçamento/pedido e projeção de comissão do representante em centavos (`aplicarPercentual(total, comissao_padrao)`).
+- [x] **Testes de Arredondamento:** Cobrir com Vitest casos de arredondamento bancário e centavos no motor do pedido.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.3. Orçamento Ágil e Fechamento de Orçamento/Pedido
-- [ ] **Contexto de Venda:** Seleção rápida de Cliente, Endereço de Entrega, Contato, Tipo de Frete (CIF/FOB/FOB Redespacho, herdando o padrão da representada) e Condição de Pagamento.
-- [ ] **UI do Orçamento:** Grid/lista com adição rápida a partir do catálogo, edição ágil de quantidade e desconto sem travas obstrutivas.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Contexto de Venda:** Seleção rápida de Cliente, Endereço de Entrega, Contato, Tipo de Frete (CIF/FOB/FOB Redespacho, herdando o padrão da representada) e Condição de Pagamento.
+- [x] **UI do Orçamento:** Grid/lista com adição rápida a partir do catálogo, edição ágil de quantidade e desconto sem travas obstrutivas.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.4. Persistência Offline, Sincronização e Espelho PDF
 - [ ] **Gravação Transacional:** Salvar Orçamento/Pedido no Dexie com status (`rascunho` ou `emitido`) e `idempotency_key`.

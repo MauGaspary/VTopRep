@@ -12,9 +12,15 @@ import {
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
+import { dataLocal } from "../../../shared/domain/datas";
+import {
+	formatarCentavos,
+	formatarCentesimosPercentual,
+} from "../../../shared/domain/decimal-br";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { useTodasRepresentadas } from "../../representadas/hooks/use-representadas";
 import type { Produto } from "../domain/produto.schema";
+import { usePrecosCatalogo } from "../hooks/use-precos";
 import { useProdutoActions, useTodosProdutos } from "../hooks/use-produtos";
 
 interface CatalogoViewProps {
@@ -24,6 +30,7 @@ interface CatalogoViewProps {
 export function CatalogoView({ tenantId }: CatalogoViewProps) {
 	const [termoBusca, setTermoBusca] = useState("");
 	const [erro, setErro] = useState<string | null>(null);
+	const hoje = dataLocal(new Date());
 
 	const { produtos, isLoading: carregandoProdutos } = useTodosProdutos(
 		tenantId,
@@ -31,6 +38,10 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 	);
 	const { representadas, isLoading: carregandoRepresentadas } =
 		useTodasRepresentadas(tenantId);
+	const { precosPorProduto, isLoading: carregandoPrecos } = usePrecosCatalogo(
+		tenantId,
+		hoje,
+	);
 	const { inativar, reativar } = useProdutoActions(tenantId);
 
 	const representadasMap = useMemo(() => {
@@ -41,7 +52,8 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 		return mapa;
 	}, [representadas]);
 
-	const isLoading = carregandoProdutos || carregandoRepresentadas;
+	const isLoading =
+		carregandoProdutos || carregandoRepresentadas || carregandoPrecos;
 
 	const handleInativar = async (produto: Produto) => {
 		const confirmado = window.confirm(
@@ -71,10 +83,18 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 				title="Catálogo de Produtos"
 				description="Consulta e gestão de produtos cadastrados offline."
 				action={
-					<Link to="/produtos/novo" className={buttonClassName()}>
-						<Plus aria-hidden="true" />
-						Novo produto
-					</Link>
+					<>
+						<Link
+							to="/pedidos/novo"
+							className={buttonClassName({ variant: "secondary" })}
+						>
+							Novo orçamento
+						</Link>
+						<Link to="/produtos/novo" className={buttonClassName()}>
+							<Plus aria-hidden="true" />
+							Novo produto
+						</Link>
+					</>
 				}
 			/>
 
@@ -103,6 +123,7 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 							const nomeRepresentada =
 								representadasMap.get(produto.representada_id) ??
 								"Representada desconhecida";
+							const precoCatalogo = precosPorProduto.get(produto.id);
 
 							return (
 								<Card
@@ -130,7 +151,28 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 											</Badge>
 										</div>
 
-										<dl className="mt-3 grid grid-cols-2 gap-2 border-t border-border pt-3 text-sm">
+										<dl className="mt-3 grid grid-cols-3 gap-2 border-t border-border pt-3 text-sm">
+											<div className="flex flex-col">
+												<dt className="text-xs text-muted-foreground">
+													Preço base
+												</dt>
+												<dd
+													className="font-medium tabular-nums"
+													title={
+														precoCatalogo
+															? `${precoCatalogo.nome_tabela}${precoCatalogo.desconto_maximo_permitido > 0 ? ` · Desc. máx: ${formatarCentesimosPercentual(precoCatalogo.desconto_maximo_permitido)}` : ""}`
+															: undefined
+													}
+												>
+													{precoCatalogo ? (
+														formatarCentavos(precoCatalogo.preco_base_centavos)
+													) : (
+														<span className="text-xs text-muted-foreground">
+															Sem preço
+														</span>
+													)}
+												</dd>
+											</div>
 											<div className="flex flex-col">
 												<dt className="text-xs text-muted-foreground">
 													Unidade
@@ -151,6 +193,17 @@ export function CatalogoView({ tenantId }: CatalogoViewProps) {
 									</div>
 
 									<div className="mt-3 flex justify-end gap-2 border-t border-border pt-3">
+										{!isInativo && precoCatalogo && (
+											<Link
+												to={`/pedidos/novo?produtoId=${produto.id}&representadaId=${produto.representada_id}`}
+												className={buttonClassName({
+													variant: "primary",
+													size: "sm",
+												})}
+											>
+												Orçar
+											</Link>
+										)}
 										{isInativo ? (
 											<Button
 												variant="secondary"

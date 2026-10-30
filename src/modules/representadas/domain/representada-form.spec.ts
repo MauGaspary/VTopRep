@@ -1,9 +1,13 @@
 import { describe, expect, it } from "vitest";
+import { NOME_TABELA_PADRAO } from "../../produtos/domain/tabela-preco";
 import { criarRepresentada } from "./representada";
 import {
+	chaveErroTabelaPreco,
 	type RepresentadaFormValues,
 	validarFormularioRepresentada,
+	validarTabelasPrecoForm,
 	valoresIniciaisFormulario,
+	valoresIniciaisTabelasPrecoForm,
 } from "./representada-form";
 
 const formValido = (
@@ -129,6 +133,60 @@ describe("valoresIniciaisFormulario", () => {
 		if (resultado.success) {
 			expect(resultado.data.percentual_comissao_padrao).toBe(333);
 			expect(resultado.data.valor_pedido_minimo_centavos).toBe(123456789);
+		}
+	});
+});
+
+describe("valoresIniciaisTabelasPrecoForm e validarTabelasPrecoForm", () => {
+	it("sugere Tabela Padrão vigente a partir de hoje quando não há tabelas", () => {
+		const iniciais = valoresIniciaisTabelasPrecoForm(
+			undefined,
+			"2026-10-29",
+			() => "id-local",
+		);
+		expect(iniciais).toEqual([
+			{
+				localId: "id-local",
+				nome_tabela: NOME_TABELA_PADRAO,
+				vigencia_inicio: "2026-10-29",
+				vigencia_fim: "",
+				ativo: true,
+			},
+		]);
+
+		expect(validarTabelasPrecoForm(iniciais)).toEqual({
+			success: true,
+			data: [
+				{
+					id: undefined,
+					nome_tabela: NOME_TABELA_PADRAO,
+					vigencia_inicio: "2026-10-29",
+					vigencia_fim: null,
+					ativo: true,
+				},
+			],
+		});
+	});
+
+	it("mapeia erros por linha e campo (ex: nome vazio e fim antes do início)", () => {
+		const resultado = validarTabelasPrecoForm([
+			{
+				localId: "1",
+				nome_tabela: "  ",
+				vigencia_inicio: "2026-06-10",
+				vigencia_fim: "2026-06-01",
+				ativo: true,
+			},
+		]);
+
+		expect(resultado.success).toBe(false);
+		if (!resultado.success) {
+			expect(resultado.erros[chaveErroTabelaPreco(0, "nome_tabela")]).toBe(
+				"Nome da tabela é obrigatório",
+			);
+			expect(resultado.erros[chaveErroTabelaPreco(0, "vigencia_fim")]).toBe(
+				"Fim da vigência não pode ser anterior ao início",
+			);
 		}
 	});
 });

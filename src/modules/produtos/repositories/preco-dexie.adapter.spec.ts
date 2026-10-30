@@ -313,4 +313,121 @@ describe("PrecoDexieAdapter", () => {
 			expect(await db.clientes_tabelas_preco.count()).toBe(0);
 		});
 	});
+
+	describe("listagens de tabelas e resolução do catálogo", () => {
+		it("lista tabelas da representada, tabelas em uso, itens do produto e preços do catálogo", async () => {
+			const vigente = tabela({
+				nome_tabela: "Tabela Padrão",
+				vigencia_inicio: "2026-01-01",
+			});
+			const futura = tabela({
+				nome_tabela: "Tabela 2027",
+				vigencia_inicio: "2027-01-01",
+			});
+			const inativa = tabela({
+				nome_tabela: "Tabela Antiga",
+				ativo: false,
+			});
+			await db.tabelas_preco.bulkAdd([inativa, futura, vigente]);
+			await db.itens_preco.bulkAdd([
+				itemPreco(vigente, {
+					produto_id: PRODUTO_A,
+					preco_base_centavos: 3500,
+					desconto_maximo_permitido: 1000,
+				}),
+				itemPreco(futura, {
+					produto_id: PRODUTO_A,
+					preco_base_centavos: 3900,
+				}),
+			]);
+
+			const todasDaRep = await adapter.listarTabelasDaRepresentada(
+				TENANT,
+				REPRESENTADA,
+			);
+			expect(todasDaRep.map((t) => t.nome_tabela)).toEqual([
+				"Tabela 2027",
+				"Tabela Padrão",
+				"Tabela Antiga",
+			]);
+
+			const emUso = await adapter.listarTabelasEmUso(
+				TENANT,
+				REPRESENTADA,
+				HOJE,
+			);
+			expect(emUso.map((t) => t.nome_tabela)).toEqual([
+				"Tabela Padrão",
+				"Tabela 2027",
+			]);
+
+			const itensDoProd = await adapter.obterItensPrecoDoProduto(
+				TENANT,
+				PRODUTO_A,
+			);
+			expect(itensDoProd.size).toBe(2);
+			expect(itensDoProd.get(vigente.id)?.preco_base_centavos).toBe(3500);
+
+			const precosCatalogo = await adapter.resolverPrecosCatalogo(TENANT, HOJE);
+			expect(precosCatalogo.get(PRODUTO_A)).toEqual({
+				tabela_id: vigente.id,
+				nome_tabela: "Tabela Padrão",
+				preco_base_centavos: 3500,
+				desconto_maximo_permitido: 1000,
+			});
+		});
+
+		it("lista tabelas disponíveis por representada e sincroniza escolhas de tabela padrão do cliente", async () => {
+			const tabRep1 = tabela({
+				representada_id: REPRESENTADA,
+				nome_tabela: "Atacado Rep 1",
+			});
+			const tabRep2 = tabela({
+				representada_id: OUTRA_REPRESENTADA,
+				nome_tabela: "Padrão Rep 2",
+			});
+			const tabInativa = tabela({
+				representada_id: REPRESENTADA,
+				nome_tabela: "Inativa",
+				ativo: false,
+			});
+			await db.tabelas_preco.bulkAdd([tabRep1, tabRep2, tabInativa]);
+
+			const disponiveisPorRep =
+				await adapter.listarTabelasDisponiveisPorRepresentada(TENANT);
+			expect(disponiveisPorRep.get(REPRESENTADA)?.map((t) => t.id)).toEqual([
+				tabRep1.id,
+			]);
+			expect(
+				disponiveisPorRep.get(OUTRA_REPRESENTADA)?.map((t) => t.id),
+			).toEqual([tabRep2.id]);
+
+			await adapter.sincronizarTabelasPadraoCliente(TENANT, CLIENTE, {
+				[REPRESENTADA]: tabRep1.id,
+				[OUTRA_REPRESENTADA]: tabRep2.id,
+			});
+
+			const padroes = await adapter.obterTabelasPadraoDoCliente(
+				TENANT,
+				CLIENTE,
+			);
+			expect(padroes.get(REPRESENTADA)?.tabela_id).toBe(tabRep1.id);
+			expect(padroes.get(OUTRA_REPRESENTADA)?.tabela_id).toBe(tabRep2.id);
+
+			// Remover a tabela padrão da primeira representada e manter a segunda
+			await adapter.sincronizarTabelasPadraoCliente(TENANT, CLIENTE, {
+				[REPRESENTADA]: "",
+				[OUTRA_REPRESENTADA]: tabRep2.id,
+			});
+
+			const padroesAposRemocao = await adapter.obterTabelasPadraoDoCliente(
+				TENANT,
+				CLIENTE,
+			);
+			expect(padroesAposRemocao.has(REPRESENTADA)).toBe(false);
+			expect(padroesAposRemocao.get(OUTRA_REPRESENTADA)?.tabela_id).toBe(
+				tabRep2.id,
+			);
+		});
+	});
 });

@@ -6,10 +6,13 @@ import {
 	definirTabelaPadrao,
 	escolherTabelaSugerida,
 	indexarItensPreco,
+	indexarItensPrecoDoProduto,
+	indexarTabelasPadraoDoCliente,
 	listarTabelasVigentes,
 	removerTabelaPadrao,
 	resolverPreco,
 	resolverPrecosDaTabela,
+	sincronizarPrecosProduto,
 	TabelaPrecoNaoEncontradaError,
 	tabelaVigenteEm,
 } from "./preco";
@@ -383,5 +386,205 @@ describe("removerTabelaPadrao", () => {
 		expect(() => removerTabelaPadrao(associacao, OUTRO_TENANT, AGORA)).toThrow(
 			TenantDivergenteError,
 		);
+	});
+});
+
+describe("indexarItensPrecoDoProduto e sincronizarPrecosProduto", () => {
+	const produto = {
+		id: PRODUTO_A,
+		tenant_id: TENANT,
+		representada_id: REPRESENTADA,
+	};
+
+	it("indexa os preços vivos do produto por tabela_id escolhendo o mais recente", () => {
+		const tab1 = tabela();
+		const tab2 = tabela();
+		const antigo = itemPreco(tab1, {
+			preco_base_centavos: 1000,
+			updated_at: "2026-09-01T00:00:00.000Z",
+		});
+		const recente = itemPreco(tab1, {
+			preco_base_centavos: 1200,
+			updated_at: "2026-10-01T00:00:00.000Z",
+		});
+		const excluido = itemPreco(tab2, { deleted_at: AGORA });
+
+		const mapa = indexarItensPrecoDoProduto(
+			[antigo, recente, excluido],
+			TENANT,
+			PRODUTO_A,
+		);
+
+		expect([...mapa.keys()]).toEqual([tab1.id]);
+		expect(mapa.get(tab1.id)).toBe(recente);
+	});
+
+	it("cria, atualiza, mantém inalterados e remove (tombstone) preços por tabela", () => {
+		const tabInalterada = tabela({ nome_tabela: "Inalterada" });
+		const tabAlterada = tabela({ nome_tabela: "Alterada" });
+		const tabRemovida = tabela({ nome_tabela: "Removida" });
+		const tabNova = tabela({ nome_tabela: "Nova" });
+
+		const itemInalterado = itemPreco(tabInalterada, {
+			preco_base_centavos: 1000,
+			desconto_maximo_permitido: 500,
+		});
+		const itemAlterado = itemPreco(tabAlterada, {
+			preco_base_centavos: 2000,
+			desconto_maximo_permitido: 0,
+		});
+		const itemRemovido = itemPreco(tabRemovida, {
+			preco_base_centavos: 3000,
+		});
+
+		const resultado = sincronizarPrecosProduto({
+			tenantId: TENANT,
+			produto,
+			tabelasDaRepresentada: [tabInalterada, tabAlterada, tabRemovida, tabNova],
+			existentes: [itemInalterado, itemAlterado, itemRemovido],
+			agora: AGORA,
+			inputs: [
+				{
+					tabela_id: tabInalterada.id,
+					preco_base_centavos: 1000,
+					desconto_maximo_permitido: 500,
+				},
+				{
+					tabela_id: tabAlterada.id,
+					preco_base_centavos: 2500,
+					desconto_maximo_permitido: 1000,
+				},
+				{
+					tabela_id: tabRemovida.id,
+					preco_base_centavos: null,
+				},
+				{
+					tabela_id: tabNova.id,
+					preco_base_centavos: 4000,
+					desconto_maximo_permitido: 200,
+				},
+			],
+		});
+
+		expect(resultado.ativos).toHaveLength(3);
+		expect(resultado.ativos).toContain(itemInalterado);
+		expect(resultado.gravar).toHaveLength(3);
+		expect(
+			resultado.gravar.find((i) => i.tabela_id === tabAlterada.id),
+		).toMatchObject({
+			id: itemAlterado.id,
+			preco_base_centavos: 2500,
+			desconto_maximo_permitido: 1000,
+			updated_at: AGORA,
+			deleted_at: null,
+		});
+		expect(
+			resultado.gravar.find((i) => i.tabela_id === tabRemovida.id),
+		).toMatchObject({
+			id: itemRemovido.id,
+			deleted_at: AGORA,
+		});
+		expect(
+			resultado.gravar.find((i) => i.tabela_id === tabNova.id),
+		).toMatchObject({
+			produto_id: PRODUTO_A,
+			preco_base_centavos: 4000,
+			desconto_maximo_permitido: 200,
+		});
+	});
+
+	it("marca como tombstone preços órfãos de outra representada quando o produto troca de representada", () => {
+		const tabAntiga = tabela({
+			representada_id: "88888888-8888-4888-a888-888888888888",
+		});
+		const tabNova = tabela({ representada_id: REPRESENTADA });
+		const itemAntigo = itemPreco(tabAntiga, { preco_base_centavos: 1500 });
+
+		const resultado = sincronizarPrecosProduto({
+			tenantId: TENANT,
+			produto,
+			tabelasDaRepresentada: [tabNova],
+			existentes: [itemAntigo],
+			agora: AGORA,
+			inputs: [{ tabela_id: tabNova.id, preco_base_centavos: 1800 }],
+		});
+
+		expect(resultado.ativos).toHaveLength(1);
+		expect(resultado.ativos[0]?.tabela_id).toBe(tabNova.id);
+		expect(
+			resultado.gravar.find((i) => i.id === itemAntigo.id)?.deleted_at,
+		).toBe(AGORA);
+	});
+
+	it("recusa tabela inexistente ou de outra representada", () => {
+		expect(() =>
+			sincronizarPrecosProduto({
+				tenantId: TENANT,
+				produto,
+				tabelasDaRepresentada: [],
+				existentes: [],
+				agora: AGORA,
+				inputs: [{ tabela_id: crypto.randomUUID(), preco_base_centavos: 1000 }],
+			}),
+		).toThrow(TabelaPrecoNaoEncontradaError);
+	});
+});
+
+describe("indexarTabelasPadraoDoCliente", () => {
+	it("indexa associações vivas do cliente por representada_id vencendo a mais recente", () => {
+		const outraRep = "99999999-9999-4999-a999-999999999999";
+		const tabAntiga = tabela();
+		const tabRecente = tabela();
+		const tabOutraRep = tabela({ representada_id: outraRep });
+
+		const assocAntiga: ClienteTabelaPreco = {
+			id: crypto.randomUUID(),
+			tenant_id: TENANT,
+			cliente_id: CLIENTE,
+			representada_id: REPRESENTADA,
+			tabela_id: tabAntiga.id,
+			created_at: CRIADO_EM,
+			updated_at: "2026-01-01T00:00:00.000Z",
+			deleted_at: null,
+		};
+		const assocRecente: ClienteTabelaPreco = {
+			...assocAntiga,
+			id: crypto.randomUUID(),
+			tabela_id: tabRecente.id,
+			updated_at: "2026-05-01T00:00:00.000Z",
+		};
+		const assocOutraRep: ClienteTabelaPreco = {
+			...assocAntiga,
+			id: crypto.randomUUID(),
+			representada_id: outraRep,
+			tabela_id: tabOutraRep.id,
+		};
+		const assocExcluida: ClienteTabelaPreco = {
+			...assocAntiga,
+			id: crypto.randomUUID(),
+			updated_at: "2026-09-01T00:00:00.000Z",
+			deleted_at: "2026-09-01T00:00:00.000Z",
+		};
+		const assocOutroTenant: ClienteTabelaPreco = {
+			...assocRecente,
+			id: crypto.randomUUID(),
+			tenant_id: OUTRO_TENANT,
+		};
+
+		const mapa = indexarTabelasPadraoDoCliente(
+			[
+				assocAntiga,
+				assocRecente,
+				assocOutraRep,
+				assocExcluida,
+				assocOutroTenant,
+			],
+			TENANT,
+			CLIENTE,
+		);
+
+		expect(mapa.size).toBe(2);
+		expect(mapa.get(REPRESENTADA)?.tabela_id).toBe(tabRecente.id);
+		expect(mapa.get(outraRep)?.tabela_id).toBe(tabOutraRep.id);
 	});
 });

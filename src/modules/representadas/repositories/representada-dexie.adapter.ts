@@ -1,5 +1,11 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
+import { dataLocal } from "../../../shared/domain/datas";
+import {
+	criarTabelaPadrao,
+	sincronizarTabelasRepresentada,
+} from "../../produtos/domain/tabela-preco";
+import type { TabelaPrecoInput } from "../../produtos/domain/tabela-preco.schema";
 import {
 	atualizarRepresentada,
 	CnpjDuplicadoError,
@@ -91,19 +97,50 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 	async criar(
 		tenantId: string,
 		input: RepresentadaInput,
+		tabelasInput?: readonly TabelaPrecoInput[],
 	): Promise<Representada> {
 		const tenant = TenantIdSchema.parse(tenantId);
+		const instante = this.agora();
 		const nova = criarRepresentada({
 			tenantId: tenant,
 			input,
 			id: this.gerarId(),
-			agora: this.agora(),
+			agora: instante,
 		});
 
-		await this.db.transaction("rw", this.db.representadas, async () => {
-			await this.garantirCnpjUnico(tenant, nova, { oferecerReativacao: true });
-			await this.db.representadas.add(nova);
-		});
+		await this.db.transaction(
+			"rw",
+			[this.db.representadas, this.db.tabelas_preco],
+			async () => {
+				await this.garantirCnpjUnico(tenant, nova, {
+					oferecerReativacao: true,
+				});
+				await this.db.representadas.add(nova);
+
+				if (tabelasInput && tabelasInput.length > 0) {
+					const { gravar } = sincronizarTabelasRepresentada({
+						tenantId: tenant,
+						representadaId: nova.id,
+						existentes: [],
+						inputs: tabelasInput,
+						agora: instante,
+						gerarId: this.gerarId,
+					});
+					if (gravar.length > 0) {
+						await this.db.tabelas_preco.bulkPut(gravar);
+					}
+				} else {
+					const padrao = criarTabelaPadrao({
+						id: this.gerarId(),
+						tenantId: tenant,
+						representadaId: nova.id,
+						hoje: dataLocal(new Date(instante)),
+						agora: instante,
+					});
+					await this.db.tabelas_preco.add(padrao);
+				}
+			},
+		);
 
 		return nova;
 	}
@@ -112,26 +149,51 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		tenantId: string,
 		id: string,
 		input: RepresentadaInput,
+		tabelasInput?: readonly TabelaPrecoInput[],
 	): Promise<Representada> {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const idValido = IdSchema.parse(id);
 
-		return this.db.transaction("rw", this.db.representadas, async () => {
-			const existente = await this.obterAtivaOuFalhar(tenant, idValido);
-			const atualizada = atualizarRepresentada(
-				existente,
-				tenant,
-				input,
-				this.agora(),
-			);
-			if (atualizada.cnpj !== existente.cnpj) {
-				await this.garantirCnpjUnico(tenant, atualizada, {
-					oferecerReativacao: true,
-				});
-			}
-			await this.db.representadas.put(atualizada);
-			return atualizada;
-		});
+		return this.db.transaction(
+			"rw",
+			[this.db.representadas, this.db.tabelas_preco],
+			async () => {
+				const existente = await this.obterAtivaOuFalhar(tenant, idValido);
+				const instante = this.agora();
+				const atualizada = atualizarRepresentada(
+					existente,
+					tenant,
+					input,
+					instante,
+				);
+				if (atualizada.cnpj !== existente.cnpj) {
+					await this.garantirCnpjUnico(tenant, atualizada, {
+						oferecerReativacao: true,
+					});
+				}
+				await this.db.representadas.put(atualizada);
+
+				if (tabelasInput !== undefined) {
+					const tabelasExistentes = await this.db.tabelas_preco
+						.where("[tenant_id+representada_id]")
+						.equals([tenant, idValido])
+						.toArray();
+					const { gravar } = sincronizarTabelasRepresentada({
+						tenantId: tenant,
+						representadaId: idValido,
+						existentes: tabelasExistentes,
+						inputs: tabelasInput,
+						agora: instante,
+						gerarId: this.gerarId,
+					});
+					if (gravar.length > 0) {
+						await this.db.tabelas_preco.bulkPut(gravar);
+					}
+				}
+
+				return atualizada;
+			},
+		);
 	}
 
 	async inativar(tenantId: string, id: string): Promise<void> {

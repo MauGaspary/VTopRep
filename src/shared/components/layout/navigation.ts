@@ -1,4 +1,10 @@
-import { Factory, type LucideIcon, Package, Users } from "lucide-react";
+import {
+	Factory,
+	FileText,
+	type LucideIcon,
+	Package,
+	Users,
+} from "lucide-react";
 
 export interface NavItem {
 	to: string;
@@ -15,7 +21,10 @@ export interface NavGroup {
 export const NAV_GROUPS: readonly NavGroup[] = [
 	{
 		label: "Vendas",
-		items: [{ to: "/catalogo", label: "Catálogo", icon: Package }],
+		items: [
+			{ to: "/pedidos", label: "Orçamentos", icon: FileText },
+			{ to: "/catalogo", label: "Catálogo", icon: Package },
+		],
 	},
 	{
 		label: "Cadastros",

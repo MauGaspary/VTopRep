@@ -42,8 +42,7 @@ export function TenantProvider({ children }: TenantProviderProps) {
 			root.style.removeProperty("--primary");
 			root.style.removeProperty("--ring");
 		};
-	}, [config.visual.primaryColorHsl] 
-	   [config.visual.secondaryColorHsl]);
+	}, [config.visual.primaryColorHsl]);
 
 	return (
 		<TenantContext.Provider value={{ config }}>

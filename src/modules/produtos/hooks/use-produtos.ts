@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
+import type { PrecoProdutoInput } from "../domain/item-preco.schema";
 import type { ProdutoInput } from "../domain/produto.schema";
 import { produtoRepository } from "../repositories/produto-dexie.adapter";
 
@@ -64,9 +65,15 @@ export function useProduto(
 export function useProdutoActions(tenantId: string) {
 	return useMemo(
 		() => ({
-			criar: (input: ProdutoInput) => produtoRepository.criar(tenantId, input),
-			atualizar: (id: string, input: ProdutoInput) =>
-				produtoRepository.atualizar(tenantId, id, input),
+			criar: (
+				input: ProdutoInput,
+				precosInput?: readonly PrecoProdutoInput[],
+			) => produtoRepository.criar(tenantId, input, precosInput),
+			atualizar: (
+				id: string,
+				input: ProdutoInput,
+				precosInput?: readonly PrecoProdutoInput[],
+			) => produtoRepository.atualizar(tenantId, id, input, precosInput),
 			inativar: (id: string) => produtoRepository.inativar(tenantId, id),
 			reativar: (id: string) => produtoRepository.reativar(tenantId, id),
 		}),

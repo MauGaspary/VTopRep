@@ -113,3 +113,96 @@
 		letter-spacing: -0.011em;
 	}
 }
+
+.table-wrapper {
+	overflow: auto;
+	max-inline-size: 100%;
+	max-block-size: min(560px, 80vh);
+	container-type: inline-size;
+}
+
+.table-wrapper table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+}
+
+.orcamento-itens-table {
+	--label-2: "Preço tabela";
+	--label-3: "Quantidade";
+	--label-4: "Desconto (%)";
+	--label-5: "Líquido unit.";
+	--label-6: "Subtotal";
+}
+
+.table-wrapper thead {
+	position: sticky;
+	inset-block-start: 0;
+	z-index: 1;
+	background-color: var(--color-muted);
+}
+
+.table-wrapper tbody th {
+	position: sticky;
+	inset-inline-start: 0;
+	background-color: var(--color-card);
+}
+
+@container (width < 600px) {
+	.table-wrapper table,
+	.table-wrapper thead,
+	.table-wrapper tbody,
+	.table-wrapper tr,
+	.table-wrapper th,
+	.table-wrapper td {
+		display: block;
+	}
+
+	.table-wrapper thead {
+		display: none;
+	}
+
+	.table-wrapper tbody tr {
+		margin-block-end: 0.75rem;
+		border: 1px solid var(--color-border);
+		border-radius: var(--radius-lg);
+		overflow: hidden;
+	}
+
+	.table-wrapper tbody th {
+		position: sticky;
+		inset-block-start: 0;
+		z-index: 2;
+		background-color: var(--color-muted);
+	}
+
+	.table-wrapper td:nth-child(2)::before {
+		content: var(--label-2) ": ";
+		font-weight: 500;
+		color: var(--color-muted-foreground);
+	}
+
+	.table-wrapper td:nth-child(3)::before {
+		content: var(--label-3) ": ";
+		font-weight: 500;
+		color: var(--color-muted-foreground);
+	}
+
+	.table-wrapper td:nth-child(4)::before {
+		content: var(--label-4) ": ";
+		font-weight: 500;
+		color: var(--color-muted-foreground);
+	}
+
+	.table-wrapper td:nth-child(5)::before {
+		content: var(--label-5) ": ";
+		font-weight: 500;
+		color: var(--color-muted-foreground);
+	}
+
+	.table-wrapper td:nth-child(6)::before {
+		content: var(--label-6) ": ";
+		font-weight: 500;
+		color: var(--color-muted-foreground);
+	}
+}

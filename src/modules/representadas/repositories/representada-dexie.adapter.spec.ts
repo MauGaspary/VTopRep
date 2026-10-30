@@ -31,6 +31,7 @@ describe("RepresentadaDexieAdapter", () => {
 
 	beforeEach(async () => {
 		await db.representadas.clear();
+		await db.tabelas_preco.clear();
 		relogio = Date.UTC(2026, 9, 22, 12, 0, 0);
 		adapter = new RepresentadaDexieAdapter({
 			agora: () => {
@@ -393,6 +394,68 @@ describe("RepresentadaDexieAdapter", () => {
 				await adapter.obterPorId(TENANT_1, criada.id, true),
 			).toBeUndefined();
 			await expect(adapter.criar(TENANT_1, input())).resolves.toBeDefined();
+		});
+	});
+
+	describe("tabelas de preço da representada", () => {
+		it("cria automaticamente a Tabela Padrão vigente quando tabelasInput é omitido", async () => {
+			const criada = await adapter.criar(TENANT_1, input());
+
+			const tabelas = await db.tabelas_preco
+				.where("[tenant_id+representada_id]")
+				.equals([TENANT_1, criada.id])
+				.toArray();
+			expect(tabelas).toHaveLength(1);
+			expect(tabelas[0]).toMatchObject({
+				tenant_id: TENANT_1,
+				representada_id: criada.id,
+				nome_tabela: "Tabela Padrão",
+				vigencia_fim: null,
+				ativo: true,
+				deleted_at: null,
+			});
+		});
+
+		it("persiste e reconcilia tabelas customizadas no criar e atualizar", async () => {
+			const criada = await adapter.criar(TENANT_1, input(), [
+				{
+					nome_tabela: "Tabela Atacado",
+					vigencia_inicio: "2026-01-01",
+					vigencia_fim: null,
+					ativo: true,
+				},
+			]);
+
+			const [atacado] = await db.tabelas_preco
+				.where("[tenant_id+representada_id]")
+				.equals([TENANT_1, criada.id])
+				.toArray();
+			expect(atacado?.nome_tabela).toBe("Tabela Atacado");
+
+			await adapter.atualizar(TENANT_1, criada.id, input(), [
+				{
+					id: atacado?.id,
+					nome_tabela: "Tabela Atacado Sul",
+					vigencia_inicio: "2026-01-01",
+					vigencia_fim: null,
+					ativo: true,
+				},
+				{
+					nome_tabela: "Tabela Varejo",
+					vigencia_inicio: "2026-06-01",
+					vigencia_fim: "2026-12-31",
+					ativo: true,
+				},
+			]);
+
+			const atualizadas = await db.tabelas_preco
+				.where("[tenant_id+representada_id]")
+				.equals([TENANT_1, criada.id])
+				.toArray();
+			expect(atualizadas.map((t) => t.nome_tabela).sort()).toEqual([
+				"Tabela Atacado Sul",
+				"Tabela Varejo",
+			]);
 		});
 	});
 });

@@ -1,3 +1,4 @@
+import type { PrecoProdutoInput } from "../domain/item-preco.schema";
 import type { Produto, ProdutoInput } from "../domain/produto.schema";
 
 export interface ProdutoRepository {
@@ -25,11 +26,16 @@ export interface ProdutoRepository {
 		representadaId: string,
 		sku: string,
 	): Promise<Produto | null>;
-	criar(tenantId: string, input: ProdutoInput): Promise<Produto>;
+	criar(
+		tenantId: string,
+		input: ProdutoInput,
+		precosInput?: readonly PrecoProdutoInput[],
+	): Promise<Produto>;
 	atualizar(
 		tenantId: string,
 		id: string,
 		input: ProdutoInput,
+		precosInput?: readonly PrecoProdutoInput[],
 	): Promise<Produto>;
 	inativar(tenantId: string, id: string): Promise<Produto>;
 	reativar(tenantId: string, id: string): Promise<Produto>;

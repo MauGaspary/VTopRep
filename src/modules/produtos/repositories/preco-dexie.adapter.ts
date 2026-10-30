@@ -2,10 +2,14 @@ import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
 import { DataSchema } from "../../../shared/domain/datas";
 import type { ClienteTabelaPreco } from "../domain/cliente-tabela-preco.schema";
+import type { ItemPreco } from "../domain/item-preco.schema";
 import {
 	ClienteNaoVinculadoError,
 	definirTabelaPadrao,
 	escolherTabelaSugerida,
+	indexarItensPreco,
+	indexarItensPrecoDoProduto,
+	indexarTabelasPadraoDoCliente,
 	listarTabelasVigentes,
 	type ResolucaoPreco,
 	type ResolucaoPrecosTabela,
@@ -13,9 +17,14 @@ import {
 	resolverPreco,
 	resolverPrecosDaTabela,
 	TabelaPrecoNaoEncontradaError,
+	tabelaDisponivel,
 } from "../domain/preco";
+import {
+	listarTabelasEmUso,
+	ordenarTabelasPreco,
+} from "../domain/tabela-preco";
 import type { TabelaPreco } from "../domain/tabela-preco.schema";
-import type { PrecoRepository } from "./preco.repository";
+import type { PrecoCatalogo, PrecoRepository } from "./preco.repository";
 
 const TenantIdSchema = z.string().uuid("tenantId inválido");
 const IdSchema = z.string().uuid("id inválido");
@@ -42,6 +51,37 @@ export class PrecoDexieAdapter implements PrecoRepository {
 		this.agora = options.agora ?? (() => new Date().toISOString());
 	}
 
+	async listarTabelasDaRepresentada(
+		tenantId: string,
+		representadaId: string,
+	): Promise<TabelaPreco[]> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const repId = IdSchema.parse(representadaId);
+
+		const tabelas = await this.db.tabelas_preco
+			.where("[tenant_id+representada_id]")
+			.equals([tenant, repId])
+			.filter((t) => t.deleted_at === null)
+			.toArray();
+		return ordenarTabelasPreco(tabelas);
+	}
+
+	async listarTabelasEmUso(
+		tenantId: string,
+		representadaId: string,
+		data: string,
+	): Promise<TabelaPreco[]> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const repId = IdSchema.parse(representadaId);
+		const dia = DataSchema.parse(data);
+
+		const tabelas = await this.db.tabelas_preco
+			.where("[tenant_id+representada_id]")
+			.equals([tenant, repId])
+			.toArray();
+		return listarTabelasEmUso(tabelas, dia);
+	}
+
 	async listarTabelasVigentes(
 		tenantId: string,
 		representadaId: string,
@@ -56,6 +96,52 @@ export class PrecoDexieAdapter implements PrecoRepository {
 			.equals([tenant, repId])
 			.toArray();
 		return listarTabelasVigentes(tabelas, dia);
+	}
+
+	async obterItensPrecoDoProduto(
+		tenantId: string,
+		produtoId: string,
+	): Promise<Map<string, ItemPreco>> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const prodId = IdSchema.parse(produtoId);
+
+		const itens = await this.db.itens_preco
+			.where("[tenant_id+produto_id]")
+			.equals([tenant, prodId])
+			.toArray();
+		return indexarItensPrecoDoProduto(itens, tenant, prodId);
+	}
+
+	async resolverPrecosCatalogo(
+		tenantId: string,
+		data: string,
+	): Promise<Map<string, PrecoCatalogo>> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const dia = DataSchema.parse(data);
+
+		const [todasTabelas, todosItens] = await Promise.all([
+			this.db.tabelas_preco.where("tenant_id").equals(tenant).toArray(),
+			this.db.itens_preco.where("tenant_id").equals(tenant).toArray(),
+		]);
+
+		const vigentes = listarTabelasVigentes(todasTabelas, dia);
+		const resultado = new Map<string, PrecoCatalogo>();
+
+		for (const tabela of vigentes) {
+			const itensDaTabela = indexarItensPreco(todosItens, tabela);
+			for (const [produtoId, item] of itensDaTabela.entries()) {
+				if (!resultado.has(produtoId)) {
+					resultado.set(produtoId, {
+						tabela_id: tabela.id,
+						nome_tabela: tabela.nome_tabela,
+						preco_base_centavos: item.preco_base_centavos,
+						desconto_maximo_permitido: item.desconto_maximo_permitido,
+					});
+				}
+			}
+		}
+
+		return resultado;
 	}
 
 	async obterTabelaSugerida(
@@ -215,6 +301,61 @@ export class PrecoDexieAdapter implements PrecoRepository {
 				return removidas[0] ?? null;
 			},
 		);
+	}
+
+	async obterTabelasPadraoDoCliente(
+		tenantId: string,
+		clienteId: string,
+	): Promise<Map<string, ClienteTabelaPreco>> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const cliId = IdSchema.parse(clienteId);
+
+		const associacoes = await this.db.clientes_tabelas_preco
+			.where("tenant_id")
+			.equals(tenant)
+			.filter((a) => a.cliente_id === cliId && a.deleted_at === null)
+			.toArray();
+		return indexarTabelasPadraoDoCliente(associacoes, tenant, cliId);
+	}
+
+	async listarTabelasDisponiveisPorRepresentada(
+		tenantId: string,
+	): Promise<Map<string, TabelaPreco[]>> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const todas = await this.db.tabelas_preco
+			.where("tenant_id")
+			.equals(tenant)
+			.filter((t) => tabelaDisponivel(t))
+			.toArray();
+
+		const porRepresentada = new Map<string, TabelaPreco[]>();
+		for (const tabela of ordenarTabelasPreco(todas)) {
+			const lista = porRepresentada.get(tabela.representada_id) ?? [];
+			lista.push(tabela);
+			porRepresentada.set(tabela.representada_id, lista);
+		}
+		return porRepresentada;
+	}
+
+	async sincronizarTabelasPadraoCliente(
+		tenantId: string,
+		clienteId: string,
+		escolhasPorRepresentada: Readonly<Record<string, string>>,
+	): Promise<void> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const cliId = IdSchema.parse(clienteId);
+
+		for (const [representadaId, tabelaId] of Object.entries(
+			escolhasPorRepresentada,
+		)) {
+			const repId = IdSchema.parse(representadaId);
+			const escolha = tabelaId.trim();
+			if (escolha === "") {
+				await this.removerTabelaPadraoCliente(tenant, cliId, repId);
+			} else {
+				await this.definirTabelaPadraoCliente(tenant, cliId, escolha);
+			}
+		}
 	}
 
 	/** Tabela do tenant e não excluída (pode estar inativa ou fora de vigência). */

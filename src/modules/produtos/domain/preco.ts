@@ -3,7 +3,13 @@ import {
 	type ClienteTabelaPreco,
 	ClienteTabelaPrecoSchema,
 } from "./cliente-tabela-preco.schema";
-import type { ItemPreco } from "./item-preco.schema";
+import {
+	type ItemPreco,
+	ItemPrecoSchema,
+	type PrecoProdutoInput,
+	PrecoProdutoInputSchema,
+} from "./item-preco.schema";
+import type { Produto } from "./produto.schema";
 import type { TabelaPreco } from "./tabela-preco.schema";
 
 export class TabelaPrecoNaoEncontradaError extends Error {
@@ -265,4 +271,209 @@ export function removerTabelaPadrao(
 	garantirMesmoTenant(existente, tenantId);
 	if (existente.deleted_at !== null) return existente;
 	return { ...existente, updated_at: agora, deleted_at: agora };
+}
+
+/**
+ * Associações vivas de tabela padrão de um cliente, indexadas por `representada_id`.
+ * Se houver duplicatas para a mesma representada (sincronização offline), vence a
+ * de `updated_at` mais recente.
+ */
+export function indexarTabelasPadraoDoCliente(
+	associacoes: readonly ClienteTabelaPreco[],
+	tenantId: string,
+	clienteId: string,
+): Map<string, ClienteTabelaPreco> {
+	const porRepresentada = new Map<string, ClienteTabelaPreco>();
+	for (const assoc of associacoes) {
+		if (
+			assoc.tenant_id !== tenantId ||
+			assoc.cliente_id !== clienteId ||
+			assoc.deleted_at !== null
+		) {
+			continue;
+		}
+		const atual = porRepresentada.get(assoc.representada_id);
+		if (!atual || assoc.updated_at > atual.updated_at) {
+			porRepresentada.set(assoc.representada_id, assoc);
+		}
+	}
+	return porRepresentada;
+}
+
+/**
+ * Itens de preço vivos de um produto, indexados por `tabela_id`.
+ * Se houver duplicatas para a mesma tabela (sincronização offline), vence o
+ * de `updated_at` mais recente.
+ */
+export function indexarItensPrecoDoProduto(
+	itens: readonly ItemPreco[],
+	tenantId: string,
+	produtoId: string,
+): Map<string, ItemPreco> {
+	const porTabela = new Map<string, ItemPreco>();
+	for (const item of itens) {
+		if (
+			item.tenant_id !== tenantId ||
+			item.produto_id !== produtoId ||
+			item.deleted_at !== null
+		) {
+			continue;
+		}
+		const atual = porTabela.get(item.tabela_id);
+		if (!atual || item.updated_at > atual.updated_at) {
+			porTabela.set(item.tabela_id, item);
+		}
+	}
+	return porTabela;
+}
+
+export interface SincronizarPrecosProdutoParams {
+	tenantId: string;
+	produto: Pick<Produto, "id" | "tenant_id" | "representada_id">;
+	/** Todas as tabelas não excluídas da representada do produto. */
+	tabelasDaRepresentada: readonly TabelaPreco[];
+	/** Todos os itens de preço existentes do produto no tenant. */
+	existentes: readonly ItemPreco[];
+	inputs: readonly PrecoProdutoInput[];
+	agora: string;
+	gerarId?: () => string;
+}
+
+export interface PrecosSincronizados {
+	/** Itens de preço vivos resultantes para o produto. */
+	ativos: ItemPreco[];
+	/** Registros a persistir: novos, alterados e removidos (tombstones). */
+	gravar: ItemPreco[];
+}
+
+/**
+ * Reconcilia os preços do produto por tabela da sua representada:
+ * - `preco_base_centavos !== null`: cria ou atualiza o `ItemPreco` (mantém intacto se não mudou);
+ * - `preco_base_centavos === null`: marca `deleted_at` no item existente da tabela;
+ * - itens de outras tabelas da mesma representada não enviadas em `inputs` (ex.: tabelas
+ *   encerradas ou inativas): permanecem preservados;
+ * - itens de tabelas que não pertencem à representada atual do produto (ex.: quando o
+ *   produto mudou de representada): recebem `deleted_at`.
+ */
+export function sincronizarPrecosProduto({
+	tenantId,
+	produto,
+	tabelasDaRepresentada,
+	existentes,
+	inputs,
+	agora,
+	gerarId = () => crypto.randomUUID(),
+}: SincronizarPrecosProdutoParams): PrecosSincronizados {
+	garantirMesmoTenant(produto, tenantId);
+	for (const tabela of tabelasDaRepresentada) {
+		garantirMesmoTenant(tabela, tenantId);
+	}
+	for (const item of existentes) {
+		garantirMesmoTenant(item, tenantId);
+	}
+
+	const tabelasValidas = new Set(
+		tabelasDaRepresentada
+			.filter(
+				(t) =>
+					t.deleted_at === null &&
+					t.representada_id === produto.representada_id,
+			)
+			.map((t) => t.id),
+	);
+
+	// Agrupa itens vivos do produto por tabela_id (mais recente primeiro)
+	const vivosPorTabela = new Map<string, ItemPreco[]>();
+	for (const item of existentes) {
+		if (item.produto_id !== produto.id || item.deleted_at !== null) continue;
+		const lista = vivosPorTabela.get(item.tabela_id) ?? [];
+		lista.push(item);
+		vivosPorTabela.set(item.tabela_id, lista);
+	}
+	for (const lista of vivosPorTabela.values()) {
+		lista.sort((a, b) => b.updated_at.localeCompare(a.updated_at));
+	}
+
+	const tabelasProcessadas = new Set<string>();
+	const ativos: ItemPreco[] = [];
+	const gravar: ItemPreco[] = [];
+
+	for (const rawInput of inputs) {
+		const dados = PrecoProdutoInputSchema.parse(rawInput);
+		if (!tabelasValidas.has(dados.tabela_id)) {
+			throw new TabelaPrecoNaoEncontradaError(dados.tabela_id);
+		}
+		if (tabelasProcessadas.has(dados.tabela_id)) {
+			continue;
+		}
+		tabelasProcessadas.add(dados.tabela_id);
+
+		const [principal, ...duplicados] =
+			vivosPorTabela.get(dados.tabela_id) ?? [];
+		for (const dup of duplicados) {
+			gravar.push({ ...dup, updated_at: agora, deleted_at: agora });
+		}
+
+		if (dados.preco_base_centavos === null) {
+			if (principal) {
+				gravar.push({ ...principal, updated_at: agora, deleted_at: agora });
+			}
+			continue;
+		}
+
+		if (principal) {
+			const inalterado =
+				principal.preco_base_centavos === dados.preco_base_centavos &&
+				principal.desconto_maximo_permitido === dados.desconto_maximo_permitido;
+			if (inalterado) {
+				ativos.push(principal);
+			} else {
+				const atualizado = ItemPrecoSchema.parse({
+					...principal,
+					preco_base_centavos: dados.preco_base_centavos,
+					desconto_maximo_permitido: dados.desconto_maximo_permitido,
+					updated_at: agora,
+					deleted_at: null,
+				});
+				ativos.push(atualizado);
+				gravar.push(atualizado);
+			}
+			continue;
+		}
+
+		const novo = ItemPrecoSchema.parse({
+			id: gerarId(),
+			tenant_id: tenantId,
+			tabela_id: dados.tabela_id,
+			produto_id: produto.id,
+			preco_base_centavos: dados.preco_base_centavos,
+			desconto_maximo_permitido: dados.desconto_maximo_permitido,
+			created_at: agora,
+			updated_at: agora,
+			deleted_at: null,
+		});
+		ativos.push(novo);
+		gravar.push(novo);
+	}
+
+	// Trata tabelas não mencionadas no input: preserva as da mesma representada,
+	// e remove (tombstone) as que ficaram órfãs por troca de representada.
+	for (const [tabelaId, lista] of vivosPorTabela.entries()) {
+		if (tabelasProcessadas.has(tabelaId)) continue;
+
+		if (!tabelasValidas.has(tabelaId)) {
+			for (const item of lista) {
+				gravar.push({ ...item, updated_at: agora, deleted_at: agora });
+			}
+			continue;
+		}
+
+		const [principal, ...duplicados] = lista;
+		if (principal) ativos.push(principal);
+		for (const dup of duplicados) {
+			gravar.push({ ...dup, updated_at: agora, deleted_at: agora });
+		}
+	}
+
+	return { ativos, gravar };
 }

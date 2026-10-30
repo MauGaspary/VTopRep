@@ -1,5 +1,6 @@
 import { useMemo } from "react";
 import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
+import type { TabelaPrecoInput } from "../../produtos/domain/tabela-preco.schema";
 import type { RepresentadaInput } from "../domain/representada.schema";
 import { representadaRepository } from "../repositories/representada-dexie.adapter";
 
@@ -59,10 +60,15 @@ export function useRepresentada(
 export function useRepresentadaActions(tenantId: string) {
 	return useMemo(
 		() => ({
-			criar: (input: RepresentadaInput) =>
-				representadaRepository.criar(tenantId, input),
-			atualizar: (id: string, input: RepresentadaInput) =>
-				representadaRepository.atualizar(tenantId, id, input),
+			criar: (
+				input: RepresentadaInput,
+				tabelasInput?: readonly TabelaPrecoInput[],
+			) => representadaRepository.criar(tenantId, input, tabelasInput),
+			atualizar: (
+				id: string,
+				input: RepresentadaInput,
+				tabelasInput?: readonly TabelaPrecoInput[],
+			) => representadaRepository.atualizar(tenantId, id, input, tabelasInput),
 			inativar: (id: string) => representadaRepository.inativar(tenantId, id),
 			reativar: (id: string) => representadaRepository.reativar(tenantId, id),
 		}),

@@ -25,6 +25,13 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 - **Definição Atual:** O input de quantidade representa o número de volumes/unidades vendidas diretamente (ex.: se a embalagem é caixa com 6 e o representante digita 7, entende-se 7 caixas de 6). Travas restritivas de divisão de lote não são necessárias.
 - **Implementação Futura:** Exibição opcional do totalizador de peças avulsas (`quantidade * multiplo_embalagem`) no espelho/PDF apenas para conferência logística.
 
+### 1.4. Reajuste em Massa e Importação de Tabelas de Preço (CSV / Planilha)
+- **Contexto:** Atualização percentual em lote ou importação de planilha da fábrica para popular centenas de SKUs de uma vez.
+- **Definição Atual:** As tabelas de preço são gerenciadas dentro do cadastro da representada (nascendo com uma *Tabela Padrão* automática) e os preços por tabela são preenchidos no cadastro do produto.
+- **Implementação Futura:**
+  - Ferramenta de clonagem de tabela com reajuste percentual em lote.
+  - Importação de preços via arquivo CSV/XLSX enviado pela representada.
+
 ---
 
 ## 2. Pós-Venda, Conciliação e CRM Avançado (Fases Posteriores)

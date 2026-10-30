@@ -3,6 +3,8 @@ import { TenantProvider } from "./config/tenant/TenantContext";
 import { useTenant } from "./config/tenant/useTenant";
 import { ClienteFormView } from "./modules/clientes/components/cliente-form-view";
 import { ClientesListView } from "./modules/clientes/components/clientes-list-view";
+import { OrcamentoFormView } from "./modules/pedidos/components/orcamento-form-view";
+import { PedidosListView } from "./modules/pedidos/components/pedidos-list-view";
 import { CatalogoView } from "./modules/produtos/components/catalogo-view";
 import { ProdutoFormView } from "./modules/produtos/components/produto-form-view";
 import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
@@ -17,6 +19,9 @@ function AppRoutes() {
 		<AppShell>
 			<Routes>
 				<Route path="/" element={<Navigate to="/catalogo" replace />} />
+				<Route path="/pedidos" element={<PedidosListView />} />
+				<Route path="/pedidos/novo" element={<OrcamentoFormView />} />
+				<Route path="/pedidos/:id" element={<OrcamentoFormView />} />
 				<Route
 					path="/catalogo"
 					element={<CatalogoView tenantId={config.id} />}

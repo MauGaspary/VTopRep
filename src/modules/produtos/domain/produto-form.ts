@@ -1,9 +1,20 @@
+import { z } from "zod";
+import {
+	formatarInteiroComoDecimalBr,
+	parseDecimalBrParaInteiro,
+} from "../../../shared/domain/decimal-br";
 import { mapearIssues } from "../../../shared/domain/formulario";
+import {
+	type ItemPreco,
+	PrecoProdutoInputSchema,
+	type PrecoProdutoInputValidado,
+} from "./item-preco.schema";
 import {
 	type Produto,
 	type ProdutoInput,
 	ProdutoInputSchema,
 } from "./produto.schema";
+import type { TabelaPreco } from "./tabela-preco.schema";
 
 /** Valores crus do formulário (sempre texto, como vêm dos inputs). */
 export interface ProdutoFormValues {
@@ -93,5 +104,117 @@ export function validarFormularioProduto(
 		(caminho) => (isCampoProdutoForm(caminho[0]) ? caminho[0] : undefined),
 		errosConversao,
 	);
+	return { success: false, erros, geral };
+}
+
+/** Linha de preço do produto por tabela da representada no formulário. */
+export interface PrecoTabelaFormValues {
+	tabela_id: string;
+	nome_tabela: string;
+	vigencia_inicio: string;
+	vigencia_fim: string | null;
+	preco_base: string;
+	desconto_maximo: string;
+}
+
+export type CampoPrecoTabelaForm = "preco_base" | "desconto_maximo";
+export type PrecosProdutoFormErros = Partial<Record<string, string>>;
+
+export type ResultadoPrecosProdutoForm =
+	| { success: true; data: PrecoProdutoInputValidado[] }
+	| { success: false; erros: PrecosProdutoFormErros; geral: string | null };
+
+export function chaveErroPrecoTabela(
+	tabelaId: string,
+	campo: CampoPrecoTabelaForm,
+): string {
+	return `precos.${tabelaId}.${campo}`;
+}
+
+export function valoresIniciaisPrecosProdutoForm(
+	tabelas: readonly TabelaPreco[],
+	itensPorTabela: ReadonlyMap<string, ItemPreco>,
+): PrecoTabelaFormValues[] {
+	return tabelas.map((tabela) => {
+		const item = itensPorTabela.get(tabela.id);
+		return {
+			tabela_id: tabela.id,
+			nome_tabela: tabela.nome_tabela,
+			vigencia_inicio: tabela.vigencia_inicio,
+			vigencia_fim: tabela.vigencia_fim ?? null,
+			preco_base: item
+				? formatarInteiroComoDecimalBr(item.preco_base_centavos)
+				: "",
+			desconto_maximo: item
+				? formatarInteiroComoDecimalBr(item.desconto_maximo_permitido)
+				: "",
+		};
+	});
+}
+
+const ListaPrecosInputSchema = z.array(PrecoProdutoInputSchema);
+
+export function validarPrecosProdutoForm(
+	valores: readonly PrecoTabelaFormValues[],
+): ResultadoPrecosProdutoForm {
+	const errosConversao: PrecosProdutoFormErros = {};
+
+	const convertidos = valores.map((linha) => {
+		const precoTexto = linha.preco_base.trim();
+		let precoCentavos: number | null = null;
+		if (precoTexto !== "") {
+			const parsed = parseDecimalBrParaInteiro(precoTexto);
+			if (parsed === null) {
+				errosConversao[chaveErroPrecoTabela(linha.tabela_id, "preco_base")] =
+					"Informe um preço válido (ex: 25,90)";
+			} else {
+				precoCentavos = parsed;
+			}
+		}
+
+		const descontoTexto = linha.desconto_maximo.trim();
+		let descontoCentesimos = 0;
+		if (descontoTexto !== "") {
+			const parsed = parseDecimalBrParaInteiro(descontoTexto);
+			if (parsed === null) {
+				errosConversao[
+					chaveErroPrecoTabela(linha.tabela_id, "desconto_maximo")
+				] = "Informe um percentual válido (ex: 5,00)";
+			} else {
+				descontoCentesimos = parsed;
+			}
+		}
+
+		return {
+			tabela_id: linha.tabela_id,
+			preco_base_centavos: precoCentavos,
+			desconto_maximo_permitido: descontoCentesimos,
+		};
+	});
+
+	const resultado = ListaPrecosInputSchema.safeParse(convertidos);
+
+	if (resultado.success && Object.keys(errosConversao).length === 0) {
+		return { success: true, data: resultado.data };
+	}
+
+	const { erros, geral } = mapearIssues(
+		resultado.success ? [] : resultado.error.issues,
+		(caminho) => {
+			const [indice, campo] = caminho;
+			if (typeof indice !== "number") return undefined;
+			const tabelaId = valores[indice]?.tabela_id;
+			if (!tabelaId) return undefined;
+			if (campo === "preco_base_centavos") {
+				return chaveErroPrecoTabela(tabelaId, "preco_base");
+			}
+			if (campo === "desconto_maximo_permitido") {
+				return chaveErroPrecoTabela(tabelaId, "desconto_maximo");
+			}
+			return undefined;
+		},
+		errosConversao,
+	);
+
 	return { success: false, erros, geral };
 }

@@ -113,6 +113,17 @@ export function ClientesListView() {
 								</div>
 
 								<div className="flex justify-end gap-2 border-t border-border pt-3">
+									{!isInativo && (
+										<Link
+											to={`/pedidos/novo?clienteId=${c.id}`}
+											className={buttonClassName({
+												variant: "primary",
+												size: "sm",
+											})}
+										>
+											Novo orçamento
+										</Link>
+									)}
 									{isInativo ? (
 										<Button
 											variant="secondary"

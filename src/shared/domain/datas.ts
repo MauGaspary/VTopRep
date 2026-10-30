@@ -28,3 +28,9 @@ export function dataLocal(instante: Date): string {
 	const dia = String(instante.getDate()).padStart(2, "0");
 	return `${ano}-${mes}-${dia}`;
 }
+
+/** Formata uma data de calendário `AAAA-MM-DD` como `DD/MM/AAAA` (sem fuso). */
+export function formatarDataBr(data: string): string {
+	const [ano, mes, dia] = DataSchema.parse(data).split("-");
+	return `${dia}/${mes}/${ano}`;
+}

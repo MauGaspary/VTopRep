@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
+import type { PrecoProdutoInput } from "../domain/item-preco.schema";
+import { sincronizarPrecosProduto } from "../domain/preco";
 import {
 	atualizarProduto,
 	correspondeBuscaProduto,
@@ -105,18 +107,28 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 		return candidatos.find((p) => p.deleted_at === null) ?? null;
 	}
 
-	async criar(tenantId: string, input: ProdutoInput): Promise<Produto> {
+	async criar(
+		tenantId: string,
+		input: ProdutoInput,
+		precosInput?: readonly PrecoProdutoInput[],
+	): Promise<Produto> {
 		const tenant = TenantIdSchema.parse(tenantId);
+		const instante = this.agora();
 		const novoProduto = criarProduto({
 			tenantId: tenant,
 			input,
 			id: this.gerarId(),
-			agora: this.agora(),
+			agora: instante,
 		});
 
 		await this.db.transaction(
 			"rw",
-			[this.db.produtos, this.db.representadas],
+			[
+				this.db.produtos,
+				this.db.representadas,
+				this.db.tabelas_preco,
+				this.db.itens_preco,
+			],
 			async () => {
 				await this.garantirRepresentadaValida(
 					tenant,
@@ -126,6 +138,15 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 					oferecerReativacao: true,
 				});
 				await this.db.produtos.add(novoProduto);
+
+				if (precosInput && precosInput.length > 0) {
+					await this.sincronizarPrecos(
+						tenant,
+						novoProduto,
+						precosInput,
+						instante,
+					);
+				}
 			},
 		);
 
@@ -136,32 +157,35 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 		tenantId: string,
 		id: string,
 		input: ProdutoInput,
+		precosInput?: readonly PrecoProdutoInput[],
 	): Promise<Produto> {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const produtoId = IdSchema.parse(id);
 
 		return this.db.transaction(
 			"rw",
-			[this.db.produtos, this.db.representadas],
+			[
+				this.db.produtos,
+				this.db.representadas,
+				this.db.tabelas_preco,
+				this.db.itens_preco,
+			],
 			async () => {
 				const existente = await this.obterPorId(tenant, produtoId, true);
 				if (!existente) {
 					throw new ProdutoNaoEncontradoError(produtoId);
 				}
 
-				const atualizado = atualizarProduto(
-					existente,
-					tenant,
-					input,
-					this.agora(),
-				);
+				const instante = this.agora();
+				const atualizado = atualizarProduto(existente, tenant, input, instante);
 				await this.garantirRepresentadaValida(
 					tenant,
 					atualizado.representada_id,
 				);
-				const chaveAlterada =
-					atualizado.sku !== existente.sku ||
+				const representadaAlterada =
 					atualizado.representada_id !== existente.representada_id;
+				const chaveAlterada =
+					atualizado.sku !== existente.sku || representadaAlterada;
 				if (chaveAlterada) {
 					await this.garantirSkuUnico(tenant, atualizado, {
 						oferecerReativacao: true,
@@ -169,6 +193,16 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 				}
 
 				await this.db.produtos.put(atualizado);
+
+				if (precosInput !== undefined || representadaAlterada) {
+					await this.sincronizarPrecos(
+						tenant,
+						atualizado,
+						precosInput ?? [],
+						instante,
+					);
+				}
+
 				return atualizado;
 			},
 		);
@@ -296,6 +330,38 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 		}
 		if (conflito?.tipo === "inativo" && oferecerReativacao) {
 			throw new ProdutoInativoExistenteError(conflito.registro);
+		}
+	}
+
+	private async sincronizarPrecos(
+		tenantId: string,
+		produto: Produto,
+		inputs: readonly PrecoProdutoInput[],
+		agora: string,
+	): Promise<void> {
+		const [tabelasDaRepresentada, existentes] = await Promise.all([
+			this.db.tabelas_preco
+				.where("[tenant_id+representada_id]")
+				.equals([tenantId, produto.representada_id])
+				.toArray(),
+			this.db.itens_preco
+				.where("[tenant_id+produto_id]")
+				.equals([tenantId, produto.id])
+				.toArray(),
+		]);
+
+		const { gravar } = sincronizarPrecosProduto({
+			tenantId,
+			produto,
+			tabelasDaRepresentada,
+			existentes,
+			inputs,
+			agora,
+			gerarId: this.gerarId,
+		});
+
+		if (gravar.length > 0) {
+			await this.db.itens_preco.bulkPut(gravar);
 		}
 	}
 }

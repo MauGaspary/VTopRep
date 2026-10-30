@@ -1,3 +1,4 @@
+import type { TabelaPrecoInput } from "../../produtos/domain/tabela-preco.schema";
 import type {
 	Representada,
 	RepresentadaInput,
@@ -14,11 +15,24 @@ export interface RepresentadaRepository {
 		id: string,
 		permitirInativo?: boolean,
 	): Promise<Representada | undefined>;
-	criar(tenantId: string, input: RepresentadaInput): Promise<Representada>;
+	/**
+	 * Cria a representada e suas tabelas de preço em transação única.
+	 * Se `tabelasInput` for omitido ou vazio, cria automaticamente uma "Tabela Padrão" vigente.
+	 */
+	criar(
+		tenantId: string,
+		input: RepresentadaInput,
+		tabelasInput?: readonly TabelaPrecoInput[],
+	): Promise<Representada>;
+	/**
+	 * Atualiza a representada e, se `tabelasInput` for informado, reconcilia
+	 * suas tabelas de preço na mesma transação.
+	 */
 	atualizar(
 		tenantId: string,
 		id: string,
 		input: RepresentadaInput,
+		tabelasInput?: readonly TabelaPrecoInput[],
 	): Promise<Representada>;
 	/** Inativação de negócio (marca `ativo = false`). */
 	inativar(tenantId: string, id: string): Promise<void>;

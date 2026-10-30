@@ -22,6 +22,8 @@ describe("ProdutoDexieAdapter", () => {
 	beforeEach(async () => {
 		await db.produtos.clear();
 		await db.representadas.clear();
+		await db.tabelas_preco.clear();
+		await db.itens_preco.clear();
 
 		const repValida: Representada = {
 			id: repIdValida,
@@ -380,6 +382,78 @@ describe("ProdutoDexieAdapter", () => {
 				ProdutoNaoEncontradoError,
 			);
 			expect((await db.produtos.get(criado.id))?.ativo).toBe(true);
+		});
+	});
+
+	describe("preços por tabela no criar e atualizar", () => {
+		it("salva, atualiza e remove preços do produto na mesma transação", async () => {
+			const agora = new Date().toISOString();
+			const tabelaPadraoId = "77777777-7777-4777-a777-777777777777";
+			await db.tabelas_preco.add({
+				id: tabelaPadraoId,
+				tenant_id: tenant1,
+				representada_id: repIdValida,
+				nome_tabela: "Tabela Padrão",
+				vigencia_inicio: "2026-01-01",
+				vigencia_fim: null,
+				ativo: true,
+				created_at: agora,
+				updated_at: agora,
+				deleted_at: null,
+			});
+
+			const criado = await adapter.criar(
+				tenant1,
+				{
+					representada_id: repIdValida,
+					sku: "SKU-PRECO",
+					descricao: "Produto com Preço",
+					unidade_medida: "UN",
+				},
+				[
+					{
+						tabela_id: tabelaPadraoId,
+						preco_base_centavos: 1990,
+						desconto_maximo_permitido: 500,
+					},
+				],
+			);
+
+			const itensCriados = await db.itens_preco
+				.where("[tenant_id+produto_id]")
+				.equals([tenant1, criado.id])
+				.toArray();
+			expect(itensCriados).toHaveLength(1);
+			expect(itensCriados[0]).toMatchObject({
+				tabela_id: tabelaPadraoId,
+				preco_base_centavos: 1990,
+				desconto_maximo_permitido: 500,
+				deleted_at: null,
+			});
+
+			// Atualiza o preço para null (remove com tombstone)
+			await adapter.atualizar(
+				tenant1,
+				criado.id,
+				{
+					representada_id: repIdValida,
+					sku: "SKU-PRECO",
+					descricao: "Produto com Preço",
+					unidade_medida: "UN",
+				},
+				[
+					{
+						tabela_id: tabelaPadraoId,
+						preco_base_centavos: null,
+					},
+				],
+			);
+
+			const itensAposRemocao = await db.itens_preco
+				.where("[tenant_id+produto_id]")
+				.equals([tenant1, criado.id])
+				.toArray();
+			expect(itensAposRemocao[0]?.deleted_at).not.toBeNull();
 		});
 	});
 });
