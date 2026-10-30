@@ -9,10 +9,12 @@ import {
 	Button,
 	buttonClassName,
 	cardClassName,
+	ESTILOS_COR_REPRESENTADA,
 	FormField,
 	InactiveRecoveryCard,
 	Input,
 	PageHeader,
+	RepresentadaBadge,
 	Select,
 } from "../../../shared/components/ui";
 import { dataLocal } from "../../../shared/domain/datas";
@@ -22,9 +24,15 @@ import type { TabelaPreco } from "../../produtos/domain/tabela-preco.schema";
 import { useTabelasDaRepresentada } from "../../produtos/hooks/use-precos";
 import {
 	CnpjDuplicadoError,
+	obterCorRepresentada,
 	RepresentadaInativaExistenteError,
+	ROTULOS_COR_REPRESENTADA,
 } from "../domain/representada";
-import type { Representada } from "../domain/representada.schema";
+import {
+	CORES_REPRESENTADA,
+	type CorRepresentada,
+	type Representada,
+} from "../domain/representada.schema";
 import {
 	type CampoTabelaPrecoForm,
 	chaveErroTabelaPreco,
@@ -317,6 +325,63 @@ function RepresentadaForm({
 								</option>
 							))}
 						</Select>
+					</FormField>
+
+					<FormField
+						id="cor_representada"
+						label="Cor identificadora no catálogo"
+						error={erros.cor}
+						help="Facilita diferenciar visualmente a fábrica no catálogo e nos pedidos."
+					>
+						<div className="flex flex-wrap items-center justify-between gap-3 pt-0.5">
+							<div
+								role="radiogroup"
+								aria-label="Cor identificadora da representada"
+								className="flex flex-wrap items-center gap-2"
+							>
+								<button
+									type="button"
+									onClick={() => alterar("cor", "")}
+									aria-pressed={!valores.cor}
+									className={`inline-flex h-7 items-center rounded-md border px-2 text-xs font-medium transition-colors ${
+										!valores.cor
+											? "border-primary bg-primary/10 text-foreground"
+											: "border-border bg-secondary text-muted-foreground hover:text-foreground"
+									}`}
+								>
+									Automática
+								</button>
+								{CORES_REPRESENTADA.map((corOpcao: CorRepresentada) => {
+									const selecionada = valores.cor === corOpcao;
+									const estilo = ESTILOS_COR_REPRESENTADA[corOpcao];
+									return (
+										<button
+											key={corOpcao}
+											type="button"
+											title={ROTULOS_COR_REPRESENTADA[corOpcao]}
+											aria-label={`Cor ${ROTULOS_COR_REPRESENTADA[corOpcao]}`}
+											aria-pressed={selecionada}
+											onClick={() => alterar("cor", corOpcao)}
+											className={`inline-flex size-7 items-center justify-center rounded-md border transition-transform ${
+												selecionada
+													? "scale-105 border-foreground bg-muted ring-2 ring-ring/40"
+													: "border-border bg-card hover:bg-muted"
+											}`}
+										>
+											<span className={`size-3.5 rounded-full ${estilo.dot}`} />
+										</button>
+									);
+								})}
+							</div>
+
+							<RepresentadaBadge
+								nome={valores.nome_fantasia.trim() || "Prévia da fábrica"}
+								cor={obterCorRepresentada({
+									id: representada?.id ?? (valores.nome_fantasia || "nova"),
+									cor: CORES_REPRESENTADA.find((c) => c === valores.cor),
+								})}
+							/>
+						</div>
 					</FormField>
 				</div>
 

@@ -94,6 +94,20 @@ describe("validarFormularioRepresentada", () => {
 			expect(resultado.erros.cnpj).toBe("CNPJ inválido");
 		}
 	});
+
+	it("preserva cor escolhida no formulário e ignora cor vazia (automática)", () => {
+		const comCor = validarFormularioRepresentada(formValido({ cor: "violet" }));
+		expect(comCor.success).toBe(true);
+		if (comCor.success) {
+			expect(comCor.data.cor).toBe("violet");
+		}
+
+		const automatica = validarFormularioRepresentada(formValido({ cor: "  " }));
+		expect(automatica.success).toBe(true);
+		if (automatica.success) {
+			expect(automatica.data.cor).toBeUndefined();
+		}
+	});
 });
 
 describe("valoresIniciaisFormulario", () => {

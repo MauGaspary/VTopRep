@@ -6,11 +6,41 @@ import {
 	detectarConflito,
 } from "../../../shared/domain/unicidade";
 import {
+	CORES_REPRESENTADA,
+	type CorRepresentada,
 	type Representada,
 	type RepresentadaInput,
 	RepresentadaInputSchema,
 	RepresentadaSchema,
 } from "./representada.schema";
+
+export const ROTULOS_COR_REPRESENTADA: Record<CorRepresentada, string> = {
+	indigo: "Índigo",
+	emerald: "Esmeralda",
+	amber: "Âmbar",
+	rose: "Rosa",
+	cyan: "Ciano",
+	violet: "Violeta",
+	blue: "Azul",
+	orange: "Laranja",
+};
+
+/**
+ * Retorna a cor configurada na representada ou deriva uma cor determinística
+ * a partir do ID quando não informada.
+ */
+export function obterCorRepresentada(
+	representada: Pick<Representada, "id" | "cor">,
+): CorRepresentada {
+	if (representada.cor) {
+		return representada.cor;
+	}
+	let hash = 0;
+	for (let i = 0; i < representada.id.length; i++) {
+		hash = (hash * 31 + representada.id.charCodeAt(i)) >>> 0;
+	}
+	return CORES_REPRESENTADA[hash % CORES_REPRESENTADA.length] ?? "indigo";
+}
 
 export class RepresentadaNaoEncontradaError extends Error {
 	constructor(id: string) {
@@ -73,8 +103,9 @@ export function atualizarRepresentada(
 ): Representada {
 	garantirMesmoTenant(existente, tenantId);
 	const dados = RepresentadaInputSchema.parse(input);
+	const { cor: _corAnterior, ...restoExistente } = existente;
 	return RepresentadaSchema.parse({
-		...existente,
+		...restoExistente,
 		...dados,
 		updated_at: agora,
 	});

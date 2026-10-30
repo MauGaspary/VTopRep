@@ -18,6 +18,8 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 | `ativo` × `deleted_at` (3.1) | `ativo` = estado de negócio reversível; `deleted_at` = tombstone de sincronização (some de tudo e não conta na unicidade). |
 | Hooks reativos (4.5) | Wrapper `useLiveRepositoryQuery` em `shared/hooks/`; `DevSeedButton` documentado como exceção dev-only no `AGENTS.md`. |
 | Conflito de sync (6.2) | **Confirmado:** LWW por `updated_at`, registro a registro, para edições de cadastros de campo; mestres da fábrica seguem server-wins. Registrado no PRD 3.2. |
+| Status "Liquidado" vs Comissão | **Confirmado (30/10/2026):** `pedidos.status` representa o ciclo logístico e vai até `faturado_total`; a liquidação financeira da comissão vive em `extratos_comissao.status_comissao = 'paga'` e aparece como indicador financeiro ao lado do pedido. |
+| `clientes_metricas` (Fase 4) | **Confirmado (30/10/2026):** Métricas (Ticket Médio, Ciclo de Recompra e Curva ABC) são calculadas automaticamente a partir do histórico de pedidos do cliente e a tabela de projeção/cache recebe `CamposSincronizaveisSchema`. |
 
 ---
 
@@ -166,5 +168,5 @@ Este documento consolida os pontos levantados na revisão do repositório ao fin
 - [x] 🟢 **Aviso de nomes a cada tecla:** `useHomonimosCliente` só consulta 400 ms depois que o usuário para de digitar (`useDebouncedValue`) e nunca com nomes vazios. Aviso removido de representadas.
 - [ ] 0.1, 4.4 e 6.2: itens externos listados acima.
 - [x] 🟡 **Confirmar a política de conflito (6.2):** LWW por `updated_at`, registro a registro, confirmado para cadastros de campo (PRD 3.2).
-- [ ] 🟡 **`clientes_metricas` sem campos de sincronização:** a tabela está em `ENTIDADES_SINCRONIZAVEIS`, mas não tem `created_at`/`updated_at`/`deleted_at`, o que contraria o "Soft Delete Universal" do PRD. Decidir na Fase 4: ou a métrica é calculada localmente e sai da lista de sincronizáveis, ou ganha os campos.
-- [ ] 🟢 **Status "Liquidado" do pedido:** o PRD (Fase 3) e o TODO 3.1 falam em `Faturado Total -> Liquidado`, mas `pedidos.status` não tem esse valor; a liquidação aparece em `extratos_comissao.status_comissao = 'paga'`. Decidir na Fase 3 se é status do pedido ou derivado das comissões.
+- [x] 🟡 **`clientes_metricas` sem campos de sincronização:** decidido que as métricas serão calculadas automaticamente a partir do histórico de pedidos na Fase 4 e a tabela contará com `CamposSincronizaveisSchema`.
+- [x] 🟢 **Status "Liquidado" do pedido:** decidido separar o status logístico do pedido (que encerra em `faturado_total`) do status financeiro da comissão (`extratos_comissao.status_comissao = 'paga'`). Documentado no PRD e no `TODO.md` 3.1.

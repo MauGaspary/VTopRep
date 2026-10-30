@@ -1,6 +1,6 @@
 import { Factory } from "lucide-react";
 import { type FormEvent, useMemo, useState } from "react";
-import { Link, useNavigate, useParams } from "react-router";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
 import { Page } from "../../../shared/components/layout/Page";
 import {
@@ -113,14 +113,24 @@ function ProdutoForm({
 	itensPorTabela,
 }: ProdutoFormProps) {
 	const navigate = useNavigate();
+	const [searchParams] = useSearchParams();
 	const { criar, atualizar, reativar } = useProdutoActions(tenantId);
 	const hoje = dataLocal(new Date());
 
-	const defaultRepId = representadas.length > 0 ? representadas[0].id : "";
+	const paramRepId = searchParams.get("representada");
+	const defaultRepId =
+		paramRepId && representadas.some((r) => r.id === paramRepId)
+			? paramRepId
+			: representadas.length > 0
+				? representadas[0].id
+				: "";
 
 	const [valores, setValores] = useState<ProdutoFormValues>(() =>
 		valoresIniciaisProdutoForm(produto, defaultRepId),
 	);
+	const destinoCatalogo = valores.representada_id
+		? `/catalogo?representada=${valores.representada_id}`
+		: "/catalogo";
 	const [edicoesPreco, setEdicoesPreco] = useState<Record<string, EdicaoPreco>>(
 		{},
 	);
@@ -178,7 +188,7 @@ function ProdutoForm({
 		setErroGeral(null);
 		try {
 			await reativar(inativoConflitante.id);
-			navigate("/catalogo");
+			navigate(destinoCatalogo);
 		} catch (err) {
 			setErroGeral(mensagemDeErro(err, "Erro ao reativar produto"));
 		} finally {
@@ -213,7 +223,7 @@ function ProdutoForm({
 			} else {
 				await criar(validacao.data, validacaoPrecos.data);
 			}
-			navigate("/catalogo");
+			navigate(`/catalogo?representada=${validacao.data.representada_id}`);
 		} catch (err) {
 			if (err instanceof ProdutoInativoExistenteError) {
 				setInativoConflitante(err.produtoInativo);
@@ -232,7 +242,7 @@ function ProdutoForm({
 		<Page width="form">
 			<PageHeader
 				title={editando ? "Editar produto" : "Novo produto"}
-				back={{ to: "/catalogo", label: "Catálogo" }}
+				back={{ to: destinoCatalogo, label: "Catálogo" }}
 			/>
 
 			{representadas.length === 0 ? (
@@ -514,7 +524,7 @@ function ProdutoForm({
 
 					<div className="flex justify-end gap-2 border-t border-border pt-4">
 						<Link
-							to="/catalogo"
+							to={destinoCatalogo}
 							className={buttonClassName({ variant: "ghost" })}
 						>
 							Cancelar

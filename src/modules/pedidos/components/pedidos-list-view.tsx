@@ -1,4 +1,4 @@
-import { Download, FileText, Plus } from "lucide-react";
+import { Download, FileText, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
@@ -8,9 +8,9 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
-	Card,
 	EmptyState,
 	PageHeader,
+	RepresentadaBadge,
 	SearchInput,
 } from "../../../shared/components/ui";
 import { formatarDataBr } from "../../../shared/domain/datas";
@@ -19,6 +19,8 @@ import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE } from "../../../shared/domain/frete";
 import { normalizarTexto } from "../../../shared/domain/texto";
 import { useTodosClientes } from "../../clientes/hooks/use-clientes";
+import { obterCorRepresentada } from "../../representadas/domain/representada";
+import type { Representada } from "../../representadas/domain/representada.schema";
 import { useTodasRepresentadas } from "../../representadas/hooks/use-representadas";
 import {
 	type Pedido,
@@ -32,8 +34,8 @@ type FiltroStatus = "todos" | "rascunho" | "emitido";
 
 const OPCOES_FILTRO: readonly { valor: FiltroStatus; rotulo: string }[] = [
 	{ valor: "todos", rotulo: "Todos" },
-	{ valor: "rascunho", rotulo: "Orçamentos (Rascunho)" },
-	{ valor: "emitido", rotulo: "Pedidos Emitidos" },
+	{ valor: "rascunho", rotulo: "Orçamentos" },
+	{ valor: "emitido", rotulo: "Emitidos" },
 ];
 
 function varianteBadgeStatus(status: StatusPedido) {
@@ -66,12 +68,39 @@ export function PedidosListView() {
 	}, [clientes]);
 
 	const representadasPorId = useMemo(() => {
-		const mapa = new Map<string, string>();
+		const mapa = new Map<string, Representada>();
 		for (const r of representadas) {
-			mapa.set(r.id, r.nome_fantasia);
+			mapa.set(r.id, r);
 		}
 		return mapa;
 	}, [representadas]);
+
+	const metricas = useMemo(() => {
+		let rascunhosCount = 0;
+		let emitidosCount = 0;
+		let totalOrcamentosCentavos = 0;
+		let totalEmitidosCentavos = 0;
+		let comissaoEmitidosCentavos = 0;
+
+		for (const p of pedidos) {
+			if (p.status === "rascunho") {
+				rascunhosCount += 1;
+				totalOrcamentosCentavos += p.valor_total_centavos;
+			} else if (p.status !== "cancelado") {
+				emitidosCount += 1;
+				totalEmitidosCentavos += p.valor_total_centavos;
+				comissaoEmitidosCentavos += p.comissao_projetada_centavos;
+			}
+		}
+
+		return {
+			rascunhosCount,
+			emitidosCount,
+			totalOrcamentosCentavos,
+			totalEmitidosCentavos,
+			comissaoEmitidosCentavos,
+		};
+	}, [pedidos]);
 
 	const pedidosFiltrados = useMemo(() => {
 		const termo = normalizarTexto(termoBusca);
@@ -88,14 +117,16 @@ export function PedidosListView() {
 				clientesPorId.get(pedido.cliente_id) ?? "",
 			);
 			const nomeRep = normalizarTexto(
-				representadasPorId.get(pedido.representada_id) ?? "",
+				representadasPorId.get(pedido.representada_id)?.nome_fantasia ?? "",
 			);
 			const condicao = normalizarTexto(pedido.condicao_pagamento);
+			const codigo = normalizarTexto(pedido.id.slice(0, 8));
 
 			return (
 				nomeCliente.includes(termo) ||
 				nomeRep.includes(termo) ||
-				condicao.includes(termo)
+				condicao.includes(termo) ||
+				codigo.includes(termo)
 			);
 		});
 	}, [pedidos, filtroStatus, termoBusca, clientesPorId, representadasPorId]);
@@ -138,7 +169,7 @@ export function PedidosListView() {
 		<Page>
 			<PageHeader
 				title="Orçamentos e Pedidos"
-				description="Elabore orçamentos ágeis em campo e acompanhe os pedidos emitidos."
+				description="Elabore orçamentos ágeis em campo, gere espelhos em PDF e acompanhe pedidos emitidos."
 				action={
 					<Link to="/pedidos/novo" className={buttonClassName()}>
 						<Plus aria-hidden="true" />
@@ -147,27 +178,76 @@ export function PedidosListView() {
 				}
 			/>
 
-			<div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-				<div className="flex flex-wrap gap-1.5">
+			{/* Resumo executivo estilo Linear */}
+			{!isLoading && pedidos.length > 0 && (
+				<div className="grid grid-cols-1 gap-2.5 sm:grid-cols-3">
+					<div className="flex flex-col gap-0.5 rounded-xl border border-border bg-card px-4 py-3">
+						<span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+							Orçamentos em aberto ({metricas.rascunhosCount})
+						</span>
+						<span className="font-mono text-lg font-semibold text-foreground tabular-nums">
+							{formatarCentavos(metricas.totalOrcamentosCentavos)}
+						</span>
+					</div>
+					<div className="flex flex-col gap-0.5 rounded-xl border border-border bg-card px-4 py-3">
+						<span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+							Pedidos fechados ({metricas.emitidosCount})
+						</span>
+						<span className="font-mono text-lg font-semibold text-foreground tabular-nums">
+							{formatarCentavos(metricas.totalEmitidosCentavos)}
+						</span>
+					</div>
+					<div className="flex flex-col gap-0.5 rounded-xl border border-border bg-card px-4 py-3">
+						<span className="text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+							Comissão projetada (fechados)
+						</span>
+						<span className="font-mono text-lg font-semibold text-success tabular-nums">
+							{formatarCentavos(metricas.comissaoEmitidosCentavos)}
+						</span>
+					</div>
+				</div>
+			)}
+
+			<div className="flex flex-col gap-2.5 sm:flex-row sm:items-center sm:justify-between">
+				<div
+					role="tablist"
+					aria-label="Filtrar pedidos por status"
+					className="inline-flex w-fit items-center gap-1 rounded-lg border border-border bg-muted/60 p-1"
+				>
 					{OPCOES_FILTRO.map((opcao) => {
 						const ativo = filtroStatus === opcao.valor;
+						const contagem =
+							opcao.valor === "todos"
+								? pedidos.length
+								: opcao.valor === "rascunho"
+									? metricas.rascunhosCount
+									: metricas.emitidosCount;
 						return (
-							<Button
+							<button
 								key={opcao.valor}
-								size="sm"
-								variant={ativo ? "primary" : "secondary"}
-								aria-pressed={ativo}
+								type="button"
+								role="tab"
+								aria-selected={ativo}
 								onClick={() => setFiltroStatus(opcao.valor)}
+								className={`inline-flex h-7 cursor-pointer items-center gap-1.5 rounded-md px-2.5 text-xs font-medium transition-colors ${
+									ativo
+										? "bg-card text-foreground shadow-2xs"
+										: "text-muted-foreground hover:text-foreground"
+								}`}
 							>
-								{opcao.rotulo}
-							</Button>
+								<span>{opcao.rotulo}</span>
+								<span className="font-mono text-[11px] text-subtle-foreground tabular-nums">
+									{contagem}
+								</span>
+							</button>
 						);
 					})}
 				</div>
+
 				<div className="w-full sm:max-w-xs">
 					<SearchInput
 						id="busca-pedidos"
-						placeholder="Cliente, representada ou condição..."
+						placeholder="Buscar por cliente, fábrica, #código..."
 						value={termoBusca}
 						onChange={setTermoBusca}
 					/>
@@ -201,101 +281,151 @@ export function PedidosListView() {
 			)}
 
 			{!isLoading && pedidosFiltrados.length > 0 && (
-				<ul className="grid grid-cols-1 gap-3 md:grid-cols-2">
-					{pedidosFiltrados.map((pedido) => {
-						const nomeCliente =
-							clientesPorId.get(pedido.cliente_id) ?? "Cliente não encontrado";
-						const nomeRep =
-							representadasPorId.get(pedido.representada_id) ??
-							"Representada não encontrada";
-						const dataCurta = pedido.data_emissao.slice(0, 10);
-						const rascunho = pedido.status === "rascunho";
+				<section
+					aria-label="Lista de orçamentos e pedidos"
+					className="dense-table-region rounded-xl border border-border bg-card"
+				>
+					<table className="text-left text-sm">
+						<thead>
+							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+								<th className="w-28 px-3.5 py-2.5">Código / Data</th>
+								<th className="px-3 py-2.5">Cliente</th>
+								<th className="hidden px-3 py-2.5 md:table-cell">
+									Representada
+								</th>
+								<th className="hidden px-3 py-2.5 lg:table-cell">Condição</th>
+								<th className="px-3 py-2.5">Status</th>
+								<th className="px-3 py-2.5 text-right">Valor Total</th>
+								<th className="px-3.5 py-2.5 text-right">Ações</th>
+							</tr>
+						</thead>
+						<tbody className="divide-y divide-border">
+							{pedidosFiltrados.map((pedido) => {
+								const nomeCliente =
+									clientesPorId.get(pedido.cliente_id) ??
+									"Cliente não encontrado";
+								const rep = representadasPorId.get(pedido.representada_id);
+								const nomeRep =
+									rep?.nome_fantasia ?? "Representada não encontrada";
+								const corRep = rep
+									? obterCorRepresentada(rep)
+									: ("indigo" as const);
+								const dataCurta = pedido.data_emissao.slice(0, 10);
+								const codigoCurto = `#${pedido.id.slice(0, 8).toUpperCase()}`;
+								const rascunho = pedido.status === "rascunho";
 
-						return (
-							<Card
-								as="li"
-								key={pedido.id}
-								className="flex flex-col justify-between gap-3 p-4"
-							>
-								<div className="flex flex-col gap-2">
-									<div className="flex items-start justify-between gap-2">
-										<div className="flex flex-col">
-											<h2 className="text-[15px] leading-tight font-medium text-foreground">
-												{nomeCliente}
-											</h2>
-											<span className="mt-0.5 text-xs text-muted-foreground">
-												{nomeRep} · {formatarDataBr(dataCurta)}
-											</span>
-										</div>
-										<Badge variant={varianteBadgeStatus(pedido.status)}>
-											{ROTULOS_STATUS_PEDIDO[pedido.status]}
-										</Badge>
-									</div>
-
-									<dl className="grid grid-cols-2 gap-2 border-t border-border pt-2.5 text-xs sm:grid-cols-4">
-										<div className="flex flex-col">
-											<dt className="text-muted-foreground">Valor total</dt>
-											<dd className="font-semibold text-foreground tabular-nums">
-												{formatarCentavos(pedido.valor_total_centavos)}
-											</dd>
-										</div>
-										<div className="flex flex-col">
-											<dt className="text-muted-foreground">Comissão proj.</dt>
-											<dd className="font-medium text-foreground tabular-nums">
-												{formatarCentavos(pedido.comissao_projetada_centavos)}
-											</dd>
-										</div>
-										<div className="flex flex-col">
-											<dt className="text-muted-foreground">Pagamento</dt>
-											<dd className="truncate font-medium text-foreground">
-												{pedido.condicao_pagamento}
-											</dd>
-										</div>
-										<div className="flex flex-col">
-											<dt className="text-muted-foreground">Frete</dt>
-											<dd
-												className="truncate font-medium text-foreground"
-												title={ROTULOS_FRETE[pedido.tipo_frete]}
-											>
-												{pedido.tipo_frete}
-											</dd>
-										</div>
-									</dl>
-								</div>
-
-								<div className="flex flex-wrap justify-end gap-2 border-t border-border pt-3">
-									{rascunho && (
-										<Button
-											variant="destructive"
-											size="sm"
-											onClick={() => handleExcluirRascunho(pedido)}
-										>
-											Excluir rascunho
-										</Button>
-									)}
-									<Button
-										variant="secondary"
-										size="sm"
-										disabled={gerandoPdfId === pedido.id}
-										onClick={() => void handleBaixarPdf(pedido.id)}
+								return (
+									<tr
+										key={pedido.id}
+										className="group transition-colors hover:bg-muted/50"
 									>
-										<Download aria-hidden="true" />
-										{gerandoPdfId === pedido.id ? "Gerando..." : "PDF"}
-									</Button>
-									<Link
-										to={`/pedidos/${pedido.id}`}
-										className={buttonClassName({
-											variant: rascunho ? "primary" : "secondary",
-											size: "sm",
-										})}
-									>
-										{rascunho ? "Continuar orçamento" : "Ver pedido"}
-									</Link>
-								</div>
-							</Card>
-						);
-					})}
-				</ul>
+										<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
+											<div className="flex flex-col">
+												<Link
+													to={`/pedidos/${pedido.id}`}
+													className="font-mono text-xs font-medium text-foreground hover:text-primary"
+												>
+													{codigoCurto}
+												</Link>
+												<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+													{formatarDataBr(dataCurta)}
+												</span>
+											</div>
+										</td>
+
+										<td className="px-3 py-2.5 align-middle">
+											<div className="flex flex-col gap-0.5">
+												<Link
+													to={`/pedidos/${pedido.id}`}
+													className="font-medium text-foreground hover:text-primary"
+												>
+													{nomeCliente}
+												</Link>
+												<div className="md:hidden">
+													<RepresentadaBadge nome={nomeRep} cor={corRep} />
+												</div>
+											</div>
+										</td>
+
+										<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap md:table-cell">
+											<RepresentadaBadge nome={nomeRep} cor={corRep} />
+										</td>
+
+										<td className="hidden px-3 py-2.5 align-middle text-xs text-muted-foreground whitespace-nowrap lg:table-cell">
+											<div className="flex items-center gap-1.5">
+												<span className="truncate">
+													{pedido.condicao_pagamento}
+												</span>
+												<span
+													title={ROTULOS_FRETE[pedido.tipo_frete]}
+													className="rounded border border-border bg-muted/60 px-1 py-0.5 font-mono text-[10px]"
+												>
+													{pedido.tipo_frete}
+												</span>
+											</div>
+										</td>
+
+										<td className="px-3 py-2.5 align-middle whitespace-nowrap">
+											<Badge variant={varianteBadgeStatus(pedido.status)}>
+												{ROTULOS_STATUS_PEDIDO[pedido.status]}
+											</Badge>
+										</td>
+
+										<td className="px-3 py-2.5 text-right align-middle whitespace-nowrap">
+											<div className="flex flex-col items-end">
+												<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+													{formatarCentavos(pedido.valor_total_centavos)}
+												</span>
+												<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+													Com.{" "}
+													{formatarCentavos(pedido.comissao_projetada_centavos)}
+												</span>
+											</div>
+										</td>
+
+										<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
+											<div className="inline-flex items-center justify-end gap-1">
+												<Button
+													variant="ghost"
+													size="sm"
+													disabled={gerandoPdfId === pedido.id}
+													onClick={() => void handleBaixarPdf(pedido.id)}
+													title="Baixar espelho do pedido em PDF"
+												>
+													<Download aria-hidden="true" className="size-3.5" />
+													<span className="hidden sm:inline">
+														{gerandoPdfId === pedido.id ? "..." : "PDF"}
+													</span>
+												</Button>
+												<Link
+													to={`/pedidos/${pedido.id}`}
+													className={buttonClassName({
+														variant: rascunho ? "primary" : "secondary",
+														size: "sm",
+													})}
+												>
+													{rascunho ? "Continuar" : "Abrir"}
+												</Link>
+												{rascunho && (
+													<Button
+														variant="ghost"
+														size="sm"
+														onClick={() => handleExcluirRascunho(pedido)}
+														title="Excluir rascunho"
+														aria-label={`Excluir rascunho ${codigoCurto}`}
+														className="px-2 text-subtle-foreground hover:text-destructive"
+													>
+														<Trash2 aria-hidden="true" className="size-3.5" />
+													</Button>
+												)}
+											</div>
+										</td>
+									</tr>
+								);
+							})}
+						</tbody>
+					</table>
+				</section>
 			)}
 		</Page>
 	);

@@ -25,6 +25,7 @@ export interface RepresentadaFormValues {
 	percentual_comissao: string;
 	valor_pedido_minimo: string;
 	regras_frete_padrao: string;
+	cor?: string;
 }
 
 export type RepresentadaFormErros = Partial<
@@ -59,6 +60,7 @@ export function valoresIniciaisFormulario(
 			representada.valor_pedido_minimo_centavos,
 		),
 		regras_frete_padrao: representada.regras_frete_padrao,
+		...(representada.cor ? { cor: representada.cor } : {}),
 	};
 }
 
@@ -69,6 +71,7 @@ const CAMPO_POR_PATH: Record<string, keyof RepresentadaFormValues> = {
 	percentual_comissao_padrao: "percentual_comissao",
 	valor_pedido_minimo_centavos: "valor_pedido_minimo",
 	regras_frete_padrao: "regras_frete_padrao",
+	cor: "cor",
 };
 
 function campoDoCaminho(
@@ -99,6 +102,8 @@ export function validarFormularioRepresentada(
 			"Informe um valor válido (ex: 1.500,00)";
 	}
 
+	const corLimpa = valores.cor?.trim() ?? "";
+
 	const resultado = RepresentadaInputSchema.safeParse({
 		razao_social: valores.razao_social,
 		nome_fantasia: valores.nome_fantasia,
@@ -106,6 +111,7 @@ export function validarFormularioRepresentada(
 		percentual_comissao_padrao: percentual ?? 0,
 		valor_pedido_minimo_centavos: pedidoMinimo ?? 0,
 		regras_frete_padrao: valores.regras_frete_padrao,
+		...(corLimpa !== "" ? { cor: corLimpa } : {}),
 	});
 
 	if (resultado.success && Object.keys(errosConversao).length === 0) {

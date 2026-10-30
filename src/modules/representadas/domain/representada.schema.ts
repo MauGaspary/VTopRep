@@ -4,6 +4,21 @@ import { CamposSincronizaveisSchema } from "../../../shared/domain/datas";
 import { CEM_POR_CENTO_CENTESIMOS } from "../../../shared/domain/dinheiro";
 import { TipoFreteSchema } from "../../../shared/domain/frete";
 
+export const CORES_REPRESENTADA = [
+	"indigo",
+	"emerald",
+	"amber",
+	"rose",
+	"cyan",
+	"violet",
+	"blue",
+	"orange",
+] as const;
+
+export type CorRepresentada = (typeof CORES_REPRESENTADA)[number];
+
+export const CorRepresentadaSchema = z.enum(CORES_REPRESENTADA);
+
 const CnpjNormalizadoSchema = z
 	.string()
 	.regex(/^[A-Z0-9]{12}\d{2}$/, "CNPJ deve conter 14 caracteres")
@@ -29,6 +44,8 @@ export const RepresentadaSchema = z
 			.int()
 			.min(0, "Pedido mínimo não pode ser negativo"),
 		regras_frete_padrao: TipoFreteSchema,
+		/** Cor identificadora opcional no catálogo e listas. Se omitida, usa cor determinística. */
+		cor: CorRepresentadaSchema.optional(),
 		/** Estado de negócio (reversível). Inativas aparecem na lista de inativas. */
 		ativo: z.boolean(),
 	})
@@ -43,6 +60,7 @@ export const RepresentadaInputSchema = RepresentadaSchema.pick({
 	percentual_comissao_padrao: true,
 	valor_pedido_minimo_centavos: true,
 	regras_frete_padrao: true,
+	cor: true,
 }).extend({
 	cnpj: z.string().transform(normalizarCnpj).pipe(CnpjNormalizadoSchema),
 });

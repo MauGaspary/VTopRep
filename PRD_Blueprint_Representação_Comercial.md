@@ -63,9 +63,12 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `razao_social: text`
 * `nome_fantasia: text`
 * `cnpj: text`
-* `percentual_comissao_padrao: integer` (Base em centésimos de %, ex: 500 = 5,00%)
+* `percentual_comissao_padrao: integer` (Base em centésimos de %, ex: 500 = 5,00%; alíquota padrão / revenda)
+* `percentual_comissao_revenda: integer` (Centésimos de %, aplicável quando `clientes.tipo_cliente = 'REVENDA'` — Fase 2.5)
+* `percentual_comissao_fabrica: integer` (Centésimos de %, aplicável quando `clientes.tipo_cliente = 'FABRICA'` — Fase 2.5)
 * `valor_pedido_minimo_centavos: integer`
 * `regras_frete_padrao: text` (`'CIF' | 'FOB' | 'FOB_REDESPACHO'`; mesmo domínio de `pedidos.tipo_frete`)
+* `cor: text (nullable)` (`'indigo' | 'emerald' | 'amber' | 'rose' | 'cyan' | 'violet' | 'blue' | 'orange'`)
 * `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
@@ -77,6 +80,21 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `cnpj_cpf: text`
 * `razao_social: text`
 * `nome_fantasia: text (nullable)`
+* `tipo_cliente: text` (`'REVENDA' | 'FABRICA'`; padrão `'REVENDA'`, determina a alíquota de comissão na representada — Fase 2.5)
+* `transportadora_padrao_id: UUID (nullable)` (FK para `transportadoras` — Fase 2.5)
+* `ativo: boolean`
+* `created_at: timestamptz`
+* `updated_at: timestamptz`
+* `deleted_at: timestamptz (nullable)`
+
+#### `transportadoras` (Fase 2.5)
+* `id: UUID` (PK)
+* `tenant_id: UUID` (FK)
+* `nome_fantasia: text`
+* `razao_social: text (nullable)`
+* `cnpj: text (nullable)`
+* `telefone: text (nullable)`
+* `cidade_uf: text (nullable)`
 * `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
@@ -168,15 +186,17 @@ No máximo uma associação viva por `tenant_id + cliente_id + representada_id`.
 #### `pedidos`
 * `id: UUID` (PK gerada pelo cliente no Dexie via UUIDv4)
 * `tenant_id: UUID` (FK)
+* `cotacao_grupo_id: UUID (nullable)` (Agrupador quando uma cotação multi-representada gera múltiplos pedidos individuais por fábrica — Fase 2.5)
 * `cliente_id: UUID` (FK)
 * `representada_id: UUID` (FK)
 * `tabela_id: UUID` (FK)
 * `endereco_entrega_id: UUID (nullable)`
 * `contato_id: UUID (nullable)`
+* `transportadora_id: UUID (nullable)` (FK para `transportadoras` — Fase 2.5)
 * `data_emissao: timestamptz`
 * `condicao_pagamento: text`
 * `tipo_frete: text` (`'CIF' | 'FOB' | 'FOB_REDESPACHO'`; herda `representadas.regras_frete_padrao` por padrão)
-* `status: text` (`'rascunho' | 'emitido' | 'parcialmente_faturado' | 'faturado_total' | 'cancelado'`)
+* `status: text` (`'rascunho' | 'emitido' | 'parcialmente_faturado' | 'faturado_total' | 'cancelado'`; o status logístico encerra em `faturado_total`, enquanto a liquidação da comissão é controlada em `extratos_comissao.status_comissao`)
 * `valor_total_centavos: integer`
 * `comissao_projetada_centavos: integer`
 * `observacoes: text (nullable)`

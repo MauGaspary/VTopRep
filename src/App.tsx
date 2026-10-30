@@ -26,6 +26,8 @@ function AppRoutes() {
 					path="/catalogo"
 					element={<CatalogoView tenantId={config.id} />}
 				/>
+				<Route path="/catalogo/novo" element={<ProdutoFormView />} />
+				<Route path="/catalogo/:id/editar" element={<ProdutoFormView />} />
 				<Route path="/produtos" element={<Navigate to="/catalogo" replace />} />
 				<Route path="/produtos/novo" element={<ProdutoFormView />} />
 				<Route path="/produtos/:id/editar" element={<ProdutoFormView />} />

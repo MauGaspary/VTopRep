@@ -206,3 +206,33 @@
 		color: var(--color-muted-foreground);
 	}
 }
+
+.dense-table-region {
+	overflow-x: auto;
+	max-inline-size: 100%;
+	container-type: inline-size;
+}
+
+.dense-table-region table {
+	width: 100%;
+	border-collapse: separate;
+	border-spacing: 0;
+}
+
+.dense-table-region thead {
+	position: sticky;
+	inset-block-start: 0;
+	z-index: 1;
+	background-color: var(--color-muted);
+}
+
+.workspace-pane {
+	content-visibility: auto;
+	contain-intrinsic-size: auto 320px auto 600px;
+}
+
+@supports not (content-visibility: auto) {
+	.workspace-pane {
+		contain: layout style paint;
+	}
+}

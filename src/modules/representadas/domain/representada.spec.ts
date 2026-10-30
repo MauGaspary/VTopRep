@@ -6,11 +6,13 @@ import {
 	criarRepresentada,
 	detectarConflitoCnpj,
 	inativarRepresentada,
+	obterCorRepresentada,
 	ordenarRepresentadas,
 	ordenarRepresentadasComInativasNoFim,
 	reativarRepresentada,
 } from "./representada";
 import {
+	CORES_REPRESENTADA,
 	type RepresentadaInput,
 	RepresentadaInputSchema,
 } from "./representada.schema";
@@ -267,5 +269,24 @@ describe("ordenarRepresentadasComInativasNoFim", () => {
 			"Alfa Inativa",
 			"Zeta Inativa",
 		]);
+	});
+});
+
+describe("cor identificadora da representada", () => {
+	it("persiste a cor quando informada e permite limpar ao atualizar", () => {
+		const comCor = criar({ cor: "emerald" });
+		expect(comCor.cor).toBe("emerald");
+		expect(obterCorRepresentada(comCor)).toBe("emerald");
+
+		const semCor = atualizarRepresentada(comCor, TENANT, inputValido(), DEPOIS);
+		expect(semCor.cor).toBeUndefined();
+	});
+
+	it("deriva uma cor determinística válida da paleta quando não configurada", () => {
+		const r = criar();
+		const cor1 = obterCorRepresentada(r);
+		const cor2 = obterCorRepresentada(r);
+		expect(cor1).toBe(cor2);
+		expect(CORES_REPRESENTADA).toContain(cor1);
 	});
 });

@@ -70,9 +70,21 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 	const documentos = criarGeradorDocumentos();
 
 	const representadas = [
-		{ sufixo: "Indústria e Comércio Ltda", comissao: 500, minimo: 150000 },
-		{ sufixo: "S/A", comissao: 750, minimo: 300000 },
-	].map(({ sufixo, comissao, minimo }, indice) =>
+		{
+			sufixo: "Indústria e Comércio Ltda",
+			comissao: 500,
+			minimo: 150000,
+			cor: "indigo" as const,
+			frete: "CIF" as const,
+		},
+		{
+			sufixo: "S/A",
+			comissao: 750,
+			minimo: 300000,
+			cor: "emerald" as const,
+			frete: "FOB" as const,
+		},
+	].map(({ sufixo, comissao, minimo, cor, frete }) =>
 		criarRepresentada({
 			tenantId,
 			id: faker.string.uuid(),
@@ -83,7 +95,8 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 				cnpj: documentos.cnpj(),
 				percentual_comissao_padrao: comissao,
 				valor_pedido_minimo_centavos: minimo,
-				regras_frete_padrao: indice === 0 ? "CIF" : "FOB",
+				regras_frete_padrao: frete,
+				cor,
 			},
 		}),
 	);

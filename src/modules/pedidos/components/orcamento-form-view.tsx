@@ -1,4 +1,13 @@
-import { Check, Minus, Package, Plus, Trash2, Users } from "lucide-react";
+import {
+	Check,
+	ChevronDown,
+	ChevronUp,
+	Minus,
+	Package,
+	Plus,
+	Trash2,
+	Users,
+} from "lucide-react";
 import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
@@ -13,6 +22,7 @@ import {
 	FormField,
 	Input,
 	PageHeader,
+	RepresentadaBadge,
 	SearchInput,
 	Select,
 } from "../../../shared/components/ui";
@@ -35,6 +45,7 @@ import {
 	useTabelasVigentes,
 } from "../../produtos/hooks/use-precos";
 import { useTodosProdutos } from "../../produtos/hooks/use-produtos";
+import { obterCorRepresentada } from "../../representadas/domain/representada";
 import type { Representada } from "../../representadas/domain/representada.schema";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
 import {
@@ -156,10 +167,14 @@ function OrcamentoForm({
 	);
 
 	const clienteInicialId =
-		searchParams.get("clienteId") ?? clientes[0]?.id ?? "";
+		searchParams.get("clienteId") ??
+		searchParams.get("cliente") ??
+		clientes[0]?.id ??
+		"";
 	const representadaInicialId =
 		produtoPreSelecionado?.representada_id ??
 		searchParams.get("representadaId") ??
+		searchParams.get("representada") ??
 		representadas[0]?.id ??
 		"";
 	const representadaInicial = representadas.find(
@@ -182,6 +197,8 @@ function OrcamentoForm({
 		Boolean(original),
 	);
 	const [tabelaManual, setTabelaManual] = useState<boolean>(Boolean(original));
+	const [mostrarDetalhesContexto, setMostrarDetalhesContexto] =
+		useState<boolean>(Boolean(original?.pedido.observacoes));
 
 	const [buscaCatalogo, setBuscaCatalogo] = useState("");
 	const [erros, setErros] = useState<PedidoFormErros>({});
@@ -512,7 +529,7 @@ function OrcamentoForm({
 		tabelaEfetivaId === tabelaPadraoDoClienteId;
 
 	return (
-		<Page width="wide">
+		<Page width="full">
 			<PageHeader
 				title={
 					somenteLeitura
@@ -524,7 +541,7 @@ function OrcamentoForm({
 				description={
 					original
 						? `Última atualização em ${formatarDataBr(original.pedido.updated_at.slice(0, 10))}`
-						: "Seleção rápida de contexto comercial e adição ágil de itens do catálogo."
+						: "Selecione o contexto comercial no topo e monte o pedido com catálogo e sacola lado a lado."
 				}
 				back={{ to: "/pedidos", label: "Orçamentos e Pedidos" }}
 				action={
@@ -549,19 +566,17 @@ function OrcamentoForm({
 
 			{espelho && <EspelhoPedidoActionsBar espelho={espelho} />}
 
-			<form noValidate onSubmit={handleSubmit} className="flex flex-col gap-5">
-				{/* 1. Contexto de Venda */}
+			<form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
+				{/* 1. Barra Compacta de Contexto da Venda */}
 				<fieldset
 					disabled={somenteLeitura}
 					className={cardClassName({
-						className: "flex flex-col gap-4 p-4 md:p-5",
+						className: "flex flex-col gap-3.5 p-3.5 md:p-4",
 					})}
 				>
-					<legend className="px-1 text-sm font-semibold text-foreground">
-						1. Contexto da venda
-					</legend>
+					<legend className="sr-only">Contexto da venda</legend>
 
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
+					<div className="grid grid-cols-1 gap-3 md:grid-cols-2 lg:grid-cols-4">
 						<FormField
 							id="orcamento-cliente"
 							label="Cliente"
@@ -603,7 +618,7 @@ function OrcamentoForm({
 								<option value="">Selecione a representada...</option>
 								{representadas.map((r) => (
 									<option key={r.id} value={r.id}>
-										{r.nome_fantasia} (Comissão:{" "}
+										{r.nome_fantasia} (Com.{" "}
 										{formatarCentesimosPercentual(r.percentual_comissao_padrao)}
 										)
 									</option>
@@ -613,13 +628,12 @@ function OrcamentoForm({
 
 						<FormField
 							id="orcamento-tabela"
-							label="Tabela de preço"
-							error={erros.tabela_id}
-							help={
+							label={
 								usandoTabelaPadraoDoCliente
-									? "Sugerida pela tabela padrão vinculada ao cliente."
-									: "Sugerida pela vigência mais recente da representada."
+									? "Tabela de preço ★ (Padrão cliente)"
+									: "Tabela de preço"
 							}
+							error={erros.tabela_id}
 							required
 						>
 							<Select
@@ -644,115 +658,13 @@ function OrcamentoForm({
 								)}
 							</Select>
 						</FormField>
-					</div>
-
-					<div className="grid grid-cols-1 gap-4 md:grid-cols-3">
-						<FormField
-							id="orcamento-endereco"
-							label="Endereço de entrega"
-							error={erros.endereco_entrega_id}
-						>
-							<Select
-								id="orcamento-endereco"
-								name="endereco_entrega_id"
-								value={enderecoEntregaEfetivo}
-								onChange={(e) => {
-									setEnderecoManual(true);
-									setValores((atual) => ({
-										...atual,
-										endereco_entrega_id: e.target.value,
-									}));
-									limparErro("endereco_entrega_id");
-								}}
-								hasError={Boolean(erros.endereco_entrega_id)}
-							>
-								<option value="">
-									{enderecosDoCliente.length === 0
-										? "Nenhum endereço cadastrado no cliente"
-										: "Não especificado"}
-								</option>
-								{enderecosDoCliente.map((end) => (
-									<option key={end.id} value={end.id}>
-										[{end.tipo_endereco}] {end.endereco_completo}
-									</option>
-								))}
-							</Select>
-						</FormField>
 
 						<FormField
-							id="orcamento-contato"
-							label="Contato / Comprador"
-							error={erros.contato_id}
-						>
-							<Select
-								id="orcamento-contato"
-								name="contato_id"
-								value={contatoEfetivo}
-								onChange={(e) => {
-									setContatoManual(true);
-									setValores((atual) => ({
-										...atual,
-										contato_id: e.target.value,
-									}));
-									limparErro("contato_id");
-								}}
-								hasError={Boolean(erros.contato_id)}
-							>
-								<option value="">
-									{contatosDoCliente.length === 0
-										? "Nenhum contato cadastrado no cliente"
-										: "Não especificado"}
-								</option>
-								{contatosDoCliente.map((cont) => (
-									<option key={cont.id} value={cont.id}>
-										{cont.nome}
-										{cont.papel ? ` (${cont.papel})` : ""} —{" "}
-										{cont.telefone_whatsapp}
-									</option>
-								))}
-							</Select>
-						</FormField>
-
-						<FormField
-							id="orcamento-frete"
-							label="Tipo de frete"
-							error={erros.tipo_frete}
-							help={
-								representadaSelecionada
-									? `Padrão da fábrica: ${representadaSelecionada.regras_frete_padrao}`
-									: undefined
-							}
+							id="orcamento-condicao"
+							label="Condição de pagamento"
+							error={erros.condicao_pagamento}
 							required
 						>
-							<Select
-								id="orcamento-frete"
-								name="tipo_frete"
-								value={valores.tipo_frete}
-								onChange={(e) => {
-									setValores((atual) => ({
-										...atual,
-										tipo_frete: e.target.value,
-									}));
-									limparErro("tipo_frete");
-								}}
-								hasError={Boolean(erros.tipo_frete)}
-							>
-								{TIPOS_FRETE.map((frete) => (
-									<option key={frete} value={frete}>
-										{ROTULOS_FRETE[frete]}
-									</option>
-								))}
-							</Select>
-						</FormField>
-					</div>
-
-					<FormField
-						id="orcamento-condicao"
-						label="Condição de pagamento"
-						error={erros.condicao_pagamento}
-						required
-					>
-						<div className="flex flex-col gap-2">
 							<Input
 								id="orcamento-condicao"
 								name="condicao_pagamento"
@@ -764,12 +676,21 @@ function OrcamentoForm({
 									}));
 									limparErro("condicao_pagamento");
 								}}
-								placeholder="Ex: 30/60/90 dias, À vista, 28 DDL..."
+								placeholder="Ex: 30/60/90 dias, À vista..."
 								autoComplete="off"
 								hasError={Boolean(erros.condicao_pagamento)}
 							/>
+						</FormField>
+					</div>
+
+					{/* Atalhos de Condição de Pagamento + Botão para expandir logística/observações */}
+					<div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
+						<div className="flex flex-wrap items-center gap-1">
 							{!somenteLeitura && (
-								<div className="flex flex-wrap gap-1.5">
+								<>
+									<span className="mr-1 text-[11px] text-muted-foreground">
+										Pagamento rápido:
+									</span>
 									{CONDICOES_PAGAMENTO_PADRAO.map((condicao) => {
 										const selecionada = valores.condicao_pagamento === condicao;
 										return (
@@ -792,406 +713,572 @@ function OrcamentoForm({
 											</button>
 										);
 									})}
-								</div>
+								</>
 							)}
 						</div>
-					</FormField>
+
+						<div className="flex items-center gap-2">
+							<span className="hidden text-xs text-muted-foreground sm:inline">
+								Frete:{" "}
+								<strong className="font-mono text-foreground">
+									{valores.tipo_frete}
+								</strong>
+							</span>
+							<button
+								type="button"
+								onClick={() => setMostrarDetalhesContexto((v) => !v)}
+								className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted"
+							>
+								{mostrarDetalhesContexto ? (
+									<>
+										<ChevronUp aria-hidden="true" className="size-3.5" />
+										Ocultar entrega, comprador e obs.
+									</>
+								) : (
+									<>
+										<ChevronDown aria-hidden="true" className="size-3.5" />
+										Entrega, comprador, frete e obs.
+									</>
+								)}
+							</button>
+						</div>
+					</div>
+
+					{mostrarDetalhesContexto && (
+						<div className="grid grid-cols-1 gap-3 border-t border-border pt-3 md:grid-cols-2 lg:grid-cols-4">
+							<FormField
+								id="orcamento-endereco"
+								label="Endereço de entrega"
+								error={erros.endereco_entrega_id}
+							>
+								<Select
+									id="orcamento-endereco"
+									name="endereco_entrega_id"
+									value={enderecoEntregaEfetivo}
+									onChange={(e) => {
+										setEnderecoManual(true);
+										setValores((atual) => ({
+											...atual,
+											endereco_entrega_id: e.target.value,
+										}));
+										limparErro("endereco_entrega_id");
+									}}
+									hasError={Boolean(erros.endereco_entrega_id)}
+								>
+									<option value="">
+										{enderecosDoCliente.length === 0
+											? "Nenhum endereço no cliente"
+											: "Não especificado"}
+									</option>
+									{enderecosDoCliente.map((end) => (
+										<option key={end.id} value={end.id}>
+											[{end.tipo_endereco}] {end.endereco_completo}
+										</option>
+									))}
+								</Select>
+							</FormField>
+
+							<FormField
+								id="orcamento-contato"
+								label="Contato / Comprador"
+								error={erros.contato_id}
+							>
+								<Select
+									id="orcamento-contato"
+									name="contato_id"
+									value={contatoEfetivo}
+									onChange={(e) => {
+										setContatoManual(true);
+										setValores((atual) => ({
+											...atual,
+											contato_id: e.target.value,
+										}));
+										limparErro("contato_id");
+									}}
+									hasError={Boolean(erros.contato_id)}
+								>
+									<option value="">
+										{contatosDoCliente.length === 0
+											? "Nenhum contato no cliente"
+											: "Não especificado"}
+									</option>
+									{contatosDoCliente.map((cont) => (
+										<option key={cont.id} value={cont.id}>
+											{cont.nome}
+											{cont.papel ? ` (${cont.papel})` : ""} —{" "}
+											{cont.telefone_whatsapp}
+										</option>
+									))}
+								</Select>
+							</FormField>
+
+							<FormField
+								id="orcamento-frete"
+								label="Tipo de frete"
+								error={erros.tipo_frete}
+								required
+							>
+								<Select
+									id="orcamento-frete"
+									name="tipo_frete"
+									value={valores.tipo_frete}
+									onChange={(e) => {
+										setValores((atual) => ({
+											...atual,
+											tipo_frete: e.target.value,
+										}));
+										limparErro("tipo_frete");
+									}}
+									hasError={Boolean(erros.tipo_frete)}
+								>
+									{TIPOS_FRETE.map((frete) => (
+										<option key={frete} value={frete}>
+											{ROTULOS_FRETE[frete]}
+										</option>
+									))}
+								</Select>
+							</FormField>
+
+							<FormField
+								id="orcamento-observacoes"
+								label="Observações (opcional)"
+								error={erros.observacoes}
+							>
+								<Input
+									id="orcamento-observacoes"
+									name="observacoes"
+									disabled={somenteLeitura}
+									value={valores.observacoes}
+									onChange={(e) =>
+										setValores((atual) => ({
+											...atual,
+											observacoes: e.target.value,
+										}))
+									}
+									placeholder="Horário de entrega, faturamento..."
+								/>
+							</FormField>
+						</div>
+					)}
 				</fieldset>
 
 				{avisoTabela && <Alert>{avisoTabela}</Alert>}
 
-				{/* 2. Adição Rápida do Catálogo */}
-				{!somenteLeitura && (
-					<div
-						className={cardClassName({
-							className: "flex flex-col gap-3 p-4 md:p-5",
-						})}
-					>
-						<div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
-							<div>
-								<h2 className="text-sm font-semibold text-foreground">
-									2. Adicionar itens do catálogo
-								</h2>
-								<p className="text-xs text-muted-foreground">
-									Clique em adicionar para incluir no orçamento ou somar +1 na
-									quantidade.
-								</p>
-							</div>
-							<div className="w-full sm:max-w-xs">
+				{/* 2. Workspace Split-View: Catálogo da Representada (Esquerda) + Sacola e Fechamento (Direita) */}
+				<div
+					className={`grid grid-cols-1 gap-4 ${
+						somenteLeitura ? "" : "lg:grid-cols-12 lg:items-start"
+					}`}
+				>
+					{/* Coluna Esquerda: Catálogo Rápido da Representada */}
+					{!somenteLeitura && (
+						<div
+							className={cardClassName({
+								className:
+									"workspace-pane flex flex-col overflow-hidden lg:col-span-5",
+							})}
+						>
+							<div className="flex flex-col gap-2.5 border-b border-border bg-muted/30 p-3.5">
+								<div className="flex items-center justify-between gap-2">
+									<div className="flex items-center gap-2">
+										<h2 className="text-sm font-semibold text-foreground">
+											Catálogo da fábrica
+										</h2>
+										{representadaSelecionada && (
+											<RepresentadaBadge
+												nome={representadaSelecionada.nome_fantasia}
+												cor={obterCorRepresentada(representadaSelecionada)}
+											/>
+										)}
+									</div>
+									<span className="font-mono text-xs text-muted-foreground tabular-nums">
+										{produtosCatalogoRepresentada.length} SKUs
+									</span>
+								</div>
+
 								<SearchInput
 									id="busca-catalogo-orcamento"
-									placeholder="Filtrar SKU ou descrição..."
+									placeholder="Buscar por SKU ou descrição para incluir..."
 									value={buscaCatalogo}
 									onChange={setBuscaCatalogo}
 								/>
 							</div>
-						</div>
 
-						{!valores.representada_id && (
-							<p className="py-4 text-center text-xs text-muted-foreground">
-								Selecione uma representada para exibir o catálogo de produtos.
-							</p>
-						)}
-
-						{valores.representada_id && carregandoPrecos && (
-							<p className="py-4 text-center text-xs text-muted-foreground">
-								Carregando preços da tabela selecionada...
-							</p>
-						)}
-
-						{valores.representada_id &&
-							!carregandoPrecos &&
-							produtosCatalogoRepresentada.length === 0 && (
-								<EmptyState
-									icon={Package}
-									title="Nenhum produto ativo encontrado para esta representada."
-								/>
+							{!valores.representada_id && (
+								<p className="p-6 text-center text-xs text-muted-foreground">
+									Selecione uma representada acima para carregar os produtos.
+								</p>
 							)}
 
-						{valores.representada_id &&
-							!carregandoPrecos &&
-							produtosCatalogoRepresentada.length > 0 && (
-								<div className="grid max-h-64 grid-cols-1 gap-2 overflow-y-auto pr-1 sm:grid-cols-2 lg:grid-cols-3">
-									{produtosCatalogoRepresentada.map((produto) => {
-										const preco = precosPorProduto.get(produto.id);
-										const qtdAtual =
-											quantidadeNoOrcamentoPorProduto.get(produto.id) ?? 0;
-
-										return (
-											<div
-												key={produto.id}
-												className="flex items-center justify-between gap-2 rounded-lg border border-border bg-muted/30 p-2.5"
-											>
-												<div className="min-w-0 flex-1">
-													<div className="flex items-center gap-1.5">
-														<Badge
-															variant="secondary"
-															className="shrink-0 font-mono"
-														>
-															{produto.sku}
-														</Badge>
-														{qtdAtual > 0 && (
-															<Badge variant="success">
-																<Check
-																	aria-hidden="true"
-																	className="mr-0.5 size-3"
-																/>
-																{qtdAtual} no orçamento
-															</Badge>
-														)}
-													</div>
-													<p className="mt-1 truncate text-xs font-medium text-foreground">
-														{produto.descricao}
-													</p>
-													<p className="text-[11px] text-muted-foreground tabular-nums">
-														{preco
-															? formatarCentavos(preco.preco_base_centavos)
-															: "Sem preço na tabela"}{" "}
-														· {produto.unidade_medida} (Emb.{" "}
-														{produto.multiplo_embalagem})
-													</p>
-												</div>
-												<Button
-													size="sm"
-													variant={qtdAtual > 0 ? "secondary" : "primary"}
-													disabled={!preco}
-													onClick={() => handleAdicionarProduto(produto)}
-													aria-label={`Adicionar ${produto.sku} ${produto.descricao} ao orçamento`}
-												>
-													<Plus aria-hidden="true" />
-													{qtdAtual > 0 ? "+1" : "Incluir"}
-												</Button>
-											</div>
-										);
-									})}
-								</div>
+							{valores.representada_id && carregandoPrecos && (
+								<p className="p-6 text-center text-xs text-muted-foreground">
+									Carregando preços da tabela selecionada...
+								</p>
 							)}
-					</div>
-				)}
 
-				{/* 3. Grid / Lista de Itens do Orçamento */}
-				<div
-					className={cardClassName({
-						className: "flex flex-col gap-3 p-4 md:p-5",
-					})}
-				>
-					<div className="flex items-center justify-between">
-						<div>
-							<h2
-								id="itens-orcamento-caption"
-								className="text-sm font-semibold text-foreground"
-							>
-								3. Itens do orçamento ({valores.itens.length})
-							</h2>
-							<p className="text-xs text-muted-foreground">
-								Edite quantidades e descontos livremente. O preço líquido é
-								calculado com arredondamento bancário.
-							</p>
-						</div>
-					</div>
+							{valores.representada_id &&
+								!carregandoPrecos &&
+								produtosCatalogoRepresentada.length === 0 && (
+									<div className="p-4">
+										<EmptyState
+											icon={Package}
+											title="Nenhum produto encontrado nesta representada."
+										/>
+									</div>
+								)}
 
-					{erros.itens && <Alert variant="destructive">{erros.itens}</Alert>}
+							{valores.representada_id &&
+								!carregandoPrecos &&
+								produtosCatalogoRepresentada.length > 0 && (
+									<ul className="max-h-[540px] divide-y divide-border overflow-y-auto">
+										{produtosCatalogoRepresentada.map((produto) => {
+											const preco = precosPorProduto.get(produto.id);
+											const qtdAtual =
+												quantidadeNoOrcamentoPorProduto.get(produto.id) ?? 0;
 
-					{valores.itens.length === 0 ? (
-						<p className="rounded-lg border border-dashed border-border py-8 text-center text-xs text-muted-foreground">
-							Nenhum item adicionado ao orçamento ainda. Selecione os produtos
-							no catálogo acima.
-						</p>
-					) : (
-						<section
-							aria-labelledby="itens-orcamento-caption"
-							className="table-wrapper rounded-lg border border-border"
-						>
-							<table className="orcamento-itens-table text-left text-sm">
-								<thead>
-									<tr className="border-b border-border text-xs font-medium text-muted-foreground">
-										<th scope="col" className="px-3 py-2.5">
-											Produto
-										</th>
-										<th scope="col" className="px-3 py-2.5 text-right">
-											Preço tabela
-										</th>
-										<th scope="col" className="px-3 py-2.5 text-center">
-											Quantidade
-										</th>
-										<th scope="col" className="px-3 py-2.5 text-center">
-											Desconto (%)
-										</th>
-										<th scope="col" className="px-3 py-2.5 text-right">
-											Líquido unit.
-										</th>
-										<th scope="col" className="px-3 py-2.5 text-right">
-											Subtotal
-										</th>
-										{!somenteLeitura && (
-											<th scope="col" className="px-2 py-2.5 text-right">
-												<span className="sr-only">Ações</span>
-											</th>
-										)}
-									</tr>
-								</thead>
-								<tbody className="divide-y divide-border">
-									{valores.itens.map((linha) => {
-										const produto = produtosPorId.get(linha.produto_id);
-										const precoTabelaInfo = precosPorProduto.get(
-											linha.produto_id,
-										);
-										const previa = calcularPreviaItemForm(linha);
-										const erroQtd =
-											erros[chaveErroItemPedido(linha.localId, "quantidade")];
-										const erroDesc =
-											erros[
-												chaveErroItemPedido(
-													linha.localId,
-													"percentual_desconto",
-												)
-											];
-
-										const descontoDigitado = parseDescontoFormParaCentesimos(
-											linha.percentual_desconto,
-										);
-										const tetoInformativo =
-											precoTabelaInfo?.desconto_maximo_permitido ?? 0;
-										const acimaDoTetoInformativo =
-											tetoInformativo > 0 &&
-											descontoDigitado !== null &&
-											descontoDigitado > tetoInformativo;
-
-										return (
-											<tr key={linha.localId} className="align-middle">
-												<th
-													scope="row"
-													className="px-3 py-2.5 font-normal text-foreground"
+											return (
+												<li
+													key={produto.id}
+													className={`flex items-center justify-between gap-2.5 px-3.5 py-2.5 transition-colors hover:bg-muted/50 ${
+														qtdAtual > 0 ? "bg-primary/5" : ""
+													}`}
 												>
-													<div className="flex flex-col">
-														<div className="flex items-center gap-1.5">
-															<span className="font-mono text-xs font-semibold">
-																{produto?.sku ?? "SKU"}
+													<div className="min-w-0 flex-1">
+														<div className="flex flex-wrap items-center gap-1.5">
+															<span className="rounded border border-border bg-muted/70 px-1.5 py-0.5 font-mono text-[11px] font-medium text-foreground">
+																{produto.sku}
 															</span>
-															<span className="text-xs font-medium">
-																{produto?.descricao ?? "Produto"}
+															<span className="text-[11px] text-muted-foreground">
+																{produto.unidade_medida}
+																{produto.multiplo_embalagem > 1
+																	? ` × ${produto.multiplo_embalagem}`
+																	: ""}
+															</span>
+															{qtdAtual > 0 && (
+																<Badge variant="success">
+																	<Check
+																		aria-hidden="true"
+																		className="mr-0.5 size-3"
+																	/>
+																	{qtdAtual} na sacola
+																</Badge>
+															)}
+														</div>
+														<p className="mt-0.5 truncate text-xs font-medium text-foreground">
+															{produto.descricao}
+														</p>
+													</div>
+
+													<div className="flex shrink-0 items-center gap-2.5">
+														<div className="text-right">
+															{preco ? (
+																<span className="font-mono text-xs font-semibold text-foreground tabular-nums">
+																	{formatarCentavos(preco.preco_base_centavos)}
+																</span>
+															) : (
+																<span className="text-[11px] text-muted-foreground">
+																	Sem preço
+																</span>
+															)}
+														</div>
+														<Button
+															size="sm"
+															variant={qtdAtual > 0 ? "secondary" : "primary"}
+															disabled={!preco}
+															onClick={() => handleAdicionarProduto(produto)}
+															aria-label={`Adicionar ${produto.sku} ${produto.descricao} ao orçamento`}
+														>
+															<Plus aria-hidden="true" />
+															{qtdAtual > 0 ? "+1" : "Incluir"}
+														</Button>
+													</div>
+												</li>
+											);
+										})}
+									</ul>
+								)}
+						</div>
+					)}
+
+					{/* Coluna Direita: Sacola de Itens + Resumo Financeiro e Ações */}
+					<div
+						className={cardClassName({
+							className: `workspace-pane flex flex-col overflow-hidden ${
+								somenteLeitura ? "" : "lg:col-span-7"
+							}`,
+						})}
+					>
+						<div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
+							<div>
+								<h2
+									id="itens-orcamento-caption"
+									className="text-sm font-semibold text-foreground"
+								>
+									Itens do orçamento ({valores.itens.length})
+								</h2>
+								<p className="text-xs text-muted-foreground">
+									Ajuste quantidades e descontos. Cálculo líquido com
+									arredondamento bancário.
+								</p>
+							</div>
+							<Badge variant="outline" className="font-mono tabular-nums">
+								{previaTotais.quantidade_total_volumes} vol.
+							</Badge>
+						</div>
+
+						{erros.itens && (
+							<div className="p-3 pb-0">
+								<Alert variant="destructive">{erros.itens}</Alert>
+							</div>
+						)}
+
+						{valores.itens.length === 0 ? (
+							<div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
+								<Package
+									aria-hidden="true"
+									className="size-8 text-subtle-foreground"
+								/>
+								<p className="text-sm font-medium text-foreground">
+									Sacola vazia
+								</p>
+								<p className="max-w-xs text-xs text-muted-foreground">
+									Clique em &ldquo;Incluir&rdquo; nos produtos do catálogo ao
+									lado para montar o orçamento.
+								</p>
+							</div>
+						) : (
+							<section
+								aria-labelledby="itens-orcamento-caption"
+								className="table-wrapper"
+							>
+								<table className="orcamento-itens-table text-left text-sm">
+									<thead>
+										<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+											<th scope="col" className="px-3.5 py-2.5">
+												Produto
+											</th>
+											<th scope="col" className="px-2.5 py-2.5 text-right">
+												Tabela
+											</th>
+											<th scope="col" className="px-2.5 py-2.5 text-center">
+												Quantidade
+											</th>
+											<th scope="col" className="px-2.5 py-2.5 text-center">
+												Desc. (%)
+											</th>
+											<th scope="col" className="px-2.5 py-2.5 text-right">
+												Líq. Unit.
+											</th>
+											<th scope="col" className="px-3 py-2.5 text-right">
+												Subtotal
+											</th>
+											{!somenteLeitura && (
+												<th scope="col" className="w-9 px-2 py-2.5 text-right">
+													<span className="sr-only">Ações</span>
+												</th>
+											)}
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-border">
+										{valores.itens.map((linha) => {
+											const produto = produtosPorId.get(linha.produto_id);
+											const precoTabelaInfo = precosPorProduto.get(
+												linha.produto_id,
+											);
+											const previa = calcularPreviaItemForm(linha);
+											const erroQtd =
+												erros[chaveErroItemPedido(linha.localId, "quantidade")];
+											const erroDesc =
+												erros[
+													chaveErroItemPedido(
+														linha.localId,
+														"percentual_desconto",
+													)
+												];
+
+											const descontoDigitado = parseDescontoFormParaCentesimos(
+												linha.percentual_desconto,
+											);
+											const tetoInformativo =
+												precoTabelaInfo?.desconto_maximo_permitido ?? 0;
+											const acimaDoTetoInformativo =
+												tetoInformativo > 0 &&
+												descontoDigitado !== null &&
+												descontoDigitado > tetoInformativo;
+
+											return (
+												<tr
+													key={linha.localId}
+													className="align-middle transition-colors hover:bg-muted/30"
+												>
+													<th
+														scope="row"
+														className="px-3.5 py-2.5 font-normal text-foreground"
+													>
+														<div className="flex flex-col">
+															<div className="flex items-center gap-1.5">
+																<span className="font-mono text-xs font-semibold">
+																	{produto?.sku ?? "SKU"}
+																</span>
+																<span className="text-xs font-medium">
+																	{produto?.descricao ?? "Produto"}
+																</span>
+															</div>
+															<span className="text-[11px] text-muted-foreground">
+																{produto
+																	? `${produto.unidade_medida} · Múlt. ${produto.multiplo_embalagem}`
+																	: ""}
 															</span>
 														</div>
-														<span className="text-[11px] text-muted-foreground">
-															{produto
-																? `${produto.unidade_medida} · Múltiplo de embalagem: ${produto.multiplo_embalagem}`
-																: ""}
-														</span>
-													</div>
-												</th>
+													</th>
 
-												<td className="px-3 py-2.5 text-right font-mono text-xs tabular-nums">
-													{formatarCentavos(
-														linha.preco_unitario_tabela_centavos,
-													)}
-												</td>
+													<td className="px-2.5 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+														{formatarCentavos(
+															linha.preco_unitario_tabela_centavos,
+														)}
+													</td>
 
-												<td className="px-3 py-2.5">
-													<div className="flex flex-col items-center gap-1">
-														<div className="flex items-center gap-1">
-															{!somenteLeitura && (
-																<Button
-																	size="sm"
-																	variant="secondary"
-																	onClick={() =>
-																		handleDeltaQuantidade(linha.localId, -1)
+													<td className="px-2.5 py-2.5">
+														<div className="flex flex-col items-center gap-1">
+															<div className="flex items-center gap-1">
+																{!somenteLeitura && (
+																	<Button
+																		size="sm"
+																		variant="secondary"
+																		className="px-2"
+																		onClick={() =>
+																			handleDeltaQuantidade(linha.localId, -1)
+																		}
+																		aria-label={`Diminuir quantidade de ${produto?.sku ?? "item"}`}
+																	>
+																		<Minus aria-hidden="true" />
+																	</Button>
+																)}
+																<Input
+																	aria-label={`Quantidade de ${produto?.sku ?? "item"}`}
+																	name={`quantidade_${linha.localId}`}
+																	inputMode="numeric"
+																	autoComplete="off"
+																	autoCorrect="off"
+																	spellCheck={false}
+																	disabled={somenteLeitura}
+																	value={linha.quantidade}
+																	onChange={(e) =>
+																		handleAlterarCampoItem(
+																			linha.localId,
+																			"quantidade",
+																			e.target.value,
+																		)
 																	}
-																	aria-label={`Diminuir quantidade de ${produto?.sku ?? "item"}`}
+																	hasError={Boolean(erroQtd)}
+																	className="w-16 text-center font-mono tabular-nums"
+																/>
+																{!somenteLeitura && (
+																	<Button
+																		size="sm"
+																		variant="secondary"
+																		className="px-2"
+																		onClick={() =>
+																			handleDeltaQuantidade(linha.localId, 1)
+																		}
+																		aria-label={`Aumentar quantidade de ${produto?.sku ?? "item"}`}
+																	>
+																		<Plus aria-hidden="true" />
+																	</Button>
+																)}
+															</div>
+															{erroQtd && (
+																<span
+																	role="alert"
+																	className="text-[11px] text-destructive"
 																>
-																	<Minus aria-hidden="true" />
-																</Button>
+																	{erroQtd}
+																</span>
 															)}
+														</div>
+													</td>
+
+													<td className="px-2.5 py-2.5">
+														<div className="flex flex-col items-center gap-1">
 															<Input
-																aria-label={`Quantidade de ${produto?.sku ?? "item"}`}
-																name={`quantidade_${linha.localId}`}
-																inputMode="numeric"
+																aria-label={`Desconto percentual de ${produto?.sku ?? "item"}`}
+																name={`desconto_${linha.localId}`}
+																inputMode="decimal"
 																autoComplete="off"
 																autoCorrect="off"
 																spellCheck={false}
 																disabled={somenteLeitura}
-																value={linha.quantidade}
+																placeholder="0,00"
+																value={linha.percentual_desconto}
 																onChange={(e) =>
 																	handleAlterarCampoItem(
 																		linha.localId,
-																		"quantidade",
+																		"percentual_desconto",
 																		e.target.value,
 																	)
 																}
-																hasError={Boolean(erroQtd)}
-																className="w-20 text-center font-mono tabular-nums"
+																hasError={Boolean(erroDesc)}
+																className="w-20 text-right font-mono tabular-nums"
 															/>
-															{!somenteLeitura && (
-																<Button
-																	size="sm"
-																	variant="secondary"
-																	onClick={() =>
-																		handleDeltaQuantidade(linha.localId, 1)
-																	}
-																	aria-label={`Aumentar quantidade de ${produto?.sku ?? "item"}`}
+															{erroDesc ? (
+																<span
+																	role="alert"
+																	className="text-[11px] text-destructive"
 																>
-																	<Plus aria-hidden="true" />
-																</Button>
-															)}
+																	{erroDesc}
+																</span>
+															) : acimaDoTetoInformativo ? (
+																<span className="text-[10px] text-warning">
+																	Máx:{" "}
+																	{formatarCentesimosPercentual(
+																		tetoInformativo,
+																	)}
+																</span>
+															) : null}
 														</div>
-														{erroQtd && (
-															<span
-																role="alert"
-																className="text-[11px] text-destructive"
-															>
-																{erroQtd}
-															</span>
-														)}
-													</div>
-												</td>
-
-												<td className="px-3 py-2.5">
-													<div className="flex flex-col items-center gap-1">
-														<Input
-															aria-label={`Desconto percentual de ${produto?.sku ?? "item"}`}
-															name={`desconto_${linha.localId}`}
-															inputMode="decimal"
-															autoComplete="off"
-															autoCorrect="off"
-															spellCheck={false}
-															disabled={somenteLeitura}
-															placeholder="0,00"
-															value={linha.percentual_desconto}
-															onChange={(e) =>
-																handleAlterarCampoItem(
-																	linha.localId,
-																	"percentual_desconto",
-																	e.target.value,
-																)
-															}
-															hasError={Boolean(erroDesc)}
-															className="w-24 text-right font-mono tabular-nums"
-														/>
-														{erroDesc ? (
-															<span
-																role="alert"
-																className="text-[11px] text-destructive"
-															>
-																{erroDesc}
-															</span>
-														) : acimaDoTetoInformativo ? (
-															<span className="text-[11px] text-warning">
-																Sugerido máx:{" "}
-																{formatarCentesimosPercentual(tetoInformativo)}
-															</span>
-														) : null}
-													</div>
-												</td>
-
-												<td className="px-3 py-2.5 text-right font-mono text-xs font-medium tabular-nums">
-													{previa
-														? formatarCentavos(
-																previa.preco_liquido_unitario_centavos,
-															)
-														: "—"}
-												</td>
-
-												<td className="px-3 py-2.5 text-right font-mono text-xs font-semibold tabular-nums">
-													{previa
-														? formatarCentavos(previa.subtotal_centavos)
-														: "—"}
-												</td>
-
-												{!somenteLeitura && (
-													<td className="px-2 py-2.5 text-right">
-														<Button
-															size="sm"
-															variant="destructive"
-															onClick={() => handleRemoverItem(linha.localId)}
-															aria-label={`Remover ${produto?.sku ?? "item"} do orçamento`}
-														>
-															<Trash2 aria-hidden="true" />
-														</Button>
 													</td>
-												)}
-											</tr>
-										);
-									})}
-								</tbody>
-							</table>
-						</section>
-					)}
-				</div>
 
-				{/* 4. Observações, Totalizadores e Fechamento */}
-				<div
-					className={cardClassName({
-						className: "flex flex-col gap-4 p-4 md:p-5",
-					})}
-				>
-					<div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
-						<FormField
-							id="orcamento-observacoes"
-							label="Observações do orçamento / pedido (opcional)"
-							error={erros.observacoes}
-						>
-							<Input
-								id="orcamento-observacoes"
-								name="observacoes"
-								disabled={somenteLeitura}
-								value={valores.observacoes}
-								onChange={(e) =>
-									setValores((atual) => ({
-										...atual,
-										observacoes: e.target.value,
-									}))
-								}
-								placeholder="Restrições de horário de entrega, instruções para faturamento..."
-							/>
-						</FormField>
+													<td className="px-2.5 py-2.5 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap">
+														{previa
+															? formatarCentavos(
+																	previa.preco_liquido_unitario_centavos,
+																)
+															: "—"}
+													</td>
 
-						<div className="flex flex-col justify-between gap-3 rounded-lg border border-border bg-muted/40 p-3.5">
+													<td className="px-3 py-2.5 text-right font-mono text-xs font-semibold tabular-nums whitespace-nowrap">
+														{previa
+															? formatarCentavos(previa.subtotal_centavos)
+															: "—"}
+													</td>
+
+													{!somenteLeitura && (
+														<td className="px-2 py-2.5 text-right">
+															<Button
+																size="sm"
+																variant="ghost"
+																onClick={() => handleRemoverItem(linha.localId)}
+																aria-label={`Remover ${produto?.sku ?? "item"} do orçamento`}
+																className="px-1.5 text-subtle-foreground hover:text-destructive"
+															>
+																<Trash2
+																	aria-hidden="true"
+																	className="size-3.5"
+																/>
+															</Button>
+														</td>
+													)}
+												</tr>
+											);
+										})}
+									</tbody>
+								</table>
+							</section>
+						)}
+
+						{/* Rodapé Integrado do Painel: Totalizadores e Botões de Fechamento */}
+						<div className="mt-auto flex flex-col gap-3 border-t border-border bg-muted/40 p-4">
 							<div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
-								<div>
-									<span className="text-muted-foreground">Volumes</span>
-									<p className="font-semibold text-foreground tabular-nums">
-										{previaTotais.quantidade_total_volumes} un.
-									</p>
-								</div>
 								<div>
 									<span className="text-muted-foreground">Total tabela</span>
 									<p className="font-mono font-medium text-foreground tabular-nums">
@@ -1212,14 +1299,22 @@ function OrcamentoForm({
 										)}
 										)
 									</span>
-									<p className="font-mono font-semibold text-foreground tabular-nums">
+									<p className="font-mono font-semibold text-success tabular-nums">
 										{formatarCentavos(previaTotais.comissao_projetada_centavos)}
+									</p>
+								</div>
+								<div className="text-right">
+									<span className="text-muted-foreground">Total líquido</span>
+									<p className="font-mono text-base font-bold text-foreground tabular-nums">
+										{formatarCentavos(previaTotais.valor_total_centavos)}
 									</p>
 								</div>
 							</div>
 
+							{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
+
 							<div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-								<div className="flex items-center gap-2">
+								<div>
 									{pedidoMinimoCentavos > 0 && (
 										<Badge
 											variant={atingiuPedidoMinimo ? "success" : "secondary"}
@@ -1228,41 +1323,31 @@ function OrcamentoForm({
 										</Badge>
 									)}
 								</div>
-								<div className="text-right">
-									<span className="text-xs text-muted-foreground">
-										Valor total líquido
-									</span>
-									<p className="font-mono text-lg font-bold text-foreground tabular-nums">
-										{formatarCentavos(previaTotais.valor_total_centavos)}
-									</p>
+
+								<div className="flex flex-wrap items-center gap-2">
+									<Link
+										to="/pedidos"
+										className={buttonClassName({ variant: "ghost" })}
+									>
+										{somenteLeitura ? "Voltar" : "Cancelar"}
+									</Link>
+									{!somenteLeitura && (
+										<>
+											<Button
+												variant="secondary"
+												disabled={salvando}
+												onClick={() => void salvarOuEmitir("rascunho")}
+											>
+												{salvando ? "Salvando..." : "Salvar rascunho"}
+											</Button>
+											<Button type="submit" disabled={salvando}>
+												{salvando ? "Emitindo..." : "Fechar pedido"}
+											</Button>
+										</>
+									)}
 								</div>
 							</div>
 						</div>
-					</div>
-
-					{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
-
-					<div className="flex flex-wrap justify-end gap-2 border-t border-border pt-4">
-						<Link
-							to="/pedidos"
-							className={buttonClassName({ variant: "ghost" })}
-						>
-							{somenteLeitura ? "Voltar" : "Cancelar"}
-						</Link>
-						{!somenteLeitura && (
-							<>
-								<Button
-									variant="secondary"
-									disabled={salvando}
-									onClick={() => void salvarOuEmitir("rascunho")}
-								>
-									{salvando ? "Salvando..." : "Salvar rascunho"}
-								</Button>
-								<Button type="submit" disabled={salvando}>
-									{salvando ? "Emitindo..." : "Fechar pedido"}
-								</Button>
-							</>
-						)}
 					</div>
 				</div>
 			</form>
