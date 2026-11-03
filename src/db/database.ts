@@ -11,6 +11,7 @@ import type { Produto } from "../modules/produtos/domain/produto.schema";
 import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
 import type { Representada } from "../modules/representadas/domain/representada.schema";
 import type { OutboxMutation } from "../modules/sync/domain/outbox.schema";
+import type { Transportadora } from "../modules/transportadoras/domain/transportadora.schema";
 import { migrarParaV4 } from "./migrations/v4";
 import { migrarParaV5 } from "./migrations/v5";
 import { migrarParaV7 } from "./migrations/v7";
@@ -30,6 +31,7 @@ export class AppDatabase extends Dexie {
 	itens_pedido!: Table<ItemPedido, string>;
 	outbox!: Table<OutboxMutation, string>;
 	representadas!: Table<Representada, string>;
+	transportadoras!: Table<Transportadora, string>;
 
 	constructor(nome = NOME_BANCO_PADRAO) {
 		super(nome);
@@ -92,6 +94,20 @@ export class AppDatabase extends Dexie {
 		// v7: segmentação de cliente (`tipo_cliente`: REVENDA | FABRICA) e
 		// alíquotas de comissão por segmento nas representadas.
 		this.version(7).stores({}).upgrade(migrarParaV7);
+
+		// v8: cadastro de transportadoras (CNPJ opcional, único quando informado).
+		// `clientes.transportadora_padrao_id` e `pedidos.transportadora_id` são
+		// opcionais e não indexados, então não há upgrade de dados.
+		this.version(8).stores({
+			transportadoras: "id, tenant_id, [tenant_id+cnpj]",
+		});
+
+		// v9: cotação multi-representada. Os pedidos de uma mesma cotação
+		// compartilham `cotacao_grupo_id` (opcional; ausente nos antigos).
+		this.version(9).stores({
+			pedidos:
+				"id, tenant_id, [tenant_id+status], [tenant_id+cliente_id], [tenant_id+deleted_at], [tenant_id+cotacao_grupo_id]",
+		});
 	}
 }
 

@@ -40,6 +40,8 @@ export const ClienteSchema = z
 		nome_fantasia: z.string().trim().nullable().optional(),
 		/** Segmento comercial que determina a alíquota de comissão na representada. */
 		tipo_cliente: TipoClienteSchema.default("REVENDA"),
+		/** Transportadora habitual, sugerida ao iniciar um orçamento (Fase 2.5). */
+		transportadora_padrao_id: z.string().uuid().nullable().optional(),
 		/** Estado de negócio (reversível). Inativos aparecem na lista de inativos. */
 		ativo: z.boolean(),
 	})
@@ -57,6 +59,14 @@ export const ClienteInputSchema = z.object({
 		.nullable()
 		.transform((val) => (val && val.length > 0 ? val : null)),
 	tipo_cliente: TipoClienteSchema.default("REVENDA"),
+	transportadora_padrao_id: z
+		.string()
+		.trim()
+		.nullish()
+		.transform((v) => (v && v.length > 0 ? v : null))
+		.refine((v) => v === null || z.uuid().safeParse(v).success, {
+			message: "Transportadora inválida",
+		}),
 });
 
 export type ClienteInput = z.input<typeof ClienteInputSchema>;

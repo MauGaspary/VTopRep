@@ -361,6 +361,8 @@ export interface CriarPedidoCompletoParams {
 	status?: "rascunho" | "emitido";
 	pedidoId?: string;
 	idempotencyKey?: string;
+	/** Agrupador da cotação multi-representada (`null` para pedido avulso). */
+	cotacaoGrupoId?: string | null;
 	agora: string;
 	gerarId?: () => string;
 }
@@ -372,6 +374,7 @@ export function criarPedidoCompleto({
 	status = "rascunho",
 	pedidoId,
 	idempotencyKey,
+	cotacaoGrupoId = null,
 	agora,
 	gerarId = () => crypto.randomUUID(),
 }: CriarPedidoCompletoParams): PedidoCompleto {
@@ -391,11 +394,13 @@ export function criarPedidoCompleto({
 	const pedido = PedidoSchema.parse({
 		id,
 		tenant_id: tenantId,
+		cotacao_grupo_id: cotacaoGrupoId,
 		cliente_id: dados.cliente_id,
 		representada_id: dados.representada_id,
 		tabela_id: dados.tabela_id,
 		endereco_entrega_id: dados.endereco_entrega_id,
 		contato_id: dados.contato_id,
+		transportadora_id: dados.transportadora_id,
 		data_emissao: agora,
 		condicao_pagamento: dados.condicao_pagamento,
 		tipo_frete: dados.tipo_frete,
@@ -420,6 +425,8 @@ export interface AtualizarPedidoCompletoParams {
 	percentualComissaoPadrao: number;
 	status?: "rascunho" | "emitido";
 	idempotencyKey?: string;
+	/** Novo agrupador da cotação; omitido, preserva o do pedido existente. */
+	cotacaoGrupoId?: string | null;
 	agora: string;
 	gerarId?: () => string;
 }
@@ -440,6 +447,7 @@ export function atualizarPedidoCompleto({
 	percentualComissaoPadrao,
 	status = "rascunho",
 	idempotencyKey,
+	cotacaoGrupoId,
 	agora,
 	gerarId = () => crypto.randomUUID(),
 }: AtualizarPedidoCompletoParams): PedidoAtualizado {
@@ -462,11 +470,16 @@ export function atualizarPedidoCompleto({
 
 	const pedido = PedidoSchema.parse({
 		...existente,
+		cotacao_grupo_id:
+			cotacaoGrupoId !== undefined
+				? cotacaoGrupoId
+				: (existente.cotacao_grupo_id ?? null),
 		cliente_id: dados.cliente_id,
 		representada_id: dados.representada_id,
 		tabela_id: dados.tabela_id,
 		endereco_entrega_id: dados.endereco_entrega_id,
 		contato_id: dados.contato_id,
+		transportadora_id: dados.transportadora_id,
 		data_emissao: status === "emitido" ? agora : existente.data_emissao,
 		condicao_pagamento: dados.condicao_pagamento,
 		tipo_frete: dados.tipo_frete,

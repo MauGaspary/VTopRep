@@ -6,11 +6,18 @@ import type { ClienteEndereco } from "../../clientes/domain/cliente-endereco.sch
 import type { Produto } from "../../produtos/domain/produto.schema";
 import type { TabelaPreco } from "../../produtos/domain/tabela-preco.schema";
 import type { Representada } from "../../representadas/domain/representada.schema";
+import type { Transportadora } from "../../transportadoras/domain/transportadora.schema";
 import {
+	EspelhoCotacaoInconsistenteError,
+	gerarNomeArquivoEspelhoCotacaoPdf,
 	gerarNomeArquivoEspelhoPdf,
+	gerarTextoCompartilhamentoCotacao,
 	gerarTextoCompartilhamentoEspelho,
+	gerarUrlEmailCotacao,
 	gerarUrlEmailEspelho,
+	gerarUrlWhatsappCotacao,
 	gerarUrlWhatsappEspelho,
+	montarEspelhoCotacao,
 	montarEspelhoPedido,
 	normalizarTelefoneWhatsapp,
 } from "./espelho-pedido";
@@ -25,6 +32,7 @@ const PRODUTO_ID = "66666666-6666-4666-a666-666666666666";
 const ENDERECO_ID = "77777777-7777-4777-a777-777777777777";
 const CONTATO_ID = "88888888-8888-4888-a888-888888888888";
 const PEDIDO_ID = "a1b2c3d4-0000-4000-a000-000000000000";
+const TRANSPORTADORA_ID = "99999999-9999-4999-a999-999999999999";
 const AGORA = "2026-10-30T14:30:00.000Z";
 
 const empresaMock = {
@@ -110,6 +118,20 @@ const contatoBase: ClienteContato = {
 	papel: "COMPRADOR",
 	telefone_whatsapp: "(51) 99888-7766",
 	email: "roberto@supercentral.com.br",
+	created_at: AGORA,
+	updated_at: AGORA,
+	deleted_at: null,
+};
+
+const transportadoraBase: Transportadora = {
+	id: TRANSPORTADORA_ID,
+	tenant_id: TENANT,
+	nome_fantasia: "Rodo Sul",
+	razao_social: "Rodo Sul Transportes Ltda",
+	cnpj: "11222333000181",
+	telefone: "(54) 3333-0000",
+	cidade_uf: "Caxias do Sul/RS",
+	ativo: true,
 	created_at: AGORA,
 	updated_at: AGORA,
 	deleted_at: null,
@@ -216,6 +238,58 @@ describe("Espelho do Pedido (Domínio)", () => {
 		).toBe(true);
 	});
 
+	it("exibe a transportadora no bloco logístico e no texto de compartilhamento", () => {
+		const espelho = montarEspelhoPedido({
+			tenantId: TENANT,
+			empresa: empresaMock,
+			pedidoCompleto,
+			cliente: clienteBase,
+			representada: representadaBase,
+			transportadora: transportadoraBase,
+			produtosPorId,
+		});
+
+		expect(espelho.logistica.transportadora).toEqual({
+			nomeFantasia: "Rodo Sul",
+			razaoSocial: "Rodo Sul Transportes Ltda",
+			cnpjFormatado: "11.222.333/0001-81",
+			telefone: "(54) 3333-0000",
+			cidadeUf: "Caxias do Sul/RS",
+		});
+		expect(gerarTextoCompartilhamentoEspelho(espelho)).toContain(
+			"Transportadora: Rodo Sul (Caxias do Sul/RS · (54) 3333-0000)",
+		);
+	});
+
+	it("deixa a transportadora vazia quando o pedido não tem uma", () => {
+		const espelho = montarEspelhoPedido({
+			tenantId: TENANT,
+			empresa: empresaMock,
+			pedidoCompleto,
+			cliente: clienteBase,
+			representada: representadaBase,
+			produtosPorId,
+		});
+		expect(espelho.logistica.transportadora).toBeNull();
+		expect(gerarTextoCompartilhamentoEspelho(espelho)).not.toContain(
+			"Transportadora:",
+		);
+	});
+
+	it("rejeita transportadora de outro tenant", () => {
+		expect(() =>
+			montarEspelhoPedido({
+				tenantId: TENANT,
+				empresa: empresaMock,
+				pedidoCompleto,
+				cliente: clienteBase,
+				representada: representadaBase,
+				transportadora: { ...transportadoraBase, tenant_id: OUTRO_TENANT },
+				produtosPorId,
+			}),
+		).toThrow(TenantDivergenteError);
+	});
+
 	it("rejeita entidades de outro tenant ao montar o espelho", () => {
 		expect(() =>
 			montarEspelhoPedido({
@@ -227,5 +301,143 @@ describe("Espelho do Pedido (Domínio)", () => {
 				produtosPorId,
 			}),
 		).toThrow(TenantDivergenteError);
+	});
+});
+
+describe("Espelho unificado da cotação (Domínio)", () => {
+	const GRUPO_ID = "c0c0c0c0-1111-4111-a111-111111111111";
+	const OUTRA_REP_ID = "45454545-4545-4545-a545-454545454545";
+	const outraRepresentada: Representada = {
+		...representadaBase,
+		id: OUTRA_REP_ID,
+		nome_fantasia: "Sucos Gaúchos",
+		razao_social: "Sucos Gaúchos Ltda",
+	};
+
+	const montarSecao = (
+		pedidoId: string,
+		representada: Representada,
+		quantidade: number,
+		status: "rascunho" | "emitido" = "rascunho",
+		cliente: Cliente = clienteBase,
+	) =>
+		montarEspelhoPedido({
+			tenantId: TENANT,
+			empresa: empresaMock,
+			pedidoCompleto: criarPedidoCompleto({
+				tenantId: TENANT,
+				pedidoId,
+				status,
+				cotacaoGrupoId: GRUPO_ID,
+				percentualComissaoPadrao: 500,
+				agora: AGORA,
+				input: {
+					cliente_id: cliente.id,
+					representada_id: representada.id,
+					tabela_id: TABELA_ID,
+					transportadora_id: TRANSPORTADORA_ID,
+					condicao_pagamento: "30 dias",
+					tipo_frete: "FOB",
+					observacoes: "Entregar junto",
+					itens: [
+						{
+							produto_id: PRODUTO_ID,
+							quantidade,
+							preco_unitario_tabela_centavos: 10000,
+							percentual_desconto: 1000,
+						},
+					],
+				},
+			}),
+			cliente,
+			representada,
+			transportadora: transportadoraBase,
+			produtosPorId: new Map([[PRODUTO_ID, produtoBase]]),
+		});
+
+	const secaoA = montarSecao(PEDIDO_ID, representadaBase, 2); // 18000
+	const secaoB = montarSecao(
+		"b2b2b2b2-0000-4000-a000-000000000000",
+		outraRepresentada,
+		1,
+	); // 9000
+
+	it("consolida as seções por fábrica com o total geral em centavos", () => {
+		const espelho = montarEspelhoCotacao([secaoA, secaoB], GRUPO_ID);
+
+		expect(espelho.codigoCurto).toBe("C0C0C0C0");
+		expect(espelho.tituloDocumento).toBe("COTAÇÃO MULTI-FÁBRICA");
+		expect(espelho.status).toBe("rascunho");
+		expect(espelho.cliente.razaoSocial).toBe(clienteBase.razao_social);
+		expect(espelho.logistica.transportadora?.nomeFantasia).toBe("Rodo Sul");
+		expect(espelho.observacoes).toBe("Entregar junto");
+		expect(espelho.secoes.map((s) => s.representada.nomeFantasia)).toEqual([
+			"Serra Sul",
+			"Sucos Gaúchos",
+		]);
+		expect(espelho.totais).toEqual({
+			quantidadeItens: 2,
+			quantidadeVolumes: 3,
+			valorTabelaTotalCentavos: 30000,
+			valorTabelaTotalFormatado: "R$ 300,00",
+			descontoTotalCentavos: 3000,
+			descontoTotalFormatado: "R$ 30,00",
+			valorTotalCentavos: 27000,
+			valorTotalFormatado: "R$ 270,00",
+		});
+	});
+
+	it("usa o status de pedido quando a cotação já foi fechada", () => {
+		const emitida = montarEspelhoCotacao(
+			[
+				montarSecao(PEDIDO_ID, representadaBase, 2, "emitido"),
+				montarSecao(
+					"b2b2b2b2-0000-4000-a000-000000000000",
+					outraRepresentada,
+					1,
+					"emitido",
+				),
+			],
+			GRUPO_ID,
+		);
+		expect(emitida.status).toBe("emitido");
+		expect(emitida.tituloDocumento).toBe("PEDIDOS DA COTAÇÃO (UNIFICADO)");
+	});
+
+	it("gera nome de arquivo, texto com uma seção por fábrica e links de envio", () => {
+		const espelho = montarEspelhoCotacao([secaoA, secaoB], GRUPO_ID);
+
+		expect(gerarNomeArquivoEspelhoCotacaoPdf(espelho)).toBe(
+			"cotacao-C0C0C0C0-super-central-2026-10-30.pdf",
+		);
+		const texto = gerarTextoCompartilhamentoCotacao(espelho);
+		expect(texto).toContain("*Serra Sul* — Pedido #A1B2C3D4");
+		expect(texto).toContain("*Sucos Gaúchos* — Pedido #B2B2B2B2");
+		expect(texto).toContain("Subtotal Sucos Gaúchos: R$ 90,00");
+		expect(texto).toContain("*Total Geral (2 fábricas): R$ 270,00*");
+		expect(texto).toContain("Transportadora: Rodo Sul");
+		// Sem contato no pedido: link do WhatsApp sem destinatário
+		expect(gerarUrlWhatsappCotacao(espelho)).toBe(
+			`https://wa.me/?text=${encodeURIComponent(texto)}`,
+		);
+		expect(gerarUrlEmailCotacao(espelho)).toContain(
+			encodeURIComponent("Cotação #C0C0C0C0 — 2 fábricas (R$ 270,00)"),
+		);
+	});
+
+	it("rejeita cotação vazia ou com clientes diferentes", () => {
+		expect(() => montarEspelhoCotacao([], GRUPO_ID)).toThrow(
+			EspelhoCotacaoInconsistenteError,
+		);
+		const outroCliente = montarSecao(
+			"b2b2b2b2-0000-4000-a000-000000000000",
+			outraRepresentada,
+			1,
+			"rascunho",
+			{ ...clienteBase, id: "34343434-3434-4434-a434-343434343434" },
+		);
+		expect(() =>
+			montarEspelhoCotacao([secaoA, outroCliente], GRUPO_ID),
+		).toThrow(EspelhoCotacaoInconsistenteError);
 	});
 });

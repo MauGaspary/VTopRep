@@ -11,6 +11,8 @@ import {
 	valoresIniciaisClienteForm,
 } from "./cliente-form";
 
+const TRANSPORTADORA_ID = "44444444-4444-4444-a444-444444444444";
+
 let sequencia = 0;
 const gerarId = () => `local-${++sequencia}`;
 
@@ -21,6 +23,7 @@ const formValido = (
 	razao_social: "  João da Silva  ",
 	nome_fantasia: "",
 	tipo_cliente: "REVENDA",
+	transportadora_padrao_id: "",
 	enderecos: [
 		{
 			...novoEnderecoForm(gerarId),
@@ -49,6 +52,7 @@ describe("validarFormularioCliente", () => {
 			razao_social: "João da Silva",
 			nome_fantasia: null,
 			tipo_cliente: "REVENDA",
+			transportadora_padrao_id: null,
 		});
 		expect(resultado.data.enderecos).toEqual([
 			{
@@ -172,6 +176,33 @@ describe("validarFormularioCliente", () => {
 	});
 });
 
+describe("validarFormularioCliente · transportadora habitual", () => {
+	it("aceita uma transportadora válida e trata vazio como nenhuma", () => {
+		const comTransportadora = validarFormularioCliente(
+			formValido({ transportadora_padrao_id: TRANSPORTADORA_ID }),
+		);
+		expect(
+			comTransportadora.success &&
+				comTransportadora.data.cliente.transportadora_padrao_id,
+		).toBe(TRANSPORTADORA_ID);
+
+		const sem = validarFormularioCliente(formValido());
+		expect(sem.success && sem.data.cliente.transportadora_padrao_id).toBeNull();
+	});
+
+	it("aponta erro no campo quando o id é inválido", () => {
+		const resultado = validarFormularioCliente(
+			formValido({ transportadora_padrao_id: "abc" }),
+		);
+		expect(resultado.success).toBe(false);
+		if (!resultado.success) {
+			expect(resultado.erros.transportadora_padrao_id).toBe(
+				"Transportadora inválida",
+			);
+		}
+	});
+});
+
 describe("valoresIniciaisClienteForm", () => {
 	it("retorna formulário vazio para cliente novo", () => {
 		expect(valoresIniciaisClienteForm()).toEqual({
@@ -179,6 +210,7 @@ describe("valoresIniciaisClienteForm", () => {
 			razao_social: "",
 			nome_fantasia: "",
 			tipo_cliente: "REVENDA",
+			transportadora_padrao_id: "",
 			enderecos: [],
 			contatos: [],
 		});
@@ -192,6 +224,7 @@ describe("valoresIniciaisClienteForm", () => {
 				razao_social: "Padaria Ltda",
 				nome_fantasia: "Pão Quente",
 				tipo_cliente: "FABRICA",
+				transportadora_padrao_id: TRANSPORTADORA_ID,
 			},
 			enderecosInput: [
 				{
@@ -210,12 +243,16 @@ describe("valoresIniciaisClienteForm", () => {
 		const valores = valoresIniciaisClienteForm(completo);
 		expect(valores.cnpj_cpf).toBe("11.222.333/0001-81");
 		expect(valores.tipo_cliente).toBe("FABRICA");
+		expect(valores.transportadora_padrao_id).toBe(TRANSPORTADORA_ID);
 		expect(valores.contatos[0].papel).toBe("");
 
 		const resultado = validarFormularioCliente(valores);
 		expect(resultado.success).toBe(true);
 		if (resultado.success) {
 			expect(resultado.data.cliente.tipo_cliente).toBe("FABRICA");
+			expect(resultado.data.cliente.transportadora_padrao_id).toBe(
+				TRANSPORTADORA_ID,
+			);
 			expect(resultado.data.enderecos[0]).toMatchObject({
 				id: completo.enderecos[0].id,
 				latitude: -30.03,
@@ -231,6 +268,7 @@ describe("valoresIniciaisClienteForm", () => {
 			razao_social: "",
 			nome_fantasia: "",
 			tipo_cliente: "REVENDA",
+			transportadora_padrao_id: "",
 			enderecos: [],
 			contatos: [],
 		});
@@ -240,6 +278,7 @@ describe("valoresIniciaisClienteForm", () => {
 			razao_social: "Mercado Central",
 			nome_fantasia: "Mercado Central",
 			tipo_cliente: "REVENDA",
+			transportadora_padrao_id: "",
 			enderecos: [],
 			contatos: [],
 		});

@@ -10,6 +10,7 @@ import {
 	TabelaPrecoSchema,
 } from "../modules/produtos/domain/tabela-preco.schema";
 import { criarRepresentada } from "../modules/representadas/domain/representada";
+import { criarTransportadora } from "../modules/transportadoras/domain/transportadora";
 import { calcularDigitosVerificadoresCnpj } from "../shared/domain/cnpj";
 import {
 	calcularDigitosVerificadoresCpf,
@@ -162,6 +163,25 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 		});
 	});
 
+	const transportadoras = [
+		{ nome: "Rodo Sul", cidade: "Caxias do Sul/RS", comCnpj: true },
+		{ nome: "Expresso Serrano", cidade: "Bento Gonçalves/RS", comCnpj: true },
+		{ nome: "Frete Rápido", cidade: "Porto Alegre/RS", comCnpj: false },
+	].map(({ nome, cidade, comCnpj }) =>
+		criarTransportadora({
+			tenantId,
+			id: faker.string.uuid(),
+			agora: agora(),
+			input: {
+				nome_fantasia: nome,
+				razao_social: comCnpj ? `${nome} Transportes Ltda` : null,
+				cnpj: comCnpj ? documentos.cnpj() : null,
+				telefone: faker.phone.number(),
+				cidade_uf: cidade,
+			},
+		}),
+	);
+
 	const clientes = Array.from({ length: 5 }, (_, idx) =>
 		criarClienteCompleto({
 			tenantId,
@@ -175,6 +195,9 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 					probability: 0.7,
 				}),
 				tipo_cliente: idx % 2 === 1 ? "FABRICA" : "REVENDA",
+				// Alguns clientes ficam sem transportadora habitual.
+				transportadora_padrao_id:
+					idx < transportadoras.length ? transportadoras[idx]?.id : null,
 			},
 			enderecosInput: [
 				{
@@ -209,6 +232,7 @@ export async function seedDatabase(db: AppDatabase, tenantId: string) {
 	await limparDadosDoTenant(db, tenantId);
 	await db.transaction("rw", db.tables, async () => {
 		await db.representadas.bulkAdd(representadas);
+		await db.transportadoras.bulkAdd(transportadoras);
 		await db.produtos.bulkAdd(produtos);
 		await db.tabelas_preco.bulkAdd(tabelasPreco);
 		await db.itens_preco.bulkAdd(itensPreco);

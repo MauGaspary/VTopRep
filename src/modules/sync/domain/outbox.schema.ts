@@ -4,6 +4,7 @@ import { TimestampSchema } from "../../../shared/domain/datas";
 /** Tabelas de negócio que propagam mutações para o servidor. */
 export const ENTIDADES_SINCRONIZAVEIS = [
 	"representadas",
+	"transportadoras",
 	"clientes",
 	"clientes_enderecos",
 	"clientes_contatos",

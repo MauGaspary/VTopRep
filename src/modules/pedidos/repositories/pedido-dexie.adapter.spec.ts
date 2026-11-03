@@ -4,7 +4,12 @@ import type { Cliente } from "../../clientes/domain/cliente.schema";
 import type { Produto } from "../../produtos/domain/produto.schema";
 import type { TabelaPreco } from "../../produtos/domain/tabela-preco.schema";
 import type { Representada } from "../../representadas/domain/representada.schema";
-import { gerarBlobEspelhoPedidoPdf } from "../components/espelho-pedido-pdf";
+import type { Transportadora } from "../../transportadoras/domain/transportadora.schema";
+import {
+	gerarBlobEspelhoCotacaoPdf,
+	gerarBlobEspelhoPedidoPdf,
+} from "../components/espelho-pedido-pdf";
+import type { CotacaoInput, GrupoCotacaoInput } from "../domain/cotacao.schema";
 import {
 	ContextoVendaInvalidoError,
 	PedidoImutavelError,
@@ -87,6 +92,22 @@ const produtoB: Produto = {
 	descricao: "Espumante Brut 750ml",
 };
 
+const TRANSPORTADORA = "abababab-abab-4bab-abab-abababababab";
+
+const transportadoraBase: Transportadora = {
+	id: TRANSPORTADORA,
+	tenant_id: TENANT,
+	nome_fantasia: "Rodo Sul",
+	razao_social: null,
+	cnpj: null,
+	telefone: "(54) 3333-0000",
+	cidade_uf: "Caxias do Sul/RS",
+	ativo: true,
+	created_at: CRIADO_EM,
+	updated_at: CRIADO_EM,
+	deleted_at: null,
+};
+
 describe("PedidoDexieAdapter", () => {
 	const adapter = new PedidoDexieAdapter({ agora: () => AGORA });
 
@@ -99,6 +120,7 @@ describe("PedidoDexieAdapter", () => {
 			db.representadas.clear(),
 			db.tabelas_preco.clear(),
 			db.produtos.clear(),
+			db.transportadoras.clear(),
 		]);
 		await db.clientes.add(clienteBase);
 		await db.representadas.add(representadaBase);
@@ -326,6 +348,75 @@ describe("PedidoDexieAdapter", () => {
 		).rejects.toThrow(PedidoNaoEncontradoError);
 	});
 
+	it("grava a transportadora do pedido, exibe no espelho/PDF e rejeita a de outro tenant", async () => {
+		await db.transportadoras.bulkAdd([
+			transportadoraBase,
+			{
+				...transportadoraBase,
+				id: crypto.randomUUID(),
+				tenant_id: OUTRO_TENANT,
+			},
+		]);
+		const inputBase = {
+			cliente_id: CLIENTE,
+			representada_id: REPRESENTADA,
+			tabela_id: TABELA,
+			condicao_pagamento: "30 dias",
+			tipo_frete: "FOB" as const,
+			itens: [
+				{
+					produto_id: PRODUTO_A,
+					quantidade: 6,
+					preco_unitario_tabela_centavos: 1000,
+				},
+			],
+		};
+
+		const emitido = await adapter.emitir(TENANT, {
+			...inputBase,
+			transportadora_id: TRANSPORTADORA,
+		});
+		expect(emitido.pedido.transportadora_id).toBe(TRANSPORTADORA);
+		expect((await db.pedidos.get(emitido.pedido.id))?.transportadora_id).toBe(
+			TRANSPORTADORA,
+		);
+		const mutacao = (await db.outbox.toArray()).find(
+			(m) => m.entity === "pedidos",
+		);
+		expect(mutacao?.payload.transportadora_id).toBe(TRANSPORTADORA);
+
+		const espelho = await adapter.obterEspelhoPorId(TENANT, emitido.pedido.id, {
+			nomeFantasia: "Vinitop RS",
+			razaoSocial: "Vinitop RS Ltda",
+			cnpj: "00.000.000/0001-00",
+			telefone: "(51) 3333-0000",
+		});
+		expect(espelho?.logistica.transportadora?.nomeFantasia).toBe("Rodo Sul");
+		if (espelho) {
+			const blob = await gerarBlobEspelhoPedidoPdf(espelho);
+			expect(blob.type).toBe("application/pdf");
+		}
+
+		const semTransportadora = await adapter.salvarRascunho(TENANT, inputBase);
+		expect(semTransportadora.pedido.transportadora_id).toBeNull();
+
+		const deOutroTenant = (await db.transportadoras.toArray()).find(
+			(t) => t.tenant_id === OUTRO_TENANT,
+		);
+		await expect(
+			adapter.salvarRascunho(TENANT, {
+				...inputBase,
+				transportadora_id: deOutroTenant?.id,
+			}),
+		).rejects.toThrow(ContextoVendaInvalidoError);
+		await expect(
+			adapter.salvarRascunho(TENANT, {
+				...inputBase,
+				transportadora_id: crypto.randomUUID(),
+			}),
+		).rejects.toThrow(ContextoVendaInvalidoError);
+	});
+
 	it("aplica a comissão de fábrica quando o cliente é do segmento FABRICA", async () => {
 		const clienteFabricaId = "99999999-9999-4999-a999-999999999999";
 		await db.clientes.add({
@@ -353,5 +444,261 @@ describe("PedidoDexieAdapter", () => {
 
 		expect(pedidoFabrica.pedido.valor_total_centavos).toBe(10000);
 		expect(pedidoFabrica.pedido.comissao_projetada_centavos).toBe(400);
+	});
+
+	describe("cotação multi-representada", () => {
+		const TABELA_2 = "6b6b6b6b-6b6b-4b6b-ab6b-6b6b6b6b6b6b";
+		const PRODUTO_C = "7c7c7c7c-7c7c-4c7c-ac7c-7c7c7c7c7c7c";
+		const EMPRESA = {
+			nomeFantasia: "Vinitop RS",
+			razaoSocial: "Vinitop RS Ltda",
+			cnpj: "00.000.000/0001-00",
+			telefone: "(51) 3333-0000",
+		};
+
+		const grupoVinitop = (quantidade = 2): GrupoCotacaoInput => ({
+			representada_id: REPRESENTADA,
+			tabela_id: TABELA,
+			condicao_pagamento: "30/60 dias",
+			tipo_frete: "CIF",
+			itens: [
+				{
+					produto_id: PRODUTO_A,
+					quantidade,
+					preco_unitario_tabela_centavos: 10000,
+				},
+			],
+		});
+		const grupoSerra: GrupoCotacaoInput = {
+			representada_id: OUTRA_REPRESENTADA,
+			tabela_id: TABELA_2,
+			condicao_pagamento: "28 dias",
+			tipo_frete: "FOB",
+			itens: [
+				{
+					produto_id: PRODUTO_C,
+					quantidade: 3,
+					preco_unitario_tabela_centavos: 5000,
+					percentual_desconto: 1000, // 10% -> 4500 x 3 = 13500
+				},
+			],
+		};
+		const cotacao = (grupos: GrupoCotacaoInput[]): CotacaoInput => ({
+			cliente_id: CLIENTE,
+			transportadora_id: TRANSPORTADORA,
+			observacoes: "Entregar junto",
+			grupos,
+		});
+
+		beforeEach(async () => {
+			await db.transportadoras.add(transportadoraBase);
+			await db.representadas.add({
+				...representadaBase,
+				id: OUTRA_REPRESENTADA,
+				nome_fantasia: "Serra Bebidas",
+				razao_social: "Serra Bebidas Ltda",
+				percentual_comissao_revenda: 500, // 5,00%
+				regras_frete_padrao: "FOB",
+			});
+			await db.tabelas_preco.add({
+				...tabelaBase,
+				id: TABELA_2,
+				representada_id: OUTRA_REPRESENTADA,
+			});
+			await db.produtos.add({
+				...produtoA,
+				id: PRODUTO_C,
+				representada_id: OUTRA_REPRESENTADA,
+				sku: "SER-001",
+				descricao: "Suco de Uva 1L",
+			});
+		});
+
+		it("desmembra em 1 pedido por fábrica, vinculados pelo mesmo cotacao_grupo_id", async () => {
+			const salva = await adapter.salvarCotacao(
+				TENANT,
+				cotacao([grupoVinitop(), grupoSerra]),
+				"rascunho",
+			);
+
+			expect(salva.cotacao_grupo_id).toEqual(expect.any(String));
+			expect(salva.pedidos).toHaveLength(2);
+			const [vinitop, serra] = salva.pedidos;
+			expect(vinitop?.pedido).toMatchObject({
+				representada_id: REPRESENTADA,
+				cotacao_grupo_id: salva.cotacao_grupo_id,
+				condicao_pagamento: "30/60 dias",
+				tipo_frete: "CIF",
+				transportadora_id: TRANSPORTADORA,
+				observacoes: "Entregar junto",
+				valor_total_centavos: 20000,
+				comissao_projetada_centavos: 1500, // 7,50%
+				status: "rascunho",
+			});
+			expect(serra?.pedido).toMatchObject({
+				representada_id: OUTRA_REPRESENTADA,
+				cotacao_grupo_id: salva.cotacao_grupo_id,
+				tipo_frete: "FOB",
+				valor_total_centavos: 13500,
+				comissao_projetada_centavos: 675, // 5,00%
+			});
+			expect(vinitop?.pedido.idempotency_key).not.toBe(
+				serra?.pedido.idempotency_key,
+			);
+
+			const fila = await db.outbox.toArray();
+			const mutacoesPedidos = fila.filter((m) => m.entity === "pedidos");
+			expect(mutacoesPedidos).toHaveLength(2);
+			expect(fila.filter((m) => m.entity === "itens_pedido")).toHaveLength(2);
+			for (const m of mutacoesPedidos) {
+				expect(m.payload.cotacao_grupo_id).toBe(salva.cotacao_grupo_id);
+			}
+
+			const serraId = serra?.pedido.id ?? "";
+			const carregada = await adapter.obterCotacao(TENANT, serraId);
+			expect(carregada?.cotacao_grupo_id).toBe(salva.cotacao_grupo_id);
+			expect(carregada?.pedidos.map((p) => p.pedido.representada_id)).toEqual([
+				REPRESENTADA,
+				OUTRA_REPRESENTADA,
+			]);
+			expect(carregada?.pedidos.every((p) => p.itens.length === 1)).toBe(true);
+			expect(await adapter.obterCotacao(OUTRO_TENANT, serraId)).toBeUndefined();
+		});
+
+		it("cotação de uma única fábrica gera pedido avulso (sem agrupador)", async () => {
+			const salva = await adapter.salvarCotacao(
+				TENANT,
+				cotacao([grupoVinitop()]),
+				"emitido",
+			);
+			expect(salva.cotacao_grupo_id).toBeNull();
+			expect(salva.pedidos[0]?.pedido.cotacao_grupo_id).toBeNull();
+			expect(salva.pedidos[0]?.pedido.status).toBe("emitido");
+		});
+
+		it("ao editar, atualiza por fábrica, inclui novas e exclui (tombstone) as removidas", async () => {
+			const avulso = await adapter.salvarCotacao(
+				TENANT,
+				cotacao([grupoVinitop()]),
+				"rascunho",
+			);
+			const vinitopId = avulso.pedidos[0]?.pedido.id ?? "";
+
+			// Pedido avulso ganha uma segunda fábrica -> passa a ter agrupador
+			const ampliada = await adapter.salvarCotacao(
+				TENANT,
+				cotacao([grupoVinitop(5), grupoSerra]),
+				"rascunho",
+				vinitopId,
+			);
+			expect(ampliada.cotacao_grupo_id).toEqual(expect.any(String));
+			expect(ampliada.pedidos[0]?.pedido.id).toBe(vinitopId);
+			expect(ampliada.pedidos[0]?.pedido.valor_total_centavos).toBe(50000);
+			expect(ampliada.pedidos[0]?.pedido.cotacao_grupo_id).toBe(
+				ampliada.cotacao_grupo_id,
+			);
+			const serraId = ampliada.pedidos[1]?.pedido.id ?? "";
+
+			// Remove a Vinitop da sacola e fecha a cotação
+			const fechada = await adapter.salvarCotacao(
+				TENANT,
+				cotacao([grupoSerra]),
+				"emitido",
+				serraId,
+			);
+			expect(fechada.cotacao_grupo_id).toBe(ampliada.cotacao_grupo_id);
+			expect(fechada.pedidos.map((p) => p.pedido.id)).toEqual([serraId]);
+			expect(fechada.pedidos[0]?.pedido.status).toBe("emitido");
+
+			const vinitopGravado = await db.pedidos.get(vinitopId);
+			expect(vinitopGravado?.deleted_at).toBe(AGORA);
+			const itensVinitop = await db.itens_pedido
+				.filter((i) => i.pedido_id === vinitopId)
+				.toArray();
+			expect(itensVinitop.length).toBeGreaterThan(0);
+			expect(itensVinitop.every((i) => i.deleted_at === AGORA)).toBe(true);
+			expect(
+				(await db.outbox.toArray()).some(
+					(m) =>
+						m.entity === "pedidos" &&
+						m.payload.id === vinitopId &&
+						m.action === "DELETE",
+				),
+			).toBe(true);
+
+			// Emitida: não pode mais ser alterada
+			await expect(
+				adapter.salvarCotacao(
+					TENANT,
+					cotacao([grupoSerra]),
+					"rascunho",
+					serraId,
+				),
+			).rejects.toThrow(PedidoImutavelError);
+		});
+
+		it("é atômica: um vínculo inválido em qualquer fábrica não grava nada", async () => {
+			await expect(
+				adapter.salvarCotacao(
+					TENANT,
+					// tabela da Vinitop na seção da Serra
+					cotacao([grupoVinitop(), { ...grupoSerra, tabela_id: TABELA }]),
+					"rascunho",
+				),
+			).rejects.toThrow(ContextoVendaInvalidoError);
+			expect(await db.pedidos.count()).toBe(0);
+			expect(await db.itens_pedido.count()).toBe(0);
+			expect(await db.outbox.count()).toBe(0);
+
+			await expect(
+				adapter.salvarCotacao(
+					TENANT,
+					cotacao([grupoVinitop(), grupoVinitop(3)]),
+					"rascunho",
+				),
+			).rejects.toThrow("mais de uma seção");
+			await expect(
+				adapter.salvarCotacao(
+					TENANT,
+					cotacao([grupoVinitop()]),
+					"rascunho",
+					crypto.randomUUID(),
+				),
+			).rejects.toThrow(PedidoNaoEncontradoError);
+		});
+
+		it("monta o espelho unificado e gera os PDFs unificado e individual", async () => {
+			const salva = await adapter.salvarCotacao(
+				TENANT,
+				cotacao([grupoVinitop(), grupoSerra]),
+				"rascunho",
+			);
+			const espelho = await adapter.obterEspelhoCotacao(
+				TENANT,
+				salva.pedidos[0]?.pedido.id ?? "",
+				EMPRESA,
+			);
+
+			expect(espelho?.secoes.map((s) => s.representada.nomeFantasia)).toEqual([
+				"Vinitop",
+				"Serra Bebidas",
+			]);
+			expect(espelho?.totais.valorTotalCentavos).toBe(33500);
+			expect(espelho?.totais.valorTotalFormatado).toBe("R$ 335,00");
+			expect(espelho?.logistica.transportadora?.nomeFantasia).toBe("Rodo Sul");
+			expect(espelho?.codigoCurto).toBe(
+				salva.cotacao_grupo_id?.slice(0, 8).toUpperCase(),
+			);
+
+			if (espelho) {
+				const unificado = await gerarBlobEspelhoCotacaoPdf(espelho);
+				expect(unificado.type).toBe("application/pdf");
+				const [primeira] = espelho.secoes;
+				if (primeira) {
+					const individual = await gerarBlobEspelhoPedidoPdf(primeira);
+					expect(individual.type).toBe("application/pdf");
+				}
+			}
+		});
 	});
 });

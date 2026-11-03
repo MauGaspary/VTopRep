@@ -2,12 +2,18 @@ import {
 	Check,
 	ChevronDown,
 	ChevronUp,
-	Minus,
+	Layers,
 	Package,
 	Plus,
-	Trash2,
 } from "lucide-react";
-import { type FormEvent, useEffect, useMemo, useRef, useState } from "react";
+import {
+	type FormEvent,
+	useCallback,
+	useEffect,
+	useMemo,
+	useRef,
+	useState,
+} from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
 import { Page } from "../../../shared/components/layout/Page";
@@ -31,26 +37,20 @@ import {
 import { formatarCnpj } from "../../../shared/domain/cnpj";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
 import { dataLocal, formatarDataBr } from "../../../shared/domain/datas";
-import {
-	formatarCentavos,
-	formatarCentesimosPercentual,
-} from "../../../shared/domain/decimal-br";
+import { formatarCentavos } from "../../../shared/domain/decimal-br";
+import { somarCentavos } from "../../../shared/domain/dinheiro";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
-import { ROTULOS_FRETE, TIPOS_FRETE } from "../../../shared/domain/frete";
 import { ClienteQuickCreateDialog } from "../../clientes/components/cliente-quick-create-dialog";
 import {
 	type Cliente,
 	ROTULOS_TIPO_CLIENTE,
 } from "../../clientes/domain/cliente.schema";
 import { useCliente, useClientes } from "../../clientes/hooks/use-clientes";
-import { escolherTabelaSugerida } from "../../produtos/domain/preco";
 import { correspondeBuscaProduto } from "../../produtos/domain/produto";
 import type { Produto } from "../../produtos/domain/produto.schema";
-import { descreverVigencia } from "../../produtos/domain/tabela-preco";
 import {
 	usePrecosDaTabela,
 	useTabelasPadraoDoCliente,
-	useTabelasVigentes,
 } from "../../produtos/hooks/use-precos";
 import { useTodosProdutos } from "../../produtos/hooks/use-produtos";
 import {
@@ -60,39 +60,44 @@ import {
 import type { Representada } from "../../representadas/domain/representada.schema";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
 import {
+	opcoesComboboxTransportadoras,
+	sugerirTransportadoraDoCliente,
+} from "../../transportadoras/domain/transportadora";
+import { useTodasTransportadoras } from "../../transportadoras/hooks/use-transportadoras";
+import { type CotacaoCompleta, cotacaoEditavel } from "../domain/cotacao";
+import {
+	atualizarGrupoForm,
+	type CotacaoFormValues,
+	type GrupoOrcamentoFormValues,
+	garantirGrupoForm,
+	removerGrupoForm,
+	validarFormularioCotacao,
+	valoresIniciaisCotacaoForm,
+} from "../domain/cotacao-form";
+import {
 	escolherContatoPadrao,
 	escolherEnderecoEntregaPadrao,
-	type PedidoCompleto,
 	resolverPercentualComissaoPedido,
+	type TotaisPedido,
 } from "../domain/pedido";
-import {
-	CONDICOES_PAGAMENTO_PADRAO,
-	ROTULOS_STATUS_PEDIDO,
-} from "../domain/pedido.schema";
+import { ROTULOS_STATUS_PEDIDO } from "../domain/pedido.schema";
 import {
 	adicionarOuIncrementarItemForm,
-	ajustarDeltaQuantidadeItemForm,
-	calcularPreviaItemForm,
 	calcularPreviaTotaisForm,
-	chaveErroItemPedido,
 	type PedidoFormErros,
-	type PedidoFormValues,
-	parseDescontoFormParaCentesimos,
-	reprecificarItensFormPorTabela,
-	validarFormularioPedido,
-	valoresIniciaisPedidoForm,
 } from "../domain/pedido-form";
 import {
-	useEspelhoPedido,
-	usePedido,
+	useCotacao,
+	useEspelhoCotacao,
 	usePedidoActions,
 } from "../hooks/use-pedidos";
-import { EspelhoPedidoActionsBar } from "./espelho-pedido-pdf";
+import { EspelhoCotacaoActionsBar } from "./espelho-pedido-pdf";
+import { SecaoRepresentadaSacola } from "./secao-representada-sacola";
 
 export function OrcamentoFormView() {
 	const { id } = useParams();
 	const { config } = useTenant();
-	const { dados, isLoading: carregandoPedido } = usePedido(config.id, id);
+	const { dados, isLoading: carregandoCotacao } = useCotacao(config.id, id);
 	const { clientes, isLoading: carregandoClientes } = useClientes(config.id);
 	const { representadas, isLoading: carregandoRepresentadas } =
 		useRepresentadas(config.id);
@@ -101,7 +106,7 @@ export function OrcamentoFormView() {
 	);
 
 	if (
-		(id && carregandoPedido) ||
+		(id && carregandoCotacao) ||
 		carregandoClientes ||
 		carregandoRepresentadas ||
 		carregandoProdutos
@@ -126,8 +131,9 @@ export function OrcamentoFormView() {
 
 	return (
 		<OrcamentoForm
-			key={dados?.pedido.id ?? "novo"}
+			key={id ?? "novo"}
 			tenantId={config.id}
+			pedidoReferenciaId={id}
 			original={dados ?? undefined}
 			clientes={clientes}
 			representadas={representadas}
@@ -138,7 +144,9 @@ export function OrcamentoFormView() {
 
 interface OrcamentoFormProps {
 	tenantId: string;
-	original?: PedidoCompleto;
+	/** Pedido pelo qual a cotação foi aberta (`/pedidos/:id`). */
+	pedidoReferenciaId?: string;
+	original?: CotacaoCompleta;
 	clientes: ReadonlyArray<
 		Pick<
 			Cliente,
@@ -153,6 +161,7 @@ const gerarLocalId = () => crypto.randomUUID();
 
 function OrcamentoForm({
 	tenantId,
+	pedidoReferenciaId,
 	original,
 	clientes,
 	representadas,
@@ -161,13 +170,21 @@ function OrcamentoForm({
 	const navigate = useNavigate();
 	const [searchParams] = useSearchParams();
 	const { config } = useTenant();
-	const { salvarRascunho, emitir } = usePedidoActions(tenantId);
-	const { espelho } = useEspelhoPedido(
+	const { salvarCotacao } = usePedidoActions(tenantId);
+	const { espelho } = useEspelhoCotacao(
 		tenantId,
-		original?.pedido.id,
+		original ? pedidoReferenciaId : undefined,
 		config.empresa,
 	);
 	const hoje = dataLocal(new Date());
+
+	const representadasPorId = useMemo(() => {
+		const mapa = new Map<string, Representada>();
+		for (const r of representadas) {
+			mapa.set(r.id, r);
+		}
+		return mapa;
+	}, [representadas]);
 
 	const produtoQueryId = searchParams.get("produtoId");
 	const produtoPreSelecionado = useMemo(
@@ -180,46 +197,51 @@ function OrcamentoForm({
 
 	const clienteInicialId =
 		searchParams.get("clienteId") ?? searchParams.get("cliente") ?? "";
-	const representadaInicialId =
+	const representadaInicial = representadasPorId.get(
 		produtoPreSelecionado?.representada_id ??
-		searchParams.get("representadaId") ??
-		searchParams.get("representada") ??
-		"";
-	const representadaInicial = representadas.find(
-		(r) => r.id === representadaInicialId,
+			searchParams.get("representadaId") ??
+			searchParams.get("representada") ??
+			"",
 	);
 
-	const [valores, setValores] = useState<PedidoFormValues>(() =>
-		valoresIniciaisPedidoForm(original, {
+	const [valores, setValores] = useState<CotacaoFormValues>(() =>
+		valoresIniciaisCotacaoForm(original, {
 			clienteId: clienteInicialId,
-			representadaId: representadaInicialId,
-			tipoFrete: representadaInicial?.regras_frete_padrao ?? "CIF",
+			representada: representadaInicial,
 		}),
+	);
+	const [representadaAtivaId, setRepresentadaAtivaId] = useState<string>(
+		() =>
+			original?.pedidos[0]?.pedido.representada_id ??
+			representadaInicial?.id ??
+			"",
 	);
 
 	const [modalNovoClienteAberto, setModalNovoClienteAberto] = useState(false);
 	const [termoCadastroRapidoCliente, setTermoCadastroRapidoCliente] =
 		useState("");
 
-	// Rastreia se o usuário escolheu manualmente endereço, contato ou tabela
+	// Rastreia se o usuário escolheu manualmente endereço, contato ou transportadora
 	const [enderecoManual, setEnderecoManual] = useState<boolean>(
 		Boolean(original),
 	);
 	const [contatoManual, setContatoManual] = useState<boolean>(
 		Boolean(original),
 	);
-	const [tabelaManual, setTabelaManual] = useState<boolean>(Boolean(original));
+	const [transportadoraManual, setTransportadoraManual] = useState<boolean>(
+		Boolean(original),
+	);
 	const [mostrarDetalhesContexto, setMostrarDetalhesContexto] =
-		useState<boolean>(Boolean(original?.pedido.observacoes));
+		useState<boolean>(Boolean(original?.pedidos[0]?.pedido.observacoes));
 
 	const [buscaCatalogo, setBuscaCatalogo] = useState("");
 	const [erros, setErros] = useState<PedidoFormErros>({});
 	const [erroGeral, setErroGeral] = useState<string | null>(null);
-	const [avisoTabela, setAvisoTabela] = useState<string | null>(null);
 	const [salvando, setSalvando] = useState(false);
 
 	const somenteLeitura =
-		original !== undefined && original.pedido.status !== "rascunho";
+		original !== undefined &&
+		!cotacaoEditavel(original.pedidos.map((p) => p.pedido));
 
 	// Dados reativos do cliente selecionado (endereços, contatos e tabelas padrão)
 	const { dados: clienteCompleto } = useCliente(
@@ -231,18 +253,7 @@ function OrcamentoForm({
 		tenantId,
 		valores.cliente_id || undefined,
 	);
-
-	// Tabelas vigentes da representada selecionada
-	const { tabelas: tabelasVigentes, isLoading: carregandoTabelas } =
-		useTabelasVigentes(tenantId, valores.representada_id || undefined, hoje);
-
-	const tabelaPadraoDoClienteId =
-		tabelasPadrao.get(valores.representada_id)?.tabela_id ?? null;
-
-	const tabelaSugerida = useMemo(
-		() => escolherTabelaSugerida(tabelasVigentes, tabelaPadraoDoClienteId),
-		[tabelasVigentes, tabelaPadraoDoClienteId],
-	);
+	const { transportadoras } = useTodasTransportadoras(tenantId);
 
 	// Valores efetivos (sugeridos automaticamente quando não sobrescritos manualmente)
 	const enderecosDoCliente = clienteCompleto?.enderecos ?? [];
@@ -256,42 +267,46 @@ function OrcamentoForm({
 		? valores.contato_id
 		: escolherContatoPadrao(contatosDoCliente);
 
-	const tabelaEfetivaId =
-		tabelaManual &&
-		valores.tabela_id !== "" &&
-		(somenteLeitura || tabelasVigentes.some((t) => t.id === valores.tabela_id))
-			? valores.tabela_id
-			: (tabelaSugerida?.id ?? valores.tabela_id);
+	const transportadoraHabitualId = sugerirTransportadoraDoCliente(
+		clienteCompleto?.cliente,
+		transportadoras,
+	);
+	const transportadoraEfetivaId = transportadoraManual
+		? valores.transportadora_id
+		: transportadoraHabitualId;
+	const usandoTransportadoraHabitual =
+		transportadoraHabitualId !== "" &&
+		transportadoraEfetivaId === transportadoraHabitualId;
 
-	// Preços vigentes dos produtos na tabela ativa
-	const { precosPorProduto, isLoading: carregandoPrecos } = usePrecosDaTabela(
-		tenantId,
-		tabelaEfetivaId || undefined,
-		hoje,
+	const transportadoraOriginalId =
+		original?.pedidos[0]?.pedido.transportadora_id;
+	const opcoesTransportadoras = useMemo(
+		() =>
+			opcoesComboboxTransportadoras(transportadoras, transportadoraOriginalId),
+		[transportadoras, transportadoraOriginalId],
 	);
 
-	// Sincroniza reprecificação automática quando os preços da tabela ativa carregam/mudam
-	useEffect(() => {
-		if (somenteLeitura || precosPorProduto.size === 0) return;
-		setValores((atual) => {
-			if (atual.itens.length === 0) return atual;
-			const { itens: reprecificados, produtosSemPrecoIds } =
-				reprecificarItensFormPorTabela(atual.itens, precosPorProduto);
-			if (produtosSemPrecoIds.length > 0) {
-				setAvisoTabela(
-					`${produtosSemPrecoIds.length} item(ns) do orçamento não possuem preço cadastrado na tabela selecionada e mantiveram o preço anterior.`,
-				);
-			} else {
-				setAvisoTabela(null);
-			}
-			const mudou = reprecificados.some(
-				(item, idx) =>
-					item.preco_unitario_tabela_centavos !==
-					atual.itens[idx]?.preco_unitario_tabela_centavos,
-			);
-			return mudou ? { ...atual, itens: reprecificados } : atual;
-		});
-	}, [precosPorProduto, somenteLeitura]);
+	const grupoAtivo = valores.grupos.find(
+		(g) => g.representada_id === representadaAtivaId,
+	);
+	const representadaAtiva = representadasPorId.get(representadaAtivaId);
+
+	// Preços da tabela da seção ativa, para o catálogo
+	const { precosPorProduto: precosCatalogo, isLoading: carregandoPrecos } =
+		usePrecosDaTabela(tenantId, grupoAtivo?.tabela_id || undefined, hoje);
+
+	const atualizarGrupo = useCallback(
+		(
+			representadaId: string,
+			alterar: (grupo: GrupoOrcamentoFormValues) => GrupoOrcamentoFormValues,
+		) => {
+			setValores((atual) => ({
+				...atual,
+				grupos: atualizarGrupoForm(atual.grupos, representadaId, alterar),
+			}));
+		},
+		[],
+	);
 
 	// Pré-adiciona produto vindo por query param (?produtoId=...) uma única vez
 	const produtoQueryInseridoRef = useRef(false);
@@ -300,18 +315,18 @@ function OrcamentoForm({
 			produtoQueryInseridoRef.current ||
 			original ||
 			!produtoPreSelecionado ||
-			produtoPreSelecionado.representada_id !== valores.representada_id
+			produtoPreSelecionado.representada_id !== grupoAtivo?.representada_id
 		) {
 			return;
 		}
-		const preco = precosPorProduto.get(produtoPreSelecionado.id);
+		const preco = precosCatalogo.get(produtoPreSelecionado.id);
 		if (!preco) return;
 
 		produtoQueryInseridoRef.current = true;
-		setValores((atual) => ({
-			...atual,
+		atualizarGrupo(produtoPreSelecionado.representada_id, (g) => ({
+			...g,
 			itens: adicionarOuIncrementarItemForm(
-				atual.itens,
+				g.itens,
 				produtoPreSelecionado.id,
 				preco.preco_base_centavos,
 				gerarLocalId,
@@ -320,14 +335,10 @@ function OrcamentoForm({
 	}, [
 		original,
 		produtoPreSelecionado,
-		valores.representada_id,
-		precosPorProduto,
+		grupoAtivo?.representada_id,
+		precosCatalogo,
+		atualizarGrupo,
 	]);
-
-	const representadaSelecionada = useMemo(
-		() => representadas.find((r) => r.id === valores.representada_id),
-		[representadas, valores.representada_id],
-	);
 
 	const clienteSelecionado = useMemo(
 		() =>
@@ -335,6 +346,7 @@ function OrcamentoForm({
 			clientes.find((c) => c.id === valores.cliente_id),
 		[clienteCompleto?.cliente, clientes, valores.cliente_id],
 	);
+	const tipoClienteAtivo = clienteSelecionado?.tipo_cliente ?? null;
 
 	const opcoesClientes = useMemo<OpcaoCombobox[]>(
 		() =>
@@ -358,39 +370,21 @@ function OrcamentoForm({
 		[clientes],
 	);
 
+	const representadasNaSacola = useMemo(
+		() => new Set(valores.grupos.map((g) => g.representada_id)),
+		[valores.grupos],
+	);
+
 	const opcoesRepresentadas = useMemo<OpcaoCombobox<Representada>[]>(
 		() =>
 			representadas.map((r) => ({
 				id: r.id,
 				label: r.nome_fantasia,
-				sublabel: `${r.razao_social} · Com. ${formatarResumoComissaoRepresentada(r)}`,
+				sublabel: `${representadasNaSacola.has(r.id) ? "Na cotação · " : ""}${r.razao_social} · Com. ${formatarResumoComissaoRepresentada(r)}`,
 				keywords: [r.cnpj, formatarCnpj(r.cnpj), r.razao_social],
 				dados: r,
 			})),
-		[representadas],
-	);
-
-	const opcoesTabelas = useMemo<OpcaoCombobox[]>(
-		() =>
-			tabelasVigentes.map((t) => ({
-				id: t.id,
-				label:
-					t.id === tabelaPadraoDoClienteId
-						? `${t.nome_tabela} ★ Padrão do cliente`
-						: t.nome_tabela,
-				sublabel: `Vigência: ${descreverVigencia(t)}`,
-				keywords: [t.nome_tabela],
-			})),
-		[tabelasVigentes, tabelaPadraoDoClienteId],
-	);
-
-	const opcoesCondicoesPagamento = useMemo<OpcaoCombobox[]>(
-		() =>
-			CONDICOES_PAGAMENTO_PADRAO.map((condicao) => ({
-				id: condicao,
-				label: condicao,
-			})),
-		[],
+		[representadas, representadasNaSacola],
 	);
 
 	const produtosPorId = useMemo(() => {
@@ -402,47 +396,79 @@ function OrcamentoForm({
 	}, [todosProdutos]);
 
 	const produtosCatalogoRepresentada = useMemo(() => {
-		if (!valores.representada_id) return [];
+		if (!representadaAtivaId) return [];
 		return todosProdutos.filter(
 			(p) =>
 				p.ativo &&
-				p.representada_id === valores.representada_id &&
+				p.representada_id === representadaAtivaId &&
 				correspondeBuscaProduto(p, buscaCatalogo),
 		);
-	}, [todosProdutos, valores.representada_id, buscaCatalogo]);
+	}, [todosProdutos, representadaAtivaId, buscaCatalogo]);
 
 	const quantidadeNoOrcamentoPorProduto = useMemo(() => {
 		const mapa = new Map<string, number>();
-		for (const item of valores.itens) {
-			const qtd = Number(item.quantidade);
-			if (Number.isFinite(qtd) && qtd > 0) {
-				mapa.set(item.produto_id, (mapa.get(item.produto_id) ?? 0) + qtd);
+		for (const grupo of valores.grupos) {
+			for (const item of grupo.itens) {
+				const qtd = Number(item.quantidade);
+				if (Number.isFinite(qtd) && qtd > 0) {
+					mapa.set(item.produto_id, (mapa.get(item.produto_id) ?? 0) + qtd);
+				}
 			}
 		}
 		return mapa;
-	}, [valores.itens]);
+	}, [valores.grupos]);
 
-	const tipoClienteAtivo = clienteSelecionado?.tipo_cliente ?? null;
+	// Prévia por fábrica (comissão conforme representada × segmento do cliente)
+	const previasPorGrupo = useMemo(() => {
+		const mapa = new Map<
+			string,
+			{ percentualComissao: number; previa: TotaisPedido }
+		>();
+		for (const grupo of valores.grupos) {
+			const rep = representadasPorId.get(grupo.representada_id);
+			const percentualComissao = rep
+				? resolverPercentualComissaoPedido(rep, tipoClienteAtivo)
+				: 0;
+			mapa.set(grupo.representada_id, {
+				percentualComissao,
+				previa: calcularPreviaTotaisForm(grupo.itens, percentualComissao),
+			});
+		}
+		return mapa;
+	}, [valores.grupos, representadasPorId, tipoClienteAtivo]);
 
-	const percentualComissaoAtivo = useMemo(
-		() =>
-			representadaSelecionada
-				? resolverPercentualComissaoPedido(
-						representadaSelecionada,
-						tipoClienteAtivo,
-					)
-				: 0,
-		[representadaSelecionada, tipoClienteAtivo],
+	const totaisGerais = useMemo(() => {
+		const previas = [...previasPorGrupo.values()].map((p) => p.previa);
+		return {
+			valor_tabela_total_centavos: somarCentavos(
+				previas.map((p) => p.valor_tabela_total_centavos),
+			),
+			desconto_total_centavos: somarCentavos(
+				previas.map((p) => p.desconto_total_centavos),
+			),
+			comissao_projetada_centavos: somarCentavos(
+				previas.map((p) => p.comissao_projetada_centavos),
+			),
+			valor_total_centavos: somarCentavos(
+				previas.map((p) => p.valor_total_centavos),
+			),
+			quantidade_total_volumes: somarCentavos(
+				previas.map((p) => p.quantidade_total_volumes),
+			),
+		};
+	}, [previasPorGrupo]);
+
+	const gruposComItens = valores.grupos.filter((g) => g.itens.length > 0);
+	const quantidadeItens = valores.grupos.reduce(
+		(total, g) => total + g.itens.length,
+		0,
 	);
 
-	const previaTotais = useMemo(
-		() => calcularPreviaTotaisForm(valores.itens, percentualComissaoAtivo),
-		[valores.itens, percentualComissaoAtivo],
-	);
-
-	const limparErro = (chave: string) => {
-		setErros((atual) => ({ ...atual, [chave]: undefined }));
-	};
+	const limparErro = useCallback((chave: string) => {
+		setErros((atual) =>
+			atual[chave] === undefined ? atual : { ...atual, [chave]: undefined },
+		);
+	}, []);
 
 	const handleTrocarCliente = (novoClienteId: string) => {
 		setValores((atual) => ({
@@ -450,53 +476,62 @@ function OrcamentoForm({
 			cliente_id: novoClienteId,
 			endereco_entrega_id: "",
 			contato_id: "",
+			transportadora_id: "",
+			// Tabelas voltam a seguir a sugestão (padrão do novo cliente)
+			grupos: atual.grupos.map((g) => ({ ...g, tabela_manual: false })),
 		}));
 		setEnderecoManual(false);
 		setContatoManual(false);
-		setTabelaManual(false);
+		setTransportadoraManual(false);
 		limparErro("cliente_id");
 	};
 
-	const handleTrocarRepresentada = (novaRepresentadaId: string) => {
-		if (novaRepresentadaId === valores.representada_id) return;
-		if (valores.itens.length > 0) {
-			const confirmar = window.confirm(
-				"Trocar a representada removerá os itens atuais do orçamento. Deseja continuar?",
-			);
-			if (!confirmar) return;
-		}
-		const novaRep = representadas.find((r) => r.id === novaRepresentadaId);
+	/** Abre o catálogo da fábrica, criando sua seção na sacola se necessário. */
+	const handleAbrirCatalogo = (novaRepresentadaId: string) => {
+		const representada = representadasPorId.get(novaRepresentadaId);
+		if (!representada) return;
 		setValores((atual) => ({
 			...atual,
-			representada_id: novaRepresentadaId,
-			tabela_id: "",
-			tipo_frete: novaRep?.regras_frete_padrao ?? atual.tipo_frete,
-			itens: [],
+			grupos: garantirGrupoForm(atual.grupos, representada),
 		}));
-		setTabelaManual(false);
-		setAvisoTabela(null);
-		limparErro("representada_id");
-		limparErro("tabela_id");
+		if (novaRepresentadaId !== representadaAtivaId) {
+			setRepresentadaAtivaId(novaRepresentadaId);
+			setBuscaCatalogo("");
+		}
+		limparErro("itens");
 	};
 
-	const handleTrocarTabela = (novaTabelaId: string) => {
+	const handleRemoverGrupo = (grupo: GrupoOrcamentoFormValues) => {
+		const nome =
+			representadasPorId.get(grupo.representada_id)?.nome_fantasia ??
+			"esta fábrica";
+		if (
+			grupo.itens.length > 0 &&
+			!window.confirm(
+				`Remover ${nome} da cotação? Os ${grupo.itens.length} item(ns) desta fábrica serão descartados.`,
+			)
+		) {
+			return;
+		}
+		const restantes = removerGrupoForm(valores.grupos, grupo.representada_id);
 		setValores((atual) => ({
 			...atual,
-			tabela_id: novaTabelaId,
+			grupos: removerGrupoForm(atual.grupos, grupo.representada_id),
 		}));
-		setTabelaManual(true);
-		limparErro("tabela_id");
+		if (grupo.representada_id === representadaAtivaId) {
+			setRepresentadaAtivaId(restantes[0]?.representada_id ?? "");
+		}
 	};
 
 	const handleAdicionarProduto = (produto: Produto) => {
-		if (somenteLeitura) return;
-		const preco = precosPorProduto.get(produto.id);
+		if (somenteLeitura || !grupoAtivo) return;
+		const preco = precosCatalogo.get(produto.id);
 		if (!preco) return;
 
-		setValores((atual) => ({
-			...atual,
+		atualizarGrupo(produto.representada_id, (g) => ({
+			...g,
 			itens: adicionarOuIncrementarItemForm(
-				atual.itens,
+				g.itens,
 				produto.id,
 				preco.preco_base_centavos,
 				gerarLocalId,
@@ -505,50 +540,16 @@ function OrcamentoForm({
 		limparErro("itens");
 	};
 
-	const handleDeltaQuantidade = (localId: string, delta: number) => {
-		if (somenteLeitura) return;
-		setValores((atual) => ({
-			...atual,
-			itens: ajustarDeltaQuantidadeItemForm(atual.itens, localId, delta),
-		}));
-		limparErro(chaveErroItemPedido(localId, "quantidade"));
-	};
-
-	const handleAlterarCampoItem = (
-		localId: string,
-		campo: "quantidade" | "percentual_desconto",
-		valor: string,
-	) => {
-		if (somenteLeitura) return;
-		setValores((atual) => ({
-			...atual,
-			itens: atual.itens.map((item) =>
-				item.localId === localId ? { ...item, [campo]: valor } : item,
-			),
-		}));
-		limparErro(chaveErroItemPedido(localId, campo));
-	};
-
-	const handleRemoverItem = (localId: string) => {
-		if (somenteLeitura) return;
-		setValores((atual) => ({
-			...atual,
-			itens: atual.itens.filter((item) => item.localId !== localId),
-		}));
-	};
-
 	const salvarOuEmitir = async (destinoStatus: "rascunho" | "emitido") => {
 		if (somenteLeitura) return;
 		setErroGeral(null);
 
-		const valoresCompletos: PedidoFormValues = {
+		const validacao = validarFormularioCotacao({
 			...valores,
-			tabela_id: tabelaEfetivaId,
 			endereco_entrega_id: enderecoEntregaEfetivo,
 			contato_id: contatoEfetivo,
-		};
-
-		const validacao = validarFormularioPedido(valoresCompletos);
+			transportadora_id: transportadoraEfetivaId,
+		});
 		if (!validacao.success) {
 			setErros(validacao.erros);
 			setErroGeral(validacao.geral);
@@ -558,11 +559,15 @@ function OrcamentoForm({
 		setErros({});
 		setSalvando(true);
 		try {
+			const resultado = await salvarCotacao(
+				validacao.data,
+				destinoStatus,
+				original ? pedidoReferenciaId : undefined,
+			);
 			if (destinoStatus === "emitido") {
-				const resultado = await emitir(validacao.data, original?.pedido.id);
-				navigate(`/pedidos/${resultado.pedido.id}`);
+				const primeiro = resultado.pedidos[0]?.pedido.id;
+				navigate(primeiro ? `/pedidos/${primeiro}` : "/pedidos");
 			} else {
-				await salvarRascunho(validacao.data, original?.pedido.id);
 				navigate("/pedidos");
 			}
 		} catch (e) {
@@ -584,55 +589,64 @@ function OrcamentoForm({
 		void salvarOuEmitir("emitido");
 	};
 
-	const pedidoMinimoCentavos =
-		representadaSelecionada?.valor_pedido_minimo_centavos ?? 0;
-	const atingiuPedidoMinimo =
-		pedidoMinimoCentavos === 0 ||
-		previaTotais.valor_total_centavos >= pedidoMinimoCentavos;
-	const usandoTabelaPadraoDoCliente =
-		tabelaPadraoDoClienteId !== null &&
-		tabelaEfetivaId === tabelaPadraoDoClienteId;
+	const multiFabrica = gruposComItens.length > 1;
+	const statusOriginal = original?.pedidos[0]?.pedido.status;
+	const rotuloFechar =
+		gruposComItens.length > 1
+			? `Fechar ${gruposComItens.length} pedidos`
+			: "Fechar pedido";
 
 	return (
 		<Page width="full">
 			<PageHeader
 				title={
 					somenteLeitura
-						? "Pedido emitido"
+						? valores.grupos.length > 1
+							? "Pedidos emitidos da cotação"
+							: "Pedido emitido"
 						: original
 							? "Editar orçamento"
 							: "Novo orçamento"
 				}
 				description={
-					original
-						? `Última atualização em ${formatarDataBr(original.pedido.updated_at.slice(0, 10))}`
-						: "Selecione o contexto comercial no topo e monte o pedido com catálogo e sacola lado a lado."
+					original?.pedidos[0]
+						? `Última atualização em ${formatarDataBr(original.pedidos[0].pedido.updated_at.slice(0, 10))}`
+						: "Escolha o cliente, abra o catálogo de cada fábrica e monte uma cotação única — ao salvar, é gerado 1 pedido por representada."
 				}
 				back={{ to: "/pedidos", label: "Orçamentos e Pedidos" }}
 				action={
-					original && (
-						<Badge
-							variant={
-								original.pedido.status === "rascunho" ? "secondary" : "success"
-							}
-						>
-							{ROTULOS_STATUS_PEDIDO[original.pedido.status]}
-						</Badge>
+					statusOriginal && (
+						<div className="flex items-center gap-1.5">
+							{valores.grupos.length > 1 && (
+								<Badge variant="outline">
+									<Layers aria-hidden="true" className="mr-1 size-3" />
+									{valores.grupos.length} fábricas
+								</Badge>
+							)}
+							<Badge
+								variant={
+									statusOriginal === "rascunho" ? "secondary" : "success"
+								}
+							>
+								{ROTULOS_STATUS_PEDIDO[statusOriginal]}
+							</Badge>
+						</div>
 					)
 				}
 			/>
 
 			{somenteLeitura && (
 				<Alert>
-					Este pedido já foi emitido e encontra-se em modo somente leitura para
-					preservar a integridade comercial.
+					{valores.grupos.length > 1
+						? "Os pedidos desta cotação já foram emitidos e estão em modo somente leitura para preservar a integridade comercial."
+						: "Este pedido já foi emitido e encontra-se em modo somente leitura para preservar a integridade comercial."}
 				</Alert>
 			)}
 
-			{espelho && <EspelhoPedidoActionsBar espelho={espelho} />}
+			{espelho && <EspelhoCotacaoActionsBar espelho={espelho} />}
 
 			<form noValidate onSubmit={handleSubmit} className="flex flex-col gap-4">
-				{/* 1. Barra Compacta de Contexto da Venda */}
+				{/* 1. Contexto do cliente, compartilhado por todas as fábricas */}
 				<fieldset
 					disabled={somenteLeitura}
 					className={cardClassName({
@@ -651,6 +665,7 @@ function OrcamentoForm({
 							}
 							error={erros.cliente_id}
 							required
+							className="lg:col-span-2"
 						>
 							<Combobox
 								id="orcamento-cliente"
@@ -680,168 +695,100 @@ function OrcamentoForm({
 						</FormField>
 
 						<FormField
-							id="orcamento-representada"
-							label="Representada (Fábrica)"
-							error={erros.representada_id}
-							required
-						>
-							<Combobox
-								id="orcamento-representada"
-								name="representada_id"
-								value={valores.representada_id}
-								onChange={handleTrocarRepresentada}
-								options={opcoesRepresentadas}
-								placeholder="Digite o nome da fábrica..."
-								emptyMessage="Nenhuma representada encontrada."
-								disabled={somenteLeitura}
-								hasError={Boolean(erros.representada_id)}
-								renderOption={(opcao) => (
-									<div className="flex min-w-0 flex-1 items-center gap-2">
-										{opcao.dados && (
-											<RepresentadaDot
-												cor={obterCorRepresentada(opcao.dados)}
-												size="sm"
-											/>
-										)}
-										<div className="min-w-0 flex-1">
-											<div className="truncate font-medium text-foreground">
-												{opcao.label}
-											</div>
-											{opcao.sublabel && (
-												<div className="truncate text-[11px] text-muted-foreground">
-													{opcao.sublabel}
-												</div>
-											)}
-										</div>
-									</div>
-								)}
-							/>
-						</FormField>
-
-						<FormField
-							id="orcamento-tabela"
+							id="orcamento-transportadora"
 							label={
-								usandoTabelaPadraoDoCliente
-									? "Tabela de preço ★ (Padrão cliente)"
-									: "Tabela de preço"
+								usandoTransportadoraHabitual
+									? "Transportadora ★ (Habitual)"
+									: "Transportadora"
 							}
-							error={erros.tabela_id}
-							required
+							error={erros.transportadora_id}
 						>
 							<Combobox
-								id="orcamento-tabela"
-								name="tabela_id"
-								value={tabelaEfetivaId}
-								onChange={handleTrocarTabela}
-								options={opcoesTabelas}
-								placeholder={
-									!valores.representada_id
-										? "Selecione a fábrica primeiro..."
-										: tabelasVigentes.length === 0
-											? "Nenhuma tabela vigente"
-											: "Digite ou selecione a tabela..."
-								}
-								emptyMessage="Nenhuma tabela vigente encontrada."
-								disabled={
-									somenteLeitura ||
-									!valores.representada_id ||
-									carregandoTabelas ||
-									tabelasVigentes.length === 0
-								}
-								hasError={Boolean(erros.tabela_id)}
-							/>
-						</FormField>
-
-						<FormField
-							id="orcamento-condicao"
-							label="Condição de pagamento"
-							error={erros.condicao_pagamento}
-							required
-						>
-							<Combobox
-								id="orcamento-condicao"
-								name="condicao_pagamento"
-								value={valores.condicao_pagamento}
-								onChange={(novaCondicao) => {
+								id="orcamento-transportadora"
+								name="transportadora_id"
+								value={transportadoraEfetivaId}
+								onChange={(novaTransportadoraId) => {
+									setTransportadoraManual(true);
 									setValores((atual) => ({
 										...atual,
-										condicao_pagamento: novaCondicao,
+										transportadora_id: novaTransportadoraId,
 									}));
-									limparErro("condicao_pagamento");
+									limparErro("transportadora_id");
 								}}
-								options={opcoesCondicoesPagamento}
-								allowCustomValue
-								placeholder="Digite ex: 30/60 dias, À vista..."
-								emptyMessage="Pressione Enter para manter a condição digitada."
+								options={opcoesTransportadoras}
+								placeholder={
+									opcoesTransportadoras.length === 0
+										? "Nenhuma transportadora cadastrada"
+										: "Digite o nome, CNPJ ou cidade..."
+								}
+								emptyMessage="Nenhuma transportadora encontrada."
 								disabled={somenteLeitura}
-								hasError={Boolean(erros.condicao_pagamento)}
+								hasError={Boolean(erros.transportadora_id)}
 							/>
+						</FormField>
+
+						<FormField
+							id="orcamento-contato"
+							label="Contato / Comprador"
+							error={erros.contato_id}
+						>
+							<Select
+								id="orcamento-contato"
+								name="contato_id"
+								value={contatoEfetivo}
+								onChange={(e) => {
+									setContatoManual(true);
+									setValores((atual) => ({
+										...atual,
+										contato_id: e.target.value,
+									}));
+									limparErro("contato_id");
+								}}
+								hasError={Boolean(erros.contato_id)}
+							>
+								<option value="">
+									{contatosDoCliente.length === 0
+										? "Nenhum contato no cliente"
+										: "Não especificado"}
+								</option>
+								{contatosDoCliente.map((cont) => (
+									<option key={cont.id} value={cont.id}>
+										{cont.nome}
+										{cont.papel ? ` (${cont.papel})` : ""} —{" "}
+										{cont.telefone_whatsapp}
+									</option>
+								))}
+							</Select>
 						</FormField>
 					</div>
 
-					{/* Atalhos de Condição de Pagamento + Botão para expandir logística/observações */}
 					<div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-2.5">
-						<div className="flex flex-wrap items-center gap-1">
-							{!somenteLeitura && (
+						<p className="text-[11px] text-muted-foreground">
+							Entrega, contato, transportadora e observações valem para todas as
+							fábricas. Tabela, pagamento e frete são definidos por fábrica na
+							sacola.
+						</p>
+						<button
+							type="button"
+							onClick={() => setMostrarDetalhesContexto((v) => !v)}
+							className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted"
+						>
+							{mostrarDetalhesContexto ? (
 								<>
-									<span className="mr-1 text-[11px] text-muted-foreground">
-										Pagamento rápido:
-									</span>
-									{CONDICOES_PAGAMENTO_PADRAO.map((condicao) => {
-										const selecionada = valores.condicao_pagamento === condicao;
-										return (
-											<button
-												key={condicao}
-												type="button"
-												aria-pressed={selecionada}
-												onClick={() => {
-													setValores((atual) => ({
-														...atual,
-														condicao_pagamento: condicao,
-													}));
-													limparErro("condicao_pagamento");
-												}}
-												className="cursor-pointer rounded-md focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
-											>
-												<Badge variant={selecionada ? "default" : "outline"}>
-													{condicao}
-												</Badge>
-											</button>
-										);
-									})}
+									<ChevronUp aria-hidden="true" className="size-3.5" />
+									Ocultar entrega e obs.
+								</>
+							) : (
+								<>
+									<ChevronDown aria-hidden="true" className="size-3.5" />
+									Entrega e observações
 								</>
 							)}
-						</div>
-
-						<div className="flex items-center gap-2">
-							<span className="hidden text-xs text-muted-foreground sm:inline">
-								Frete:{" "}
-								<strong className="font-mono text-foreground">
-									{valores.tipo_frete}
-								</strong>
-							</span>
-							<button
-								type="button"
-								onClick={() => setMostrarDetalhesContexto((v) => !v)}
-								className="inline-flex cursor-pointer items-center gap-1 rounded-md border border-border bg-secondary px-2.5 py-1 text-xs font-medium text-secondary-foreground transition-colors hover:bg-muted"
-							>
-								{mostrarDetalhesContexto ? (
-									<>
-										<ChevronUp aria-hidden="true" className="size-3.5" />
-										Ocultar entrega, comprador e obs.
-									</>
-								) : (
-									<>
-										<ChevronDown aria-hidden="true" className="size-3.5" />
-										Entrega, comprador, frete e obs.
-									</>
-								)}
-							</button>
-						</div>
+						</button>
 					</div>
 
 					{mostrarDetalhesContexto && (
-						<div className="grid grid-cols-1 gap-3 border-t border-border pt-3 md:grid-cols-2 lg:grid-cols-4">
+						<div className="grid grid-cols-1 gap-3 border-t border-border pt-3 md:grid-cols-2">
 							<FormField
 								id="orcamento-endereco"
 								label="Endereço de entrega"
@@ -875,67 +822,6 @@ function OrcamentoForm({
 							</FormField>
 
 							<FormField
-								id="orcamento-contato"
-								label="Contato / Comprador"
-								error={erros.contato_id}
-							>
-								<Select
-									id="orcamento-contato"
-									name="contato_id"
-									value={contatoEfetivo}
-									onChange={(e) => {
-										setContatoManual(true);
-										setValores((atual) => ({
-											...atual,
-											contato_id: e.target.value,
-										}));
-										limparErro("contato_id");
-									}}
-									hasError={Boolean(erros.contato_id)}
-								>
-									<option value="">
-										{contatosDoCliente.length === 0
-											? "Nenhum contato no cliente"
-											: "Não especificado"}
-									</option>
-									{contatosDoCliente.map((cont) => (
-										<option key={cont.id} value={cont.id}>
-											{cont.nome}
-											{cont.papel ? ` (${cont.papel})` : ""} —{" "}
-											{cont.telefone_whatsapp}
-										</option>
-									))}
-								</Select>
-							</FormField>
-
-							<FormField
-								id="orcamento-frete"
-								label="Tipo de frete"
-								error={erros.tipo_frete}
-								required
-							>
-								<Select
-									id="orcamento-frete"
-									name="tipo_frete"
-									value={valores.tipo_frete}
-									onChange={(e) => {
-										setValores((atual) => ({
-											...atual,
-											tipo_frete: e.target.value,
-										}));
-										limparErro("tipo_frete");
-									}}
-									hasError={Boolean(erros.tipo_frete)}
-								>
-									{TIPOS_FRETE.map((frete) => (
-										<option key={frete} value={frete}>
-											{ROTULOS_FRETE[frete]}
-										</option>
-									))}
-								</Select>
-							</FormField>
-
-							<FormField
 								id="orcamento-observacoes"
 								label="Observações (opcional)"
 								error={erros.observacoes}
@@ -958,15 +844,12 @@ function OrcamentoForm({
 					)}
 				</fieldset>
 
-				{avisoTabela && <Alert>{avisoTabela}</Alert>}
-
-				{/* 2. Workspace Split-View: Catálogo da Representada (Esquerda) + Sacola e Fechamento (Direita) */}
+				{/* 2. Workspace Split-View: Catálogo (Esquerda) + Sacola por fábrica (Direita) */}
 				<div
 					className={`grid grid-cols-1 gap-4 ${
 						somenteLeitura ? "" : "lg:grid-cols-12 lg:items-start"
 					}`}
 				>
-					{/* Coluna Esquerda: Catálogo Rápido da Representada */}
 					{!somenteLeitura && (
 						<div
 							className={cardClassName({
@@ -976,21 +859,82 @@ function OrcamentoForm({
 						>
 							<div className="flex flex-col gap-2.5 border-b border-border bg-muted/30 p-3.5">
 								<div className="flex items-center justify-between gap-2">
-									<div className="flex items-center gap-2">
-										<h2 className="text-sm font-semibold text-foreground">
-											Catálogo da fábrica
-										</h2>
-										{representadaSelecionada && (
-											<RepresentadaBadge
-												nome={representadaSelecionada.nome_fantasia}
-												cor={obterCorRepresentada(representadaSelecionada)}
-											/>
-										)}
-									</div>
+									<h2 className="text-sm font-semibold text-foreground">
+										Catálogo da fábrica
+									</h2>
 									<span className="font-mono text-xs text-muted-foreground tabular-nums">
 										{produtosCatalogoRepresentada.length} SKUs
 									</span>
 								</div>
+
+								<FormField
+									id="orcamento-representada"
+									label="Representada (Fábrica)"
+								>
+									<Combobox
+										id="orcamento-representada"
+										name="representada_id"
+										value={representadaAtivaId}
+										onChange={handleAbrirCatalogo}
+										options={opcoesRepresentadas}
+										placeholder="Digite o nome da fábrica..."
+										emptyMessage="Nenhuma representada encontrada."
+										renderOption={(opcao) => (
+											<div className="flex min-w-0 flex-1 items-center gap-2">
+												{opcao.dados && (
+													<RepresentadaDot
+														cor={obterCorRepresentada(opcao.dados)}
+														size="sm"
+													/>
+												)}
+												<div className="min-w-0 flex-1">
+													<div className="truncate font-medium text-foreground">
+														{opcao.label}
+													</div>
+													{opcao.sublabel && (
+														<div className="truncate text-[11px] text-muted-foreground">
+															{opcao.sublabel}
+														</div>
+													)}
+												</div>
+											</div>
+										)}
+									/>
+								</FormField>
+
+								{valores.grupos.length > 1 && (
+									<fieldset
+										aria-label="Fábricas na cotação"
+										className="flex flex-wrap items-center gap-1"
+									>
+										{valores.grupos.map((grupo) => {
+											const rep = representadasPorId.get(grupo.representada_id);
+											if (!rep) return null;
+											const ativa =
+												grupo.representada_id === representadaAtivaId;
+											return (
+												<button
+													key={grupo.representada_id}
+													type="button"
+													aria-pressed={ativa}
+													onClick={() =>
+														handleAbrirCatalogo(grupo.representada_id)
+													}
+													className={`cursor-pointer rounded-md p-0.5 focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none ${
+														ativa
+															? "ring-1 ring-primary"
+															: "opacity-75 hover:opacity-100"
+													}`}
+												>
+													<RepresentadaBadge
+														nome={`${rep.nome_fantasia} (${grupo.itens.length})`}
+														cor={obterCorRepresentada(rep)}
+													/>
+												</button>
+											);
+										})}
+									</fieldset>
+								)}
 
 								<SearchInput
 									id="busca-catalogo-orcamento"
@@ -1000,19 +944,20 @@ function OrcamentoForm({
 								/>
 							</div>
 
-							{!valores.representada_id && (
+							{!representadaAtiva && (
 								<p className="p-6 text-center text-xs text-muted-foreground">
 									Selecione uma representada acima para carregar os produtos.
+									Você pode alternar entre fábricas sem perder a sacola.
 								</p>
 							)}
 
-							{valores.representada_id && carregandoPrecos && (
+							{representadaAtiva && carregandoPrecos && (
 								<p className="p-6 text-center text-xs text-muted-foreground">
 									Carregando preços da tabela selecionada...
 								</p>
 							)}
 
-							{valores.representada_id &&
+							{representadaAtiva &&
 								!carregandoPrecos &&
 								produtosCatalogoRepresentada.length === 0 && (
 									<div className="p-4">
@@ -1023,12 +968,12 @@ function OrcamentoForm({
 									</div>
 								)}
 
-							{valores.representada_id &&
+							{representadaAtiva &&
 								!carregandoPrecos &&
 								produtosCatalogoRepresentada.length > 0 && (
 									<ul className="max-h-[540px] divide-y divide-border overflow-y-auto">
 										{produtosCatalogoRepresentada.map((produto) => {
-											const preco = precosPorProduto.get(produto.id);
+											const preco = precosCatalogo.get(produto.id);
 											const qtdAtual =
 												quantidadeNoOrcamentoPorProduto.get(produto.id) ?? 0;
 
@@ -1096,7 +1041,7 @@ function OrcamentoForm({
 						</div>
 					)}
 
-					{/* Coluna Direita: Sacola de Itens + Resumo Financeiro e Ações */}
+					{/* Coluna Direita: Sacola agrupada por fábrica + Resumo e Ações */}
 					<div
 						className={cardClassName({
 							className: `workspace-pane flex flex-col overflow-hidden ${
@@ -1106,19 +1051,17 @@ function OrcamentoForm({
 					>
 						<div className="flex items-center justify-between border-b border-border bg-muted/30 px-4 py-3">
 							<div>
-								<h2
-									id="itens-orcamento-caption"
-									className="text-sm font-semibold text-foreground"
-								>
-									Itens do orçamento ({valores.itens.length})
+								<h2 className="text-sm font-semibold text-foreground">
+									Sacola da cotação ({quantidadeItens}{" "}
+									{quantidadeItens === 1 ? "item" : "itens"})
 								</h2>
 								<p className="text-xs text-muted-foreground">
-									Ajuste quantidades e descontos. Cálculo líquido com
+									Itens agrupados por fábrica. Cálculo líquido com
 									arredondamento bancário.
 								</p>
 							</div>
 							<Badge variant="outline" className="font-mono tabular-nums">
-								{previaTotais.quantidade_total_volumes} vol.
+								{totaisGerais.quantidade_total_volumes} vol.
 							</Badge>
 						</div>
 
@@ -1128,7 +1071,7 @@ function OrcamentoForm({
 							</div>
 						)}
 
-						{valores.itens.length === 0 ? (
+						{valores.grupos.length === 0 ? (
 							<div className="flex flex-col items-center justify-center gap-2 px-4 py-12 text-center">
 								<Package
 									aria-hidden="true"
@@ -1138,253 +1081,59 @@ function OrcamentoForm({
 									Sacola vazia
 								</p>
 								<p className="max-w-xs text-xs text-muted-foreground">
-									Clique em &ldquo;Incluir&rdquo; nos produtos do catálogo ao
-									lado para montar o orçamento.
+									Escolha uma fábrica no catálogo ao lado e clique em
+									&ldquo;Incluir&rdquo;. Itens de várias fábricas podem entrar
+									na mesma cotação.
 								</p>
 							</div>
 						) : (
-							<section
-								aria-labelledby="itens-orcamento-caption"
-								className="table-wrapper"
-							>
-								<table className="orcamento-itens-table text-left text-sm">
-									<thead>
-										<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-											<th scope="col" className="px-3.5 py-2.5">
-												Produto
-											</th>
-											<th scope="col" className="px-2.5 py-2.5 text-right">
-												Tabela
-											</th>
-											<th scope="col" className="px-2.5 py-2.5 text-center">
-												Quantidade
-											</th>
-											<th scope="col" className="px-2.5 py-2.5 text-center">
-												Desc. (%)
-											</th>
-											<th scope="col" className="px-2.5 py-2.5 text-right">
-												Líq. Unit.
-											</th>
-											<th scope="col" className="px-3 py-2.5 text-right">
-												Subtotal
-											</th>
-											{!somenteLeitura && (
-												<th scope="col" className="w-9 px-2 py-2.5 text-right">
-													<span className="sr-only">Ações</span>
-												</th>
+							<div className="flex flex-col">
+								{valores.grupos.map((grupo) => {
+									const resumo = previasPorGrupo.get(grupo.representada_id);
+									return (
+										<SecaoRepresentadaSacola
+											key={grupo.representada_id}
+											tenantId={tenantId}
+											hoje={hoje}
+											grupo={grupo}
+											representada={representadasPorId.get(
+												grupo.representada_id,
 											)}
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-border">
-										{valores.itens.map((linha) => {
-											const produto = produtosPorId.get(linha.produto_id);
-											const precoTabelaInfo = precosPorProduto.get(
-												linha.produto_id,
-											);
-											const previa = calcularPreviaItemForm(linha);
-											const erroQtd =
-												erros[chaveErroItemPedido(linha.localId, "quantidade")];
-											const erroDesc =
-												erros[
-													chaveErroItemPedido(
-														linha.localId,
-														"percentual_desconto",
-													)
-												];
-
-											const descontoDigitado = parseDescontoFormParaCentesimos(
-												linha.percentual_desconto,
-											);
-											const tetoInformativo =
-												precoTabelaInfo?.desconto_maximo_permitido ?? 0;
-											const acimaDoTetoInformativo =
-												tetoInformativo > 0 &&
-												descontoDigitado !== null &&
-												descontoDigitado > tetoInformativo;
-
-											return (
-												<tr
-													key={linha.localId}
-													className="align-middle transition-colors hover:bg-muted/30"
-												>
-													<th
-														scope="row"
-														className="px-3.5 py-2.5 font-normal text-foreground"
-													>
-														<div className="flex flex-col">
-															<div className="flex items-center gap-1.5">
-																<span className="font-mono text-xs font-semibold">
-																	{produto?.sku ?? "SKU"}
-																</span>
-																<span className="text-xs font-medium">
-																	{produto?.descricao ?? "Produto"}
-																</span>
-															</div>
-															<span className="text-[11px] text-muted-foreground">
-																{produto
-																	? `${produto.unidade_medida} · Múlt. ${produto.multiplo_embalagem}`
-																	: ""}
-															</span>
-														</div>
-													</th>
-
-													<td className="px-2.5 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-														{formatarCentavos(
-															linha.preco_unitario_tabela_centavos,
-														)}
-													</td>
-
-													<td className="px-2.5 py-2.5">
-														<div className="flex flex-col items-center gap-1">
-															<div className="flex items-center gap-1">
-																{!somenteLeitura && (
-																	<Button
-																		size="sm"
-																		variant="secondary"
-																		className="px-2"
-																		onClick={() =>
-																			handleDeltaQuantidade(linha.localId, -1)
-																		}
-																		aria-label={`Diminuir quantidade de ${produto?.sku ?? "item"}`}
-																	>
-																		<Minus aria-hidden="true" />
-																	</Button>
-																)}
-																<Input
-																	aria-label={`Quantidade de ${produto?.sku ?? "item"}`}
-																	name={`quantidade_${linha.localId}`}
-																	inputMode="numeric"
-																	autoComplete="off"
-																	autoCorrect="off"
-																	spellCheck={false}
-																	disabled={somenteLeitura}
-																	value={linha.quantidade}
-																	onChange={(e) =>
-																		handleAlterarCampoItem(
-																			linha.localId,
-																			"quantidade",
-																			e.target.value,
-																		)
-																	}
-																	hasError={Boolean(erroQtd)}
-																	className="w-16 text-center font-mono tabular-nums"
-																/>
-																{!somenteLeitura && (
-																	<Button
-																		size="sm"
-																		variant="secondary"
-																		className="px-2"
-																		onClick={() =>
-																			handleDeltaQuantidade(linha.localId, 1)
-																		}
-																		aria-label={`Aumentar quantidade de ${produto?.sku ?? "item"}`}
-																	>
-																		<Plus aria-hidden="true" />
-																	</Button>
-																)}
-															</div>
-															{erroQtd && (
-																<span
-																	role="alert"
-																	className="text-[11px] text-destructive"
-																>
-																	{erroQtd}
-																</span>
-															)}
-														</div>
-													</td>
-
-													<td className="px-2.5 py-2.5">
-														<div className="flex flex-col items-center gap-1">
-															<Input
-																aria-label={`Desconto percentual de ${produto?.sku ?? "item"}`}
-																name={`desconto_${linha.localId}`}
-																inputMode="decimal"
-																autoComplete="off"
-																autoCorrect="off"
-																spellCheck={false}
-																disabled={somenteLeitura}
-																placeholder="0,00"
-																value={linha.percentual_desconto}
-																onChange={(e) =>
-																	handleAlterarCampoItem(
-																		linha.localId,
-																		"percentual_desconto",
-																		e.target.value,
-																	)
-																}
-																hasError={Boolean(erroDesc)}
-																className="w-20 text-right font-mono tabular-nums"
-															/>
-															{erroDesc ? (
-																<span
-																	role="alert"
-																	className="text-[11px] text-destructive"
-																>
-																	{erroDesc}
-																</span>
-															) : acimaDoTetoInformativo ? (
-																<span className="text-[10px] text-warning">
-																	Máx:{" "}
-																	{formatarCentesimosPercentual(
-																		tetoInformativo,
-																	)}
-																</span>
-															) : null}
-														</div>
-													</td>
-
-													<td className="px-2.5 py-2.5 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap">
-														{previa
-															? formatarCentavos(
-																	previa.preco_liquido_unitario_centavos,
-																)
-															: "—"}
-													</td>
-
-													<td className="px-3 py-2.5 text-right font-mono text-xs font-semibold tabular-nums whitespace-nowrap">
-														{previa
-															? formatarCentavos(previa.subtotal_centavos)
-															: "—"}
-													</td>
-
-													{!somenteLeitura && (
-														<td className="px-2 py-2.5 text-right">
-															<Button
-																size="sm"
-																variant="ghost"
-																onClick={() => handleRemoverItem(linha.localId)}
-																aria-label={`Remover ${produto?.sku ?? "item"} do orçamento`}
-																className="px-1.5 text-subtle-foreground hover:text-destructive"
-															>
-																<Trash2
-																	aria-hidden="true"
-																	className="size-3.5"
-																/>
-															</Button>
-														</td>
-													)}
-												</tr>
-											);
-										})}
-									</tbody>
-								</table>
-							</section>
+											tabelaPadraoDoClienteId={
+												tabelasPadrao.get(grupo.representada_id)?.tabela_id ??
+												null
+											}
+											somenteLeitura={somenteLeitura}
+											ativa={grupo.representada_id === representadaAtivaId}
+											percentualComissao={resumo?.percentualComissao ?? 0}
+											previa={resumo?.previa ?? calcularPreviaTotaisForm([], 0)}
+											erros={erros}
+											produtosPorId={produtosPorId}
+											onAtualizarGrupo={atualizarGrupo}
+											onRemover={() => handleRemoverGrupo(grupo)}
+											onVerCatalogo={() =>
+												handleAbrirCatalogo(grupo.representada_id)
+											}
+											limparErro={limparErro}
+										/>
+									);
+								})}
+							</div>
 						)}
 
-						{/* Rodapé Integrado do Painel: Totalizadores e Botões de Fechamento */}
+						{/* Rodapé: Totalizadores consolidados e Botões de Fechamento */}
 						<div className="mt-auto flex flex-col gap-3 border-t border-border bg-muted/40 p-4">
 							<div className="grid grid-cols-2 gap-3 text-xs sm:grid-cols-4">
 								<div>
 									<span className="text-muted-foreground">Total tabela</span>
 									<p className="font-mono font-medium text-foreground tabular-nums">
-										{formatarCentavos(previaTotais.valor_tabela_total_centavos)}
+										{formatarCentavos(totaisGerais.valor_tabela_total_centavos)}
 									</p>
 								</div>
 								<div>
 									<span className="text-muted-foreground">Desconto total</span>
 									<p className="font-mono font-medium text-foreground tabular-nums">
-										{formatarCentavos(previaTotais.desconto_total_centavos)}
+										{formatarCentavos(totaisGerais.desconto_total_centavos)}
 									</p>
 								</div>
 								<div>
@@ -1392,21 +1141,18 @@ function OrcamentoForm({
 										Comissão{" "}
 										{tipoClienteAtivo
 											? ROTULOS_TIPO_CLIENTE[tipoClienteAtivo]
-											: "base"}{" "}
-										(
-										{formatarCentesimosPercentual(
-											previaTotais.percentual_comissao_padrao,
-										)}
-										)
+											: "projetada"}
 									</span>
 									<p className="font-mono font-semibold text-success tabular-nums">
-										{formatarCentavos(previaTotais.comissao_projetada_centavos)}
+										{formatarCentavos(totaisGerais.comissao_projetada_centavos)}
 									</p>
 								</div>
 								<div className="text-right">
-									<span className="text-muted-foreground">Total líquido</span>
+									<span className="text-muted-foreground">
+										{multiFabrica ? "Total geral" : "Total líquido"}
+									</span>
 									<p className="font-mono text-base font-bold text-foreground tabular-nums">
-										{formatarCentavos(previaTotais.valor_total_centavos)}
+										{formatarCentavos(totaisGerais.valor_total_centavos)}
 									</p>
 								</div>
 							</div>
@@ -1414,15 +1160,11 @@ function OrcamentoForm({
 							{erroGeral && <Alert variant="destructive">{erroGeral}</Alert>}
 
 							<div className="flex flex-wrap items-center justify-between gap-2 border-t border-border pt-3">
-								<div>
-									{pedidoMinimoCentavos > 0 && (
-										<Badge
-											variant={atingiuPedidoMinimo ? "success" : "secondary"}
-										>
-											Mínimo fábrica: {formatarCentavos(pedidoMinimoCentavos)}
-										</Badge>
-									)}
-								</div>
+								<p className="text-[11px] text-muted-foreground">
+									{multiFabrica
+										? `Cotação com ${gruposComItens.length} fábricas: gera ${gruposComItens.length} pedidos individuais vinculados.`
+										: ""}
+								</p>
 
 								<div className="flex flex-wrap items-center gap-2">
 									<Link
@@ -1441,7 +1183,7 @@ function OrcamentoForm({
 												{salvando ? "Salvando..." : "Salvar rascunho"}
 											</Button>
 											<Button type="submit" disabled={salvando}>
-												{salvando ? "Emitindo..." : "Fechar pedido"}
+												{salvando ? "Emitindo..." : rotuloFechar}
 											</Button>
 										</>
 									)}

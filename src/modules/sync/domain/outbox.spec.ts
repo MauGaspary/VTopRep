@@ -147,6 +147,7 @@ describe("Fila Outbox e Resolução de Conflitos (Domínio)", () => {
 				"CLIENT_WINS_IDEMPOTENCY",
 			);
 			expect(obterPoliticaConflito("clientes")).toBe("LWW_CAMPO");
+			expect(obterPoliticaConflito("transportadoras")).toBe("LWW_CAMPO");
 			expect(obterPoliticaConflito("clientes_enderecos")).toBe("LWW_CAMPO");
 			expect(obterPoliticaConflito("clientes_contatos")).toBe("LWW_CAMPO");
 			expect(obterPoliticaConflito("clientes_tabelas_preco")).toBe("LWW_CAMPO");

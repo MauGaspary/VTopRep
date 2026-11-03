@@ -95,17 +95,17 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.5.3. Módulo de Transportadoras e Vínculo Logístico
-- [ ] **Contrato, Lógica e Persistência (Dexie):** Criar módulo `src/modules/transportadoras/` com schema Zod (`nome_fantasia`, `razao_social` opcional, `cnpj` opcional validado, `telefone`, `cidade_uf`, `ativo` + campos sincronizáveis) e repositório Dexie com Outbox.
-- [ ] **Vínculo em Cliente e Pedido:** Adicionar `transportadora_padrao_id` (opcional) no `Cliente` e `transportadora_id` (opcional) no `Pedido` (sugerindo a transportadora habitual do cliente ao selecioná-lo).
-- [ ] **UI e Espelho PDF:** Tela de listagem/cadastro de Transportadoras, seleção digitável (`Combobox`) no orçamento e exibição da Transportadora no bloco logístico do Espelho PDF.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Contrato, Lógica e Persistência (Dexie):** Criar módulo `src/modules/transportadoras/` com schema Zod (`nome_fantasia`, `razao_social` opcional, `cnpj` opcional validado, `telefone`, `cidade_uf`, `ativo` + campos sincronizáveis) e repositório Dexie com Outbox.
+- [x] **Vínculo em Cliente e Pedido:** Adicionar `transportadora_padrao_id` (opcional) no `Cliente` e `transportadora_id` (opcional) no `Pedido` (sugerindo a transportadora habitual do cliente ao selecioná-lo).
+- [x] **UI e Espelho PDF:** Tela de listagem/cadastro de Transportadoras, seleção digitável (`Combobox`) no orçamento e exibição da Transportadora no bloco logístico do Espelho PDF.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.5.4. Cotação Multi-Representada (Orçamento Unificado com Desmembramento por Fábrica)
-- [ ] **Modelo de Agrupamento (`cotacao_grupo_id`):** Permitir que múltiplos registros de `Pedido` (um para cada fábrica) compartilhem um mesmo `cotacao_grupo_id: UUID (nullable)`.
-- [ ] **Workspace Multi-Fábrica no Orçamento:** Permitir alternar livremente entre as Representadas no painel de catálogo do orçamento sem limpar a sacola; agrupar os itens da sacola em seções por Representada (cada seção com sua Tabela de Preço, Condição de Pagamento, Tipo de Frete e indicador de Pedido Mínimo).
-- [ ] **Gravação Transacional Desmembrada:** Ao salvar rascunho ou fechar a cotação, gravar transacionalmente 1 `Pedido` individual por representada presente na sacola.
-- [ ] **Espelho PDF Unificado vs. Individual:** Permitir baixar o **PDF Unificado da Cotação** (visão consolidada para o cliente com todas as fábricas) ou o **PDF Individual por Representada** (para envio separado a cada fábrica).
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Modelo de Agrupamento (`cotacao_grupo_id`):** Permitir que múltiplos registros de `Pedido` (um para cada fábrica) compartilhem um mesmo `cotacao_grupo_id: UUID (nullable)`.
+- [x] **Workspace Multi-Fábrica no Orçamento:** Permitir alternar livremente entre as Representadas no painel de catálogo do orçamento sem limpar a sacola; agrupar os itens da sacola em seções por Representada (cada seção com sua Tabela de Preço, Condição de Pagamento, Tipo de Frete e indicador de Pedido Mínimo).
+- [x] **Gravação Transacional Desmembrada:** Ao salvar rascunho ou fechar a cotação, gravar transacionalmente 1 `Pedido` individual por representada presente na sacola.
+- [x] **Espelho PDF Unificado vs. Individual:** Permitir baixar o **PDF Unificado da Cotação** (visão consolidada para o cliente com todas as fábricas) ou o **PDF Individual por Representada** (para envio separado a cada fábrica).
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 

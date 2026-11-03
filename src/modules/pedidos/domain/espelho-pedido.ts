@@ -6,6 +6,7 @@ import {
 	formatarCentavos,
 	formatarCentesimosPercentual,
 } from "../../../shared/domain/decimal-br";
+import { somarCentavos } from "../../../shared/domain/dinheiro";
 import { ROTULOS_FRETE, type TipoFrete } from "../../../shared/domain/frete";
 import { garantirMesmoTenant } from "../../../shared/domain/tenant";
 import { normalizarTexto } from "../../../shared/domain/texto";
@@ -15,6 +16,7 @@ import type { ClienteEndereco } from "../../clientes/domain/cliente-endereco.sch
 import type { Produto } from "../../produtos/domain/produto.schema";
 import type { TabelaPreco } from "../../produtos/domain/tabela-preco.schema";
 import type { Representada } from "../../representadas/domain/representada.schema";
+import type { Transportadora } from "../../transportadoras/domain/transportadora.schema";
 import {
 	calcularItemPedido,
 	calcularTotaisPedido,
@@ -86,6 +88,16 @@ export interface EspelhoPedidoDados {
 		contatoTelefone: string | null;
 		contatoEmail: string | null;
 	};
+	/** Bloco logístico: transportadora do pedido (`null` quando não definida). */
+	logistica: {
+		transportadora: {
+			nomeFantasia: string;
+			razaoSocial: string | null;
+			cnpjFormatado: string | null;
+			telefone: string | null;
+			cidadeUf: string | null;
+		} | null;
+	};
 	comercial: {
 		tabelaPrecoNome: string;
 		condicaoPagamento: string;
@@ -106,6 +118,7 @@ export interface MontarEspelhoPedidoParams {
 	tabelaPreco?: TabelaPreco | null;
 	enderecoEntrega?: ClienteEndereco | null;
 	contato?: ClienteContato | null;
+	transportadora?: Transportadora | null;
 	produtosPorId: ReadonlyMap<string, Produto>;
 }
 
@@ -127,6 +140,7 @@ export function montarEspelhoPedido({
 	tabelaPreco,
 	enderecoEntrega,
 	contato,
+	transportadora,
 	produtosPorId,
 }: MontarEspelhoPedidoParams): EspelhoPedidoDados {
 	const { pedido, itens } = pedidoCompleto;
@@ -142,6 +156,9 @@ export function montarEspelhoPedido({
 	}
 	if (contato) {
 		garantirMesmoTenant(contato, tenantId);
+	}
+	if (transportadora) {
+		garantirMesmoTenant(transportadora, tenantId);
 	}
 
 	const itensVivos = itens.filter((i) => i.deleted_at === null);
@@ -229,6 +246,19 @@ export function montarEspelhoPedido({
 			contatoTelefone: contato?.telefone_whatsapp ?? null,
 			contatoEmail: contato?.email ?? null,
 		},
+		logistica: {
+			transportadora: transportadora
+				? {
+						nomeFantasia: transportadora.nome_fantasia,
+						razaoSocial: transportadora.razao_social,
+						cnpjFormatado: transportadora.cnpj
+							? formatarCnpjSeguro(transportadora.cnpj)
+							: null,
+						telefone: transportadora.telefone,
+						cidadeUf: transportadora.cidade_uf,
+					}
+				: null,
+		},
 		comercial: {
 			tabelaPrecoNome: tabelaPreco?.nome_tabela ?? "Tabela comercial",
 			condicaoPagamento: pedido.condicao_pagamento,
@@ -256,6 +286,16 @@ export function montarEspelhoPedido({
 	};
 }
 
+function slugCliente(cliente: EspelhoPedidoDados["cliente"]): string {
+	const nomeBase = cliente.nomeFantasia ?? cliente.razaoSocial;
+	return (
+		normalizarTexto(nomeBase)
+			.replace(/[^a-z0-9]+/g, "-")
+			.replace(/^-+|-+$/g, "")
+			.slice(0, 32) || "cliente"
+	);
+}
+
 /**
  * Gera um nome de arquivo determinístico e seguro para sistemas de arquivos
  * (ex.: `pedido-A1B2C3D4-mercado-bom-preco-2026-10-30.pdf`).
@@ -267,14 +307,7 @@ export function gerarNomeArquivoEspelhoPdf(
 	>,
 ): string {
 	const prefixo = espelho.status === "rascunho" ? "orcamento" : "pedido";
-	const nomeBase = espelho.cliente.nomeFantasia ?? espelho.cliente.razaoSocial;
-	const slugCliente =
-		normalizarTexto(nomeBase)
-			.replace(/[^a-z0-9]+/g, "-")
-			.replace(/^-+|-+$/g, "")
-			.slice(0, 32) || "cliente";
-
-	return `${prefixo}-${espelho.codigoCurto}-${slugCliente}-${espelho.dataEmissaoIso}.pdf`;
+	return `${prefixo}-${espelho.codigoCurto}-${slugCliente(espelho.cliente)}-${espelho.dataEmissaoIso}.pdf`;
 }
 
 /**
@@ -306,6 +339,16 @@ export function gerarTextoCompartilhamentoEspelho(
 		`Frete: ${espelho.comercial.tipoFreteRotulo}`,
 	];
 
+	const transportadora = espelho.logistica.transportadora;
+	if (transportadora) {
+		const detalhes = [transportadora.cidadeUf, transportadora.telefone]
+			.filter((parte): parte is string => Boolean(parte))
+			.join(" · ");
+		blocos.push(
+			`Transportadora: ${transportadora.nomeFantasia}${detalhes ? ` (${detalhes})` : ""}`,
+		);
+	}
+
 	if (espelho.comercial.observacoes) {
 		blocos.push(`Observações: ${espelho.comercial.observacoes}`);
 	}
@@ -328,18 +371,31 @@ export function normalizarTelefoneWhatsapp(
 	return null;
 }
 
+function montarUrlWhatsapp(texto: string, telefone?: string | null): string {
+	const textoCodificado = encodeURIComponent(texto);
+	const fone = normalizarTelefoneWhatsapp(telefone);
+	return fone
+		? `https://wa.me/${fone}?text=${textoCodificado}`
+		: `https://wa.me/?text=${textoCodificado}`;
+}
+
+function montarUrlEmail(
+	destinatario: string | null | undefined,
+	assunto: string,
+	corpo: string,
+): string {
+	return `mailto:${(destinatario ?? "").trim()}?subject=${encodeURIComponent(assunto)}&body=${encodeURIComponent(corpo)}`;
+}
+
 /** Gera a URL `https://wa.me/...` pronta para envio imediato do espelho no WhatsApp. */
 export function gerarUrlWhatsappEspelho(
 	espelho: EspelhoPedidoDados,
 	telefoneOverride?: string | null,
 ): string {
-	const texto = encodeURIComponent(gerarTextoCompartilhamentoEspelho(espelho));
-	const fone = normalizarTelefoneWhatsapp(
+	return montarUrlWhatsapp(
+		gerarTextoCompartilhamentoEspelho(espelho),
 		telefoneOverride ?? espelho.cliente.contatoTelefone,
 	);
-	return fone
-		? `https://wa.me/${fone}?text=${texto}`
-		: `https://wa.me/?text=${texto}`;
 }
 
 /** Gera a URL `mailto:...` com assunto e resumo do espelho para envio por e-mail. */
@@ -348,14 +404,180 @@ export function gerarUrlEmailEspelho(
 	emailOverride?: string | null,
 ): string {
 	const tipo = espelho.status === "rascunho" ? "Orçamento" : "Pedido";
-	const destinatario = (
-		emailOverride ??
-		espelho.cliente.contatoEmail ??
-		""
-	).trim();
-	const assunto = encodeURIComponent(
+	return montarUrlEmail(
+		emailOverride ?? espelho.cliente.contatoEmail,
 		`${tipo} #${espelho.codigoCurto} — ${espelho.representada.nomeFantasia} (${espelho.totais.valorTotalFormatado})`,
+		gerarTextoCompartilhamentoEspelho(espelho),
 	);
-	const corpo = encodeURIComponent(gerarTextoCompartilhamentoEspelho(espelho));
-	return `mailto:${destinatario}?subject=${assunto}&body=${corpo}`;
+}
+
+// ---------------------------------------------------------------------------
+// Cotação multi-representada: espelho unificado (todas as fábricas)
+// ---------------------------------------------------------------------------
+
+export class EspelhoCotacaoInconsistenteError extends Error {
+	constructor(mensagem: string) {
+		super(mensagem);
+		this.name = "EspelhoCotacaoInconsistenteError";
+	}
+}
+
+/**
+ * Espelho unificado da cotação para o cliente: cabeçalho, cliente e logística
+ * uma única vez, uma seção por representada e o total consolidado.
+ */
+export interface EspelhoCotacaoDados {
+	cotacaoGrupoId: string | null;
+	tenantId: string;
+	codigoCurto: string;
+	status: StatusPedido;
+	statusRotulo: string;
+	tituloDocumento: string;
+	dataEmissaoIso: string;
+	dataEmissaoFormatada: string;
+	emitente: EspelhoPedidoDados["emitente"];
+	cliente: EspelhoPedidoDados["cliente"];
+	logistica: EspelhoPedidoDados["logistica"];
+	observacoes: string | null;
+	/** Um espelho individual por representada (também usado no PDF por fábrica). */
+	secoes: EspelhoPedidoDados[];
+	totais: EspelhoTotaisPedido;
+}
+
+/**
+ * Consolida os espelhos individuais de uma cotação. Todas as seções precisam
+ * ser do mesmo tenant e do mesmo cliente.
+ */
+export function montarEspelhoCotacao(
+	secoes: readonly EspelhoPedidoDados[],
+	cotacaoGrupoId: string | null,
+): EspelhoCotacaoDados {
+	const [primeira] = secoes;
+	if (!primeira) {
+		throw new EspelhoCotacaoInconsistenteError(
+			"A cotação não possui pedidos para montar o espelho.",
+		);
+	}
+	for (const secao of secoes) {
+		if (
+			secao.tenantId !== primeira.tenantId ||
+			secao.cliente.id !== primeira.cliente.id
+		) {
+			throw new EspelhoCotacaoInconsistenteError(
+				"Os pedidos da cotação pertencem a clientes ou tenants diferentes.",
+			);
+		}
+	}
+
+	const rascunho = secoes.every((s) => s.status === "rascunho");
+	const status = rascunho
+		? "rascunho"
+		: (secoes.find((s) => s.status !== "rascunho")?.status ?? primeira.status);
+	const dataEmissaoIso = secoes
+		.map((s) => s.dataEmissaoIso)
+		.reduce((maior, atual) => (atual > maior ? atual : maior));
+	const somar = (valor: (t: EspelhoTotaisPedido) => number) =>
+		somarCentavos(secoes.map((s) => valor(s.totais)));
+	const valorTabelaTotalCentavos = somar((t) => t.valorTabelaTotalCentavos);
+	const descontoTotalCentavos = somar((t) => t.descontoTotalCentavos);
+	const valorTotalCentavos = somar((t) => t.valorTotalCentavos);
+
+	return {
+		cotacaoGrupoId,
+		tenantId: primeira.tenantId,
+		codigoCurto: (cotacaoGrupoId ?? primeira.pedidoId)
+			.slice(0, 8)
+			.toUpperCase(),
+		status,
+		statusRotulo: ROTULOS_STATUS_PEDIDO[status],
+		tituloDocumento: rascunho
+			? "COTAÇÃO MULTI-FÁBRICA"
+			: "PEDIDOS DA COTAÇÃO (UNIFICADO)",
+		dataEmissaoIso,
+		dataEmissaoFormatada: formatarDataBr(dataEmissaoIso),
+		emitente: primeira.emitente,
+		cliente: primeira.cliente,
+		logistica: primeira.logistica,
+		observacoes: primeira.comercial.observacoes,
+		secoes: [...secoes],
+		totais: {
+			quantidadeItens: somar((t) => t.quantidadeItens),
+			quantidadeVolumes: somar((t) => t.quantidadeVolumes),
+			valorTabelaTotalCentavos,
+			valorTabelaTotalFormatado: formatarCentavos(valorTabelaTotalCentavos),
+			descontoTotalCentavos,
+			descontoTotalFormatado: formatarCentavos(descontoTotalCentavos),
+			valorTotalCentavos,
+			valorTotalFormatado: formatarCentavos(valorTotalCentavos),
+		},
+	};
+}
+
+/** Ex.: `cotacao-A1B2C3D4-mercado-bom-preco-2026-10-30.pdf`. */
+export function gerarNomeArquivoEspelhoCotacaoPdf(
+	espelho: Pick<
+		EspelhoCotacaoDados,
+		"codigoCurto" | "cliente" | "dataEmissaoIso"
+	>,
+): string {
+	return `cotacao-${espelho.codigoCurto}-${slugCliente(espelho.cliente)}-${espelho.dataEmissaoIso}.pdf`;
+}
+
+/** Texto do espelho unificado (WhatsApp/E-mail), com uma seção por fábrica. */
+export function gerarTextoCompartilhamentoCotacao(
+	espelho: EspelhoCotacaoDados,
+): string {
+	const nomeCliente =
+		espelho.cliente.nomeFantasia ?? espelho.cliente.razaoSocial;
+
+	const blocos = [
+		`*${espelho.tituloDocumento} #${espelho.codigoCurto}*`,
+		`Data: ${espelho.dataEmissaoFormatada} | Status: ${espelho.statusRotulo}`,
+		`Cliente: ${nomeCliente} (${espelho.cliente.documentoFormatado})`,
+	];
+
+	for (const secao of espelho.secoes) {
+		blocos.push(
+			"",
+			`*${secao.representada.nomeFantasia}* — Pedido #${secao.codigoCurto}`,
+			`Pagamento: ${secao.comercial.condicaoPagamento} | Frete: ${secao.comercial.tipoFreteRotulo}`,
+			...secao.itens.map(
+				(item) =>
+					`• ${item.quantidade}x [${item.sku}] ${item.descricao} — ${item.precoLiquidoFormatado}/un (${item.subtotalFormatado})`,
+			),
+			`Subtotal ${secao.representada.nomeFantasia}: ${secao.totais.valorTotalFormatado}`,
+		);
+	}
+
+	blocos.push(
+		"",
+		`*Total Geral (${espelho.secoes.length} fábricas): ${espelho.totais.valorTotalFormatado}*`,
+	);
+
+	const transportadora = espelho.logistica.transportadora;
+	if (transportadora) {
+		blocos.push(`Transportadora: ${transportadora.nomeFantasia}`);
+	}
+	if (espelho.observacoes) {
+		blocos.push(`Observações: ${espelho.observacoes}`);
+	}
+
+	return blocos.join("\n");
+}
+
+/** URL do WhatsApp com o texto do espelho unificado da cotação. */
+export function gerarUrlWhatsappCotacao(espelho: EspelhoCotacaoDados): string {
+	return montarUrlWhatsapp(
+		gerarTextoCompartilhamentoCotacao(espelho),
+		espelho.cliente.contatoTelefone,
+	);
+}
+
+/** URL `mailto:` com o resumo do espelho unificado da cotação. */
+export function gerarUrlEmailCotacao(espelho: EspelhoCotacaoDados): string {
+	return montarUrlEmail(
+		espelho.cliente.contatoEmail,
+		`Cotação #${espelho.codigoCurto} — ${espelho.secoes.length} fábricas (${espelho.totais.valorTotalFormatado})`,
+		gerarTextoCompartilhamentoCotacao(espelho),
+	);
 }

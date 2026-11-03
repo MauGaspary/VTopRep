@@ -1,9 +1,11 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../../db/database";
+import { TransportadoraDexieAdapter } from "../../transportadoras/repositories/transportadora-dexie.adapter";
 import {
 	ClienteInativoExistenteError,
 	ClienteNaoEncontradoError,
 	CpfCnpjDuplicadoError,
+	TransportadoraPadraoInvalidaError,
 } from "../domain/cliente";
 import type { SalvarClienteDTO } from "./cliente.repository";
 import { ClienteDexieAdapter } from "./cliente-dexie.adapter";
@@ -46,6 +48,7 @@ describe("ClienteDexieAdapter", () => {
 		await db.clientes.clear();
 		await db.clientes_enderecos.clear();
 		await db.clientes_contatos.clear();
+		await db.transportadoras.clear();
 		adapter = new ClienteDexieAdapter();
 	});
 
@@ -398,6 +401,80 @@ describe("ClienteDexieAdapter", () => {
 				adapter.inativar(TENANT_2, criado.cliente.id),
 			).rejects.toBeInstanceOf(ClienteNaoEncontradoError);
 			expect((await db.clientes.get(criado.cliente.id))?.ativo).toBe(true);
+		});
+	});
+	describe("transportadora habitual", () => {
+		const transportadoras = new TransportadoraDexieAdapter();
+
+		it("vincula uma transportadora ativa do mesmo tenant", async () => {
+			const t = await transportadoras.criar(TENANT_1, {
+				nome_fantasia: "Rodo Sul",
+			});
+			const criado = await adapter.criar(
+				TENANT_1,
+				dtoPadrao({ transportadora_padrao_id: t.id }),
+			);
+			expect(
+				(await db.clientes.get(criado.cliente.id))?.transportadora_padrao_id,
+			).toBe(t.id);
+
+			const atualizado = await adapter.atualizar(
+				TENANT_1,
+				criado.cliente.id,
+				dtoPadrao({ transportadora_padrao_id: "" }),
+			);
+			expect(atualizado.cliente.transportadora_padrao_id).toBeNull();
+		});
+
+		it("rejeita transportadora de outro tenant, inexistente ou inativa", async () => {
+			const deOutroTenant = await transportadoras.criar(TENANT_2, {
+				nome_fantasia: "Outro",
+			});
+			await expect(
+				adapter.criar(
+					TENANT_1,
+					dtoPadrao({ transportadora_padrao_id: deOutroTenant.id }),
+				),
+			).rejects.toBeInstanceOf(TransportadoraPadraoInvalidaError);
+			await expect(
+				adapter.criar(
+					TENANT_1,
+					dtoPadrao({ transportadora_padrao_id: crypto.randomUUID() }),
+				),
+			).rejects.toBeInstanceOf(TransportadoraPadraoInvalidaError);
+
+			const inativa = await transportadoras.criar(TENANT_1, {
+				nome_fantasia: "Inativa",
+			});
+			await transportadoras.inativar(TENANT_1, inativa.id);
+			await expect(
+				adapter.criar(
+					TENANT_1,
+					dtoPadrao({ transportadora_padrao_id: inativa.id }),
+				),
+			).rejects.toBeInstanceOf(TransportadoraPadraoInvalidaError);
+			expect(await db.clientes.count()).toBe(0);
+		});
+
+		it("mantém o vínculo antigo ao editar mesmo após a transportadora ser inativada", async () => {
+			const t = await transportadoras.criar(TENANT_1, {
+				nome_fantasia: "Rodo Sul",
+			});
+			const criado = await adapter.criar(
+				TENANT_1,
+				dtoPadrao({ transportadora_padrao_id: t.id }),
+			);
+			await transportadoras.inativar(TENANT_1, t.id);
+
+			const atualizado = await adapter.atualizar(
+				TENANT_1,
+				criado.cliente.id,
+				dtoPadrao({
+					transportadora_padrao_id: t.id,
+					razao_social: "Novo Nome Ltda",
+				}),
+			);
+			expect(atualizado.cliente.transportadora_padrao_id).toBe(t.id);
 		});
 	});
 });

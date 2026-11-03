@@ -7,6 +7,7 @@ import { ProdutoSchema } from "../../modules/produtos/domain/produto.schema";
 import { TabelaPrecoSchema } from "../../modules/produtos/domain/tabela-preco.schema";
 import { criarRepresentada } from "../../modules/representadas/domain/representada";
 import { RepresentadaSchema } from "../../modules/representadas/domain/representada.schema";
+import { TransportadoraSchema } from "../../modules/transportadoras/domain/transportadora.schema";
 import { db } from "../database";
 import { seedDatabase } from "../seed";
 
@@ -37,10 +38,25 @@ describe("seedDatabase", () => {
 		validar(ClienteSchema, await db.clientes.toArray());
 		validar(ClienteEnderecoSchema, await db.clientes_enderecos.toArray());
 		validar(ClienteContatoSchema, await db.clientes_contatos.toArray());
+		validar(TransportadoraSchema, await db.transportadoras.toArray());
 
 		expect(await db.representadas.count()).toBe(2);
 		expect(await db.produtos.count()).toBe(10);
 		expect(await db.clientes.count()).toBe(5);
+		expect(await db.transportadoras.count()).toBe(3);
+
+		const idsTransportadoras = new Set(
+			(await db.transportadoras.toArray()).map((t) => t.id),
+		);
+		const vinculados = (await db.clientes.toArray()).filter(
+			(c) => c.transportadora_padrao_id,
+		);
+		expect(vinculados.length).toBeGreaterThan(0);
+		for (const c of vinculados) {
+			expect(idsTransportadoras.has(c.transportadora_padrao_id ?? "")).toBe(
+				true,
+			);
+		}
 	});
 
 	it("substitui apenas os dados do tenant informado", async () => {

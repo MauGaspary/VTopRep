@@ -1,4 +1,4 @@
-import { Download, FileText, Plus, Trash2 } from "lucide-react";
+import { Download, FileText, Layers, Plus, Trash2 } from "lucide-react";
 import { useMemo, useState } from "react";
 import { Link } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
@@ -75,6 +75,17 @@ export function PedidosListView() {
 		return mapa;
 	}, [representadas]);
 
+	// Quantos pedidos vivos cada cotação multi-representada gerou
+	const pedidosPorCotacao = useMemo(() => {
+		const mapa = new Map<string, number>();
+		for (const p of pedidos) {
+			if (p.cotacao_grupo_id) {
+				mapa.set(p.cotacao_grupo_id, (mapa.get(p.cotacao_grupo_id) ?? 0) + 1);
+			}
+		}
+		return mapa;
+	}, [pedidos]);
+
 	const metricas = useMemo(() => {
 		let rascunhosCount = 0;
 		let emitidosCount = 0;
@@ -121,12 +132,16 @@ export function PedidosListView() {
 			);
 			const condicao = normalizarTexto(pedido.condicao_pagamento);
 			const codigo = normalizarTexto(pedido.id.slice(0, 8));
+			const codigoCotacao = normalizarTexto(
+				pedido.cotacao_grupo_id?.slice(0, 8) ?? "",
+			);
 
 			return (
 				nomeCliente.includes(termo) ||
 				nomeRep.includes(termo) ||
 				condicao.includes(termo) ||
-				codigo.includes(termo)
+				codigo.includes(termo) ||
+				(codigoCotacao !== "" && codigoCotacao.includes(termo))
 			);
 		});
 	}, [pedidos, filtroStatus, termoBusca, clientesPorId, representadasPorId]);
@@ -136,8 +151,16 @@ export function PedidosListView() {
 
 	const handleExcluirRascunho = async (pedido: Pedido) => {
 		const nomeCliente = clientesPorId.get(pedido.cliente_id) ?? "Cliente";
+		const nomeRep =
+			representadasPorId.get(pedido.representada_id)?.nome_fantasia ??
+			"esta fábrica";
+		const daCotacao =
+			pedido.cotacao_grupo_id &&
+			(pedidosPorCotacao.get(pedido.cotacao_grupo_id) ?? 0) > 1;
 		const confirmado = window.confirm(
-			`Excluir o rascunho de orçamento de "${nomeCliente}"?`,
+			daCotacao
+				? `Excluir apenas o rascunho de ${nomeRep} da cotação de "${nomeCliente}"? As demais fábricas da cotação são mantidas.`
+				: `Excluir o rascunho de orçamento de "${nomeCliente}"?`,
 		);
 		if (!confirmado) return;
 		setErro(null);
@@ -313,6 +336,9 @@ export function PedidosListView() {
 								const dataCurta = pedido.data_emissao.slice(0, 10);
 								const codigoCurto = `#${pedido.id.slice(0, 8).toUpperCase()}`;
 								const rascunho = pedido.status === "rascunho";
+								const fabricasNaCotacao = pedido.cotacao_grupo_id
+									? (pedidosPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
+									: 0;
 
 								return (
 									<tr
@@ -330,6 +356,15 @@ export function PedidosListView() {
 												<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
 													{formatarDataBr(dataCurta)}
 												</span>
+												{fabricasNaCotacao > 1 && (
+													<span
+														title={`Cotação #${pedido.cotacao_grupo_id?.slice(0, 8).toUpperCase()} com ${fabricasNaCotacao} fábricas`}
+														className="mt-0.5 inline-flex w-fit items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] text-muted-foreground"
+													>
+														<Layers aria-hidden="true" className="size-3" />
+														Cotação · {fabricasNaCotacao} fáb.
+													</span>
+												)}
 											</div>
 										</td>
 

@@ -24,7 +24,7 @@ export function MobileBottomNav() {
 				className="grid"
 				style={{ gridTemplateColumns: `repeat(${NAV_ITEMS.length}, 1fr)` }}
 			>
-				{NAV_ITEMS.map(({ to, label, icon: Icon }) => (
+				{NAV_ITEMS.map(({ to, label, shortLabel, icon: Icon }) => (
 					<li key={to}>
 						<NavLink
 							to={to}
@@ -42,7 +42,7 @@ export function MobileBottomNav() {
 										aria-hidden="true"
 										className={`size-5 ${isActive ? "text-primary" : ""}`}
 									/>
-									{label}
+									{shortLabel ?? label}
 								</>
 							)}
 						</NavLink>

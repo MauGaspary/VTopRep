@@ -92,7 +92,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `tenant_id: UUID` (FK)
 * `nome_fantasia: text`
 * `razao_social: text (nullable)`
-* `cnpj: text (nullable)`
+* `cnpj: text (nullable)` (normalizado; quando informado, único por tenant — bloqueante, com oferta de reativação se pertencer a uma inativa)
 * `telefone: text (nullable)`
 * `cidade_uf: text (nullable)`
 * `ativo: boolean`
@@ -205,6 +205,8 @@ No máximo uma associação viva por `tenant_id + cliente_id + representada_id`.
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
 
+Cotação multi-representada: a sacola é gravada numa única transação como 1 pedido por representada. Cliente, endereço de entrega, contato, transportadora e observações são comuns a todos; tabela, condição de pagamento e tipo de frete são de cada fábrica. O `cotacao_grupo_id` só é criado quando há mais de uma representada e, uma vez criado, é mantido nas edições. Ao editar um rascunho, os pedidos são casados pela representada, e os das fábricas retiradas da sacola recebem `deleted_at`. A cotação só é editável enquanto todos os seus pedidos estão em `rascunho`.
+
 #### `itens_pedido`
 * `id: UUID` (PK gerada pelo cliente no Dexie via UUIDv4)
 * `tenant_id: UUID` (FK)
@@ -265,7 +267,7 @@ export interface OutboxMutation {
 }
 ```
 
-Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `representadas`, `clientes`, `clientes_enderecos`, `clientes_contatos`, `clientes_metricas`, `clientes_tabelas_preco`, `produtos`, `tabelas_preco`, `itens_preco`, `pedidos` e `itens_pedido` (fonte: `ENTIDADES_SINCRONIZAVEIS` em `src/modules/sync/domain/outbox.schema.ts`).
+Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `representadas`, `transportadoras`, `clientes`, `clientes_enderecos`, `clientes_contatos`, `clientes_metricas`, `clientes_tabelas_preco`, `produtos`, `tabelas_preco`, `itens_preco`, `pedidos` e `itens_pedido` (fonte: `ENTIDADES_SINCRONIZAVEIS` em `src/modules/sync/domain/outbox.schema.ts`).
 
 ### 3.2. Estratégia de Resolução de Conflitos
 * **Entidades Transacionais Geradas em Campo (Pedidos, Itens, Clientes Novos):**
@@ -276,7 +278,7 @@ Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `
   * O backend é a fonte de autoridade. O cliente consome rotinas de *delta sync* consultando `updated_at > :ultimaSincronizacaoLocal`.
 * **Tratamento de Exclusões:**
   * O servidor envia registros com `deleted_at != null`. O Dexie.js atualiza o registro local marcando o soft-delete para removê-lo das telas sem perder integridade referencial com pedidos antigos já persistidos.
-* **Cadastros editados em campo (Clientes, Endereços, Contatos, Tabela Padrão do Cliente):**
+* **Cadastros editados em campo (Transportadoras, Clientes, Endereços, Contatos, Tabela Padrão do Cliente):**
   * Edições do mesmo cliente em dois aparelhos offline seguem **Last-Write-Wins por `updated_at`**, registro a registro (sem merge por campo nesta fase).
 * **Imutabilidade remota de pedidos:**
   * Pedidos com `status` diferente de `rascunho` são somente-leitura também no PostgreSQL: a migração que criar `pedidos`/`itens_pedido` deve incluir um *trigger* que rejeite `UPDATE` de campos comerciais (exceto as transições de status do funil de faturamento).

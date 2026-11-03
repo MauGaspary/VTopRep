@@ -16,6 +16,7 @@ import {
 	ordenarClientesComInativosNoFim,
 	reativarCliente,
 	sincronizarFilhosCliente,
+	TransportadoraPadraoInvalidaError,
 } from "../domain/cliente";
 import type { Cliente } from "../domain/cliente.schema";
 import type { ClienteRepository, SalvarClienteDTO } from "./cliente.repository";
@@ -119,9 +120,11 @@ export class ClienteDexieAdapter implements ClienteRepository {
 				this.db.clientes,
 				this.db.clientes_enderecos,
 				this.db.clientes_contatos,
+				this.db.transportadoras,
 				this.db.outbox,
 			],
 			async () => {
+				await this.garantirTransportadoraDoTenant(tenant, completo.cliente);
 				await this.garantirDocumentoUnico(tenant, completo.cliente, {
 					oferecerReativacao: true,
 				});
@@ -186,6 +189,7 @@ export class ClienteDexieAdapter implements ClienteRepository {
 				this.db.clientes,
 				this.db.clientes_enderecos,
 				this.db.clientes_contatos,
+				this.db.transportadoras,
 				this.db.outbox,
 			],
 			async () => {
@@ -201,6 +205,12 @@ export class ClienteDexieAdapter implements ClienteRepository {
 					dto.cliente,
 					agora,
 				);
+				if (
+					atualizado.transportadora_padrao_id !==
+					existente.transportadora_padrao_id
+				) {
+					await this.garantirTransportadoraDoTenant(tenant, atualizado);
+				}
 
 				if (atualizado.cnpj_cpf !== existente.cnpj_cpf) {
 					await this.garantirDocumentoUnico(tenant, atualizado, {
@@ -376,6 +386,28 @@ export class ClienteDexieAdapter implements ClienteRepository {
 			return undefined;
 		}
 		return cliente;
+	}
+
+	/**
+	 * A transportadora habitual (se houver) precisa ser ativa e do mesmo tenant.
+	 * Na edição só é verificada quando muda, para que um vínculo antigo com uma
+	 * transportadora depois inativada não impeça salvar o cliente.
+	 */
+	private async garantirTransportadoraDoTenant(
+		tenantId: string,
+		cliente: Pick<Cliente, "transportadora_padrao_id">,
+	): Promise<void> {
+		const transportadoraId = cliente.transportadora_padrao_id;
+		if (!transportadoraId) return;
+		const transportadora = await this.db.transportadoras.get(transportadoraId);
+		if (
+			!transportadora ||
+			transportadora.tenant_id !== tenantId ||
+			transportadora.deleted_at !== null ||
+			!transportadora.ativo
+		) {
+			throw new TransportadoraPadraoInvalidaError();
+		}
 	}
 
 	/**

@@ -3,12 +3,15 @@ import {
 	FileText,
 	type LucideIcon,
 	Package,
+	Truck,
 	Users,
 } from "lucide-react";
 
 export interface NavItem {
 	to: string;
 	label: string;
+	/** Rótulo curto para a barra inferior do mobile, onde o espaço é estreito. */
+	shortLabel?: string;
 	icon: LucideIcon;
 }
 
@@ -31,6 +34,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 		items: [
 			{ to: "/clientes", label: "Clientes", icon: Users },
 			{ to: "/representadas", label: "Representadas", icon: Factory },
+			{
+				to: "/transportadoras",
+				label: "Transportadoras",
+				shortLabel: "Transp.",
+				icon: Truck,
+			},
 		],
 	},
 ];

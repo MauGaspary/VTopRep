@@ -52,6 +52,13 @@ export class ClienteInativoExistenteError extends Error {
 	}
 }
 
+export class TransportadoraPadraoInvalidaError extends Error {
+	constructor() {
+		super("A transportadora habitual selecionada não foi encontrada.");
+		this.name = "TransportadoraPadraoInvalidaError";
+	}
+}
+
 export interface ClienteCompleto {
 	cliente: Cliente;
 	enderecos: ClienteEndereco[];

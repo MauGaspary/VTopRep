@@ -41,6 +41,8 @@ export interface ClienteFormValues {
 	razao_social: string;
 	nome_fantasia: string;
 	tipo_cliente: string;
+	/** Id da transportadora habitual; vazio = nenhuma. */
+	transportadora_padrao_id: string;
 	enderecos: EnderecoFormValues[];
 	contatos: ContatoFormValues[];
 }
@@ -48,7 +50,7 @@ export interface ClienteFormValues {
 export type CampoEnderecoForm = "tipo_endereco" | "endereco_completo";
 export type CampoContatoForm = "nome" | "papel" | "telefone_whatsapp" | "email";
 
-/** Chaves: `cnpj_cpf`, `razao_social`, `nome_fantasia`, `tipo_cliente`, `enderecos.<i>.<campo>`, `contatos.<i>.<campo>`. */
+/** Chaves: `cnpj_cpf`, `razao_social`, `nome_fantasia`, `tipo_cliente`, `transportadora_padrao_id`, `enderecos.<i>.<campo>`, `contatos.<i>.<campo>`. */
 export type ClienteFormErros = Partial<Record<string, string>>;
 
 export interface ClienteFormDados {
@@ -80,6 +82,7 @@ const CAMPOS_CLIENTE = new Set([
 	"razao_social",
 	"nome_fantasia",
 	"tipo_cliente",
+	"transportadora_padrao_id",
 ]);
 const CAMPOS_ENDERECO = new Set<string>(["tipo_endereco", "endereco_completo"]);
 const CAMPOS_CONTATO = new Set<string>([
@@ -139,6 +142,7 @@ export function valoresIniciaisClienteForm(
 			razao_social: "",
 			nome_fantasia: "",
 			tipo_cliente: "REVENDA",
+			transportadora_padrao_id: "",
 			enderecos: [],
 			contatos: [],
 		};
@@ -149,6 +153,7 @@ export function valoresIniciaisClienteForm(
 		razao_social: dados.cliente.razao_social,
 		nome_fantasia: dados.cliente.nome_fantasia ?? "",
 		tipo_cliente: dados.cliente.tipo_cliente ?? "REVENDA",
+		transportadora_padrao_id: dados.cliente.transportadora_padrao_id ?? "",
 		enderecos: dados.enderecos.map((e) => ({
 			localId: e.id,
 			id: e.id,
@@ -187,6 +192,7 @@ export function valoresIniciaisCadastroRapidoCliente(
 			razao_social: "",
 			nome_fantasia: "",
 			tipo_cliente: "REVENDA",
+			transportadora_padrao_id: "",
 			enderecos: [],
 			contatos: [],
 		};
@@ -196,6 +202,7 @@ export function valoresIniciaisCadastroRapidoCliente(
 		razao_social: limpo,
 		nome_fantasia: limpo,
 		tipo_cliente: "REVENDA",
+		transportadora_padrao_id: "",
 		enderecos: [],
 		contatos: [],
 	};
@@ -217,6 +224,7 @@ export function validarFormularioCliente(
 			nome_fantasia: valores.nome_fantasia,
 			tipo_cliente:
 				valores.tipo_cliente.trim() === "" ? "REVENDA" : valores.tipo_cliente,
+			transportadora_padrao_id: valores.transportadora_padrao_id,
 		},
 		enderecos: valores.enderecos.map((e) => ({
 			id: e.id,

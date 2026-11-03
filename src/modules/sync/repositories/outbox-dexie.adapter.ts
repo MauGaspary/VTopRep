@@ -13,6 +13,7 @@ import { ItemPrecoSchema } from "../../produtos/domain/item-preco.schema";
 import { ProdutoSchema } from "../../produtos/domain/produto.schema";
 import { TabelaPrecoSchema } from "../../produtos/domain/tabela-preco.schema";
 import { RepresentadaSchema } from "../../representadas/domain/representada.schema";
+import { TransportadoraSchema } from "../../transportadoras/domain/transportadora.schema";
 import {
 	criarMutacaoOutbox,
 	iniciarSincronizacaoMutacao,
@@ -256,6 +257,13 @@ export class OutboxDexieAdapter implements OutboxRepository {
 					entidadeValida,
 					this.db.representadas,
 					registrosRemotos.map((r) => RepresentadaSchema.parse(r)),
+				);
+			case "transportadoras":
+				return this.aplicarDeltaComChaveId(
+					tenant,
+					entidadeValida,
+					this.db.transportadoras,
+					registrosRemotos.map((r) => TransportadoraSchema.parse(r)),
 				);
 			case "clientes":
 				return this.aplicarDeltaComChaveId(

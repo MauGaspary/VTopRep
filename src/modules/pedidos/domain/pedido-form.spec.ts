@@ -27,6 +27,7 @@ describe("valoresIniciaisPedidoForm", () => {
 			tabela_id: "",
 			endereco_entrega_id: "",
 			contato_id: "",
+			transportadora_id: "",
 			condicao_pagamento: "",
 			tipo_frete: "CIF",
 			observacoes: "",
@@ -49,6 +50,7 @@ describe("valoresIniciaisPedidoForm", () => {
 			tabela_id: TABELA,
 			endereco_entrega_id: "",
 			contato_id: "",
+			transportadora_id: "",
 			condicao_pagamento: "28 dias",
 			tipo_frete: "FOB",
 			observacoes: "",
@@ -218,6 +220,7 @@ describe("validarFormularioPedido", () => {
 			tabela_id: TABELA,
 			endereco_entrega_id: "",
 			contato_id: "",
+			transportadora_id: "",
 			condicao_pagamento: "30 dias",
 			tipo_frete: "CIF",
 			observacoes: "  ",
@@ -236,6 +239,7 @@ describe("validarFormularioPedido", () => {
 		if (resultado.success) {
 			expect(resultado.data.observacoes).toBeNull();
 			expect(resultado.data.endereco_entrega_id).toBeNull();
+			expect(resultado.data.transportadora_id).toBeNull();
 			expect(resultado.data.itens).toEqual([
 				{
 					id: undefined,
@@ -255,6 +259,7 @@ describe("validarFormularioPedido", () => {
 			tabela_id: "",
 			endereco_entrega_id: "",
 			contato_id: "",
+			transportadora_id: "",
 			condicao_pagamento: " ",
 			tipo_frete: "CIF",
 			observacoes: "",
@@ -276,6 +281,7 @@ describe("validarFormularioPedido", () => {
 			tabela_id: TABELA,
 			endereco_entrega_id: "",
 			contato_id: "",
+			transportadora_id: "",
 			condicao_pagamento: "À vista",
 			tipo_frete: "CIF",
 			observacoes: "",

@@ -29,6 +29,7 @@ export interface PedidoFormValues {
 	tabela_id: string;
 	endereco_entrega_id: string;
 	contato_id: string;
+	transportadora_id: string;
 	condicao_pagamento: string;
 	tipo_frete: string;
 	observacoes: string;
@@ -39,7 +40,7 @@ export type CampoItemPedidoForm = "quantidade" | "percentual_desconto";
 
 /**
  * Chaves possíveis: `cliente_id`, `representada_id`, `tabela_id`,
- * `endereco_entrega_id`, `contato_id`, `condicao_pagamento`, `tipo_frete`,
+ * `endereco_entrega_id`, `contato_id`, `transportadora_id`, `condicao_pagamento`, `tipo_frete`,
  * `observacoes`, `itens`, `itens.<localId>.quantidade`,
  * `itens.<localId>.percentual_desconto`.
  */
@@ -62,6 +63,7 @@ const CAMPOS_TOPO = new Set<string>([
 	"tabela_id",
 	"endereco_entrega_id",
 	"contato_id",
+	"transportadora_id",
 	"condicao_pagamento",
 	"tipo_frete",
 	"observacoes",
@@ -89,6 +91,7 @@ export function valoresIniciaisPedidoForm(
 			tabela_id: dados.pedido.tabela_id,
 			endereco_entrega_id: dados.pedido.endereco_entrega_id ?? "",
 			contato_id: dados.pedido.contato_id ?? "",
+			transportadora_id: dados.pedido.transportadora_id ?? "",
 			condicao_pagamento: dados.pedido.condicao_pagamento,
 			tipo_frete: dados.pedido.tipo_frete,
 			observacoes: dados.pedido.observacoes ?? "",
@@ -112,6 +115,7 @@ export function valoresIniciaisPedidoForm(
 		tabela_id: defaults.tabelaId ?? "",
 		endereco_entrega_id: "",
 		contato_id: "",
+		transportadora_id: "",
 		condicao_pagamento: defaults.condicaoPagamento ?? "",
 		tipo_frete: defaults.tipoFrete ?? "CIF",
 		observacoes: "",
@@ -269,13 +273,23 @@ export function calcularPreviaTotaisForm(
 	return calcularTotaisPedido(calculaveis, percentualComissaoPadrao);
 }
 
-/** Converte e valida o formulário completo do orçamento/pedido. */
-export function validarFormularioPedido(
-	valores: PedidoFormValues,
-): ResultadoFormularioPedido {
-	const errosConversao: PedidoFormErros = {};
+export interface ItemPedidoConvertido {
+	id?: string;
+	produto_id: string;
+	quantidade: number;
+	preco_unitario_tabela_centavos: number;
+	percentual_desconto: number;
+}
 
-	const itensConvertidos = valores.itens.map((linha) => {
+/**
+ * Converte as linhas digitadas da sacola para o formato numérico do input,
+ * acumulando erros de conversão por linha (`itens.<localId>.<campo>`).
+ */
+export function converterItensFormPedido(
+	itens: readonly ItemOrcamentoFormValues[],
+	errosConversao: PedidoFormErros,
+): ItemPedidoConvertido[] {
+	return itens.map((linha) => {
 		const qtdTexto = linha.quantidade.trim();
 		let quantidade = 0;
 		if (SOMENTE_DIGITOS.test(qtdTexto)) {
@@ -306,6 +320,17 @@ export function validarFormularioPedido(
 			percentual_desconto: descontoCentesimos ?? 0,
 		};
 	});
+}
+
+/** Converte e valida o formulário completo do orçamento/pedido. */
+export function validarFormularioPedido(
+	valores: PedidoFormValues,
+): ResultadoFormularioPedido {
+	const errosConversao: PedidoFormErros = {};
+	const itensConvertidos = converterItensFormPedido(
+		valores.itens,
+		errosConversao,
+	);
 
 	const resultado = PedidoInputSchema.safeParse({
 		cliente_id: valores.cliente_id,
@@ -313,6 +338,7 @@ export function validarFormularioPedido(
 		tabela_id: valores.tabela_id,
 		endereco_entrega_id: valores.endereco_entrega_id,
 		contato_id: valores.contato_id,
+		transportadora_id: valores.transportadora_id,
 		condicao_pagamento: valores.condicao_pagamento,
 		tipo_frete: valores.tipo_frete,
 		observacoes: valores.observacoes,

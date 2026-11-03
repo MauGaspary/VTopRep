@@ -46,11 +46,18 @@ export const PedidoSchema = z
 	.object({
 		id: z.string().uuid(),
 		tenant_id: z.string().uuid(),
+		/**
+		 * Agrupador da cotação multi-representada: os pedidos individuais (um por
+		 * fábrica) gerados pela mesma cotação compartilham este id (Fase 2.5).
+		 */
+		cotacao_grupo_id: z.string().uuid().nullable().optional(),
 		cliente_id: z.string().uuid(),
 		representada_id: z.string().uuid(),
 		tabela_id: z.string().uuid(),
 		endereco_entrega_id: z.string().uuid().nullable().optional(),
 		contato_id: z.string().uuid().nullable().optional(),
+		/** Transportadora do pedido; sugerida a partir da habitual do cliente (Fase 2.5). */
+		transportadora_id: z.string().uuid().nullable().optional(),
 		data_emissao: TimestampSchema,
 		condicao_pagamento: z.string().min(1),
 		/** Herdável de `representadas.regras_frete_padrao` (mesmo domínio de valores). */
@@ -80,6 +87,7 @@ export const PedidoInputSchema = z.object({
 	tabela_id: z.string().uuid("Selecione uma tabela de preço"),
 	endereco_entrega_id: IdOpcionalSchema,
 	contato_id: IdOpcionalSchema,
+	transportadora_id: IdOpcionalSchema,
 	condicao_pagamento: z
 		.string()
 		.trim()

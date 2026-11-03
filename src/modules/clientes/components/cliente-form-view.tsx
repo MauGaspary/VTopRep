@@ -1,5 +1,5 @@
 import { Plus } from "lucide-react";
-import { type FormEvent, useState } from "react";
+import { type FormEvent, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
 import { Page } from "../../../shared/components/layout/Page";
@@ -7,6 +7,7 @@ import {
 	Alert,
 	Button,
 	buttonClassName,
+	Combobox,
 	cardClassName,
 	FormField,
 	HomonymWarning,
@@ -27,10 +28,14 @@ import {
 } from "../../produtos/hooks/use-precos";
 import type { Representada } from "../../representadas/domain/representada.schema";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
+import { opcoesComboboxTransportadoras } from "../../transportadoras/domain/transportadora";
+import type { Transportadora } from "../../transportadoras/domain/transportadora.schema";
+import { useTodasTransportadoras } from "../../transportadoras/hooks/use-transportadoras";
 import {
 	type ClienteCompleto,
 	ClienteInativoExistenteError,
 	CpfCnpjDuplicadoError,
+	TransportadoraPadraoInvalidaError,
 } from "../domain/cliente";
 import {
 	type Cliente,
@@ -67,11 +72,14 @@ export function ClienteFormView() {
 		useTabelasDisponiveisPorRepresentada(config.id);
 	const { tabelasPadrao, isLoading: carregandoPadroes } =
 		useTabelasPadraoDoCliente(config.id, id);
+	const { transportadoras, isLoading: carregandoTransportadoras } =
+		useTodasTransportadoras(config.id);
 
 	if (
 		(id && (isLoading || carregandoPadroes)) ||
 		carregandoRepresentadas ||
-		carregandoTabelas
+		carregandoTabelas ||
+		carregandoTransportadoras
 	) {
 		return (
 			<p className="p-6 text-center text-muted-foreground">
@@ -99,6 +107,7 @@ export function ClienteFormView() {
 			representadas={representadas}
 			tabelasPorRepresentada={tabelasPorRepresentada}
 			tabelasPadraoIniciais={tabelasPadrao}
+			transportadoras={transportadoras}
 		/>
 	);
 }
@@ -109,6 +118,7 @@ interface ClienteFormProps {
 	representadas: readonly Representada[];
 	tabelasPorRepresentada: ReadonlyMap<string, TabelaPreco[]>;
 	tabelasPadraoIniciais: ReadonlyMap<string, ClienteTabelaPreco>;
+	transportadoras: readonly Transportadora[];
 }
 
 const gerarLocalId = () => crypto.randomUUID();
@@ -119,6 +129,7 @@ function ClienteForm({
 	representadas,
 	tabelasPorRepresentada,
 	tabelasPadraoIniciais,
+	transportadoras,
 }: ClienteFormProps) {
 	const navigate = useNavigate();
 	const { criar, atualizar, reativar } = useClienteActions(tenantId);
@@ -154,11 +165,25 @@ function ClienteForm({
 
 	const editando = clienteOriginal !== undefined;
 
+	const opcoesTransportadoras = useMemo(
+		() =>
+			opcoesComboboxTransportadoras(
+				transportadoras,
+				clienteOriginal?.transportadora_padrao_id,
+			),
+		[transportadoras, clienteOriginal?.transportadora_padrao_id],
+	);
+
 	const limparErro = (chave: string) =>
 		setErros((atual) => ({ ...atual, [chave]: undefined }));
 
 	const alterarCampo = (
-		campo: "cnpj_cpf" | "razao_social" | "nome_fantasia" | "tipo_cliente",
+		campo:
+			| "cnpj_cpf"
+			| "razao_social"
+			| "nome_fantasia"
+			| "tipo_cliente"
+			| "transportadora_padrao_id",
 		valor: string,
 	) => {
 		setValores((atual) => ({ ...atual, [campo]: valor }));
@@ -271,6 +296,8 @@ function ClienteForm({
 				setErros({ cnpj_cpf: err.message });
 			} else if (err instanceof CpfCnpjDuplicadoError) {
 				setErros({ cnpj_cpf: err.message });
+			} else if (err instanceof TransportadoraPadraoInvalidaError) {
+				setErros({ transportadora_padrao_id: err.message });
 			} else {
 				setErroGeral(mensagemDeErro(err, "Erro ao salvar cliente"));
 			}
@@ -405,6 +432,39 @@ function ClienteForm({
 							inativo: !registro.ativo,
 						}))}
 					/>
+				</div>
+
+				{/* Logística */}
+				<div className="flex flex-col gap-3">
+					<div className="border-b border-border pb-2">
+						<h2 className="text-sm font-semibold text-foreground">Logística</h2>
+						<p className="text-xs text-muted-foreground">
+							A transportadora habitual é sugerida automaticamente ao iniciar um
+							orçamento para este cliente.
+						</p>
+					</div>
+
+					<FormField
+						id="transportadora_padrao_id"
+						label="Transportadora habitual (opcional)"
+						error={erros.transportadora_padrao_id}
+						help={
+							opcoesTransportadoras.length === 0
+								? "Nenhuma transportadora ativa cadastrada."
+								: undefined
+						}
+					>
+						<Combobox
+							id="transportadora_padrao_id"
+							name="transportadora_padrao_id"
+							value={valores.transportadora_padrao_id}
+							onChange={(id) => alterarCampo("transportadora_padrao_id", id)}
+							options={opcoesTransportadoras}
+							placeholder="Digite o nome, CNPJ ou cidade..."
+							emptyMessage="Nenhuma transportadora encontrada."
+							hasError={Boolean(erros.transportadora_padrao_id)}
+						/>
+					</FormField>
 				</div>
 
 				{/* Endereços */}

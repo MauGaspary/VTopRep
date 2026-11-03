@@ -9,6 +9,8 @@ import { CatalogoView } from "./modules/produtos/components/catalogo-view";
 import { ProdutoFormView } from "./modules/produtos/components/produto-form-view";
 import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
 import { RepresentadasListView } from "./modules/representadas/components/representadas-list-view";
+import { TransportadoraFormView } from "./modules/transportadoras/components/transportadora-form-view";
+import { TransportadorasListView } from "./modules/transportadoras/components/transportadoras-list-view";
 import { DevSeedButton } from "./shared/components/dev/DevSeedButton";
 import { AppShell } from "./shared/components/layout/AppShell";
 
@@ -36,6 +38,15 @@ function AppRoutes() {
 				<Route
 					path="/representadas/:id/editar"
 					element={<RepresentadaFormView />}
+				/>
+				<Route path="/transportadoras" element={<TransportadorasListView />} />
+				<Route
+					path="/transportadoras/nova"
+					element={<TransportadoraFormView />}
+				/>
+				<Route
+					path="/transportadoras/:id/editar"
+					element={<TransportadoraFormView />}
 				/>
 				<Route path="/clientes" element={<ClientesListView />} />
 				<Route path="/clientes/novo" element={<ClienteFormView />} />

@@ -4,7 +4,17 @@ import { type AppDatabase, db as defaultDb } from "../../../db/database";
 import type { Produto } from "../../produtos/domain/produto.schema";
 import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
 import {
+	type CotacaoCompleta,
+	desmembrarCotacao,
+	ordenarPedidosDaCotacao,
+	planejarGravacaoCotacao,
+	resolverCotacaoGrupoId,
+} from "../domain/cotacao";
+import type { CotacaoInput } from "../domain/cotacao.schema";
+import {
+	type EspelhoCotacaoDados,
 	type EspelhoPedidoDados,
+	montarEspelhoCotacao,
 	montarEspelhoPedido,
 } from "../domain/espelho-pedido";
 import type { ItemPedido } from "../domain/item-pedido.schema";
@@ -85,19 +95,29 @@ export class PedidoDexieAdapter implements PedidoRepository {
 		const { pedido, itens } = pedidoCompleto;
 		const idsProdutos = [...new Set(itens.map((i) => i.produto_id))];
 
-		const [cliente, representada, tabelaPreco, endereco, contato, produtos] =
-			await Promise.all([
-				this.db.clientes.get(pedido.cliente_id),
-				this.db.representadas.get(pedido.representada_id),
-				this.db.tabelas_preco.get(pedido.tabela_id),
-				pedido.endereco_entrega_id
-					? this.db.clientes_enderecos.get(pedido.endereco_entrega_id)
-					: Promise.resolve(undefined),
-				pedido.contato_id
-					? this.db.clientes_contatos.get(pedido.contato_id)
-					: Promise.resolve(undefined),
-				this.db.produtos.bulkGet(idsProdutos),
-			]);
+		const [
+			cliente,
+			representada,
+			tabelaPreco,
+			endereco,
+			contato,
+			transportadora,
+			produtos,
+		] = await Promise.all([
+			this.db.clientes.get(pedido.cliente_id),
+			this.db.representadas.get(pedido.representada_id),
+			this.db.tabelas_preco.get(pedido.tabela_id),
+			pedido.endereco_entrega_id
+				? this.db.clientes_enderecos.get(pedido.endereco_entrega_id)
+				: Promise.resolve(undefined),
+			pedido.contato_id
+				? this.db.clientes_contatos.get(pedido.contato_id)
+				: Promise.resolve(undefined),
+			pedido.transportadora_id
+				? this.db.transportadoras.get(pedido.transportadora_id)
+				: Promise.resolve(undefined),
+			this.db.produtos.bulkGet(idsProdutos),
+		]);
 
 		if (
 			!cliente ||
@@ -126,6 +146,10 @@ export class PedidoDexieAdapter implements PedidoRepository {
 			enderecoEntrega:
 				endereco && endereco.tenant_id === tenant ? endereco : null,
 			contato: contato && contato.tenant_id === tenant ? contato : null,
+			transportadora:
+				transportadora && transportadora.tenant_id === tenant
+					? transportadora
+					: null,
 			produtosPorId,
 		});
 	}
@@ -158,45 +182,128 @@ export class PedidoDexieAdapter implements PedidoRepository {
 				if (!existente) {
 					throw new PedidoNaoEncontradoError(pedidoId);
 				}
-				const itensExistentes = await this.obterItensVivos(tenant, pedidoId);
-				const agora = this.agora();
-				const { pedido, itens } = excluirRascunhoPedido({
-					existente,
-					itensExistentes,
-					tenantId: tenant,
-					agora,
-				});
-
-				const mutacoesOutbox = [
-					criarMutacaoParaRegistro({
-						tenantId: tenant,
-						entity: "pedidos",
-						registro: pedido,
-						existiaAntes: true,
-						agora,
-						gerarId: this.gerarId,
-					}),
-					...itens.map((item) =>
-						criarMutacaoParaRegistro({
-							tenantId: tenant,
-							entity: "itens_pedido",
-							registro: item,
-							existiaAntes: true,
-							agora,
-							gerarId: this.gerarId,
-						}),
-					),
-				];
-
-				await Promise.all([
-					this.db.pedidos.put(pedido),
-					itens.length > 0
-						? this.db.itens_pedido.bulkPut(itens)
-						: Promise.resolve(),
-					this.db.outbox.bulkAdd(mutacoesOutbox),
-				]);
+				await this.excluirRascunhoNaTransacao(tenant, existente, this.agora());
 			},
 		);
+	}
+
+	async salvarCotacao(
+		tenantId: string,
+		input: CotacaoInput,
+		status: "rascunho" | "emitido",
+		pedidoReferenciaId?: string,
+	): Promise<CotacaoCompleta> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const referenciaId =
+			pedidoReferenciaId !== undefined
+				? IdSchema.parse(pedidoReferenciaId)
+				: undefined;
+		const pedidosInput = desmembrarCotacao(input);
+
+		return this.db.transaction("rw", this.tabelasDeGravacao(), async () => {
+			let existentes: Pedido[] = [];
+			if (referenciaId) {
+				const daCotacao = await this.obterPedidosDaCotacao(
+					tenant,
+					referenciaId,
+				);
+				if (!daCotacao) {
+					throw new PedidoNaoEncontradoError(referenciaId);
+				}
+				existentes = daCotacao;
+			}
+
+			const plano = planejarGravacaoCotacao(
+				pedidosInput.map((p) => p.representada_id),
+				existentes,
+			);
+			const cotacaoGrupoId = resolverCotacaoGrupoId(
+				existentes,
+				pedidosInput.length,
+				this.gerarId,
+			);
+			const agora = this.agora();
+
+			const pedidos: PedidoCompleto[] = [];
+			for (const [indice, dados] of pedidosInput.entries()) {
+				pedidos.push(
+					await this.gravarPedido({
+						tenant,
+						dados,
+						status,
+						existente: plano.existentePorRepresentada.get(
+							dados.representada_id,
+						),
+						cotacaoGrupoId,
+						// +1 ms por seção: a ordem de criação preserva a ordem da sacola
+						agora: new Date(Date.parse(agora) + indice).toISOString(),
+					}),
+				);
+			}
+			for (const removido of plano.excluir) {
+				await this.excluirRascunhoNaTransacao(tenant, removido, agora);
+			}
+
+			return { cotacao_grupo_id: cotacaoGrupoId, pedidos };
+		});
+	}
+
+	async obterCotacao(
+		tenantId: string,
+		pedidoId: string,
+	): Promise<CotacaoCompleta | undefined> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const id = IdSchema.parse(pedidoId);
+
+		const pedidosDaCotacao = await this.obterPedidosDaCotacao(tenant, id);
+		if (!pedidosDaCotacao) return undefined;
+
+		const pedidos = await Promise.all(
+			pedidosDaCotacao.map(async (pedido) => ({
+				pedido,
+				itens: await this.obterItensVivos(tenant, pedido.id),
+			})),
+		);
+		return {
+			cotacao_grupo_id: pedidosDaCotacao[0]?.cotacao_grupo_id ?? null,
+			pedidos,
+		};
+	}
+
+	async obterEspelhoCotacao(
+		tenantId: string,
+		pedidoId: string,
+		empresa: TenantConfig["empresa"],
+	): Promise<EspelhoCotacaoDados | undefined> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const id = IdSchema.parse(pedidoId);
+
+		const pedidosDaCotacao = await this.obterPedidosDaCotacao(tenant, id);
+		if (!pedidosDaCotacao) return undefined;
+
+		const secoes: EspelhoPedidoDados[] = [];
+		for (const pedido of pedidosDaCotacao) {
+			const espelho = await this.obterEspelhoPorId(tenant, pedido.id, empresa);
+			if (!espelho) return undefined;
+			secoes.push(espelho);
+		}
+		return montarEspelhoCotacao(
+			secoes,
+			pedidosDaCotacao[0]?.cotacao_grupo_id ?? null,
+		);
+	}
+
+	private tabelasDeGravacao() {
+		return [
+			this.db.pedidos,
+			this.db.itens_pedido,
+			this.db.outbox,
+			this.db.clientes,
+			this.db.representadas,
+			this.db.tabelas_preco,
+			this.db.produtos,
+			this.db.transportadoras,
+		];
 	}
 
 	private async persistir(
@@ -209,123 +316,206 @@ export class PedidoDexieAdapter implements PedidoRepository {
 		const pedidoId = id !== undefined ? IdSchema.parse(id) : undefined;
 		const dados = PedidoInputSchema.parse(input);
 
-		return this.db.transaction(
-			"rw",
-			[
-				this.db.pedidos,
-				this.db.itens_pedido,
-				this.db.outbox,
-				this.db.clientes,
-				this.db.representadas,
-				this.db.tabelas_preco,
-				this.db.produtos,
-			],
-			async () => {
-				const percentualComissaoPadrao = await this.validarContextoEVinculos(
-					tenant,
-					dados,
-				);
-				const agora = this.agora();
-
-				if (pedidoId) {
-					const existente = await this.obterPedidoVivo(tenant, pedidoId);
-					if (!existente) {
-						throw new PedidoNaoEncontradoError(pedidoId);
-					}
-					const itensExistentes = await this.obterItensVivos(tenant, pedidoId);
-					const idsItensExistentes = new Set(itensExistentes.map((i) => i.id));
-					const novaIdempotencyKey = this.gerarId();
-
-					const atualizado = atualizarPedidoCompleto({
-						existente,
-						itensExistentes,
-						tenantId: tenant,
-						input: dados,
-						percentualComissaoPadrao,
-						status,
-						idempotencyKey:
-							status === "emitido"
-								? novaIdempotencyKey
-								: existente.idempotency_key,
-						agora,
-						gerarId: this.gerarId,
-					});
-
-					const mutacoesOutbox = [
-						criarMutacaoParaRegistro({
-							tenantId: tenant,
-							entity: "pedidos",
-							registro: atualizado.pedido,
-							existiaAntes: true,
-							idempotencyKey: novaIdempotencyKey,
-							agora,
-							gerarId: this.gerarId,
-						}),
-						...atualizado.gravarItens.map((item) =>
-							criarMutacaoParaRegistro({
-								tenantId: tenant,
-								entity: "itens_pedido",
-								registro: item,
-								existiaAntes: idsItensExistentes.has(item.id),
-								agora,
-								gerarId: this.gerarId,
-							}),
-						),
-					];
-
-					await Promise.all([
-						this.db.pedidos.put(atualizado.pedido),
-						atualizado.gravarItens.length > 0
-							? this.db.itens_pedido.bulkPut(atualizado.gravarItens)
-							: Promise.resolve(),
-						this.db.outbox.bulkAdd(mutacoesOutbox),
-					]);
-
-					return { pedido: atualizado.pedido, itens: atualizado.itens };
+		return this.db.transaction("rw", this.tabelasDeGravacao(), async () => {
+			let existente: Pedido | undefined;
+			if (pedidoId) {
+				existente = await this.obterPedidoVivo(tenant, pedidoId);
+				if (!existente) {
+					throw new PedidoNaoEncontradoError(pedidoId);
 				}
+			}
+			return this.gravarPedido({
+				tenant,
+				dados,
+				status,
+				existente,
+				cotacaoGrupoId: existente?.cotacao_grupo_id ?? null,
+				agora: this.agora(),
+			});
+		});
+	}
 
-				const criado = criarPedidoCompleto({
+	/**
+	 * Cria ou atualiza um pedido (com itens e mutações na outbox). Deve ser
+	 * chamado dentro de uma transação que inclua `tabelasDeGravacao()`.
+	 */
+	private async gravarPedido({
+		tenant,
+		dados,
+		status,
+		existente,
+		cotacaoGrupoId,
+		agora,
+	}: {
+		tenant: string;
+		dados: PedidoInput;
+		status: "rascunho" | "emitido";
+		existente: Pedido | undefined;
+		cotacaoGrupoId: string | null;
+		agora: string;
+	}): Promise<PedidoCompleto> {
+		const percentualComissaoPadrao = await this.validarContextoEVinculos(
+			tenant,
+			dados,
+		);
+
+		if (existente) {
+			const itensExistentes = await this.obterItensVivos(tenant, existente.id);
+			const idsItensExistentes = new Set(itensExistentes.map((i) => i.id));
+			const novaIdempotencyKey = this.gerarId();
+
+			const atualizado = atualizarPedidoCompleto({
+				existente,
+				itensExistentes,
+				tenantId: tenant,
+				input: dados,
+				percentualComissaoPadrao,
+				status,
+				idempotencyKey:
+					status === "emitido" ? novaIdempotencyKey : existente.idempotency_key,
+				cotacaoGrupoId,
+				agora,
+				gerarId: this.gerarId,
+			});
+
+			const mutacoesOutbox = [
+				criarMutacaoParaRegistro({
 					tenantId: tenant,
-					input: dados,
-					percentualComissaoPadrao,
-					status,
-					pedidoId: this.gerarId(),
-					idempotencyKey: this.gerarId(),
+					entity: "pedidos",
+					registro: atualizado.pedido,
+					existiaAntes: true,
+					idempotencyKey: novaIdempotencyKey,
 					agora,
 					gerarId: this.gerarId,
-				});
-
-				const mutacoesOutbox = [
+				}),
+				...atualizado.gravarItens.map((item) =>
 					criarMutacaoParaRegistro({
 						tenantId: tenant,
-						entity: "pedidos",
-						registro: criado.pedido,
-						existiaAntes: false,
-						idempotencyKey: criado.pedido.idempotency_key,
+						entity: "itens_pedido",
+						registro: item,
+						existiaAntes: idsItensExistentes.has(item.id),
 						agora,
 						gerarId: this.gerarId,
 					}),
-					...criado.itens.map((item) =>
-						criarMutacaoParaRegistro({
-							tenantId: tenant,
-							entity: "itens_pedido",
-							registro: item,
-							existiaAntes: false,
-							agora,
-							gerarId: this.gerarId,
-						}),
-					),
-				];
+				),
+			];
 
-				await Promise.all([
-					this.db.pedidos.add(criado.pedido),
-					this.db.itens_pedido.bulkAdd(criado.itens),
-					this.db.outbox.bulkAdd(mutacoesOutbox),
-				]);
+			await Promise.all([
+				this.db.pedidos.put(atualizado.pedido),
+				atualizado.gravarItens.length > 0
+					? this.db.itens_pedido.bulkPut(atualizado.gravarItens)
+					: Promise.resolve(),
+				this.db.outbox.bulkAdd(mutacoesOutbox),
+			]);
 
-				return criado;
-			},
-		);
+			return { pedido: atualizado.pedido, itens: atualizado.itens };
+		}
+
+		const criado = criarPedidoCompleto({
+			tenantId: tenant,
+			input: dados,
+			percentualComissaoPadrao,
+			status,
+			pedidoId: this.gerarId(),
+			idempotencyKey: this.gerarId(),
+			cotacaoGrupoId,
+			agora,
+			gerarId: this.gerarId,
+		});
+
+		const mutacoesOutbox = [
+			criarMutacaoParaRegistro({
+				tenantId: tenant,
+				entity: "pedidos",
+				registro: criado.pedido,
+				existiaAntes: false,
+				idempotencyKey: criado.pedido.idempotency_key,
+				agora,
+				gerarId: this.gerarId,
+			}),
+			...criado.itens.map((item) =>
+				criarMutacaoParaRegistro({
+					tenantId: tenant,
+					entity: "itens_pedido",
+					registro: item,
+					existiaAntes: false,
+					agora,
+					gerarId: this.gerarId,
+				}),
+			),
+		];
+
+		await Promise.all([
+			this.db.pedidos.add(criado.pedido),
+			this.db.itens_pedido.bulkAdd(criado.itens),
+			this.db.outbox.bulkAdd(mutacoesOutbox),
+		]);
+
+		return criado;
+	}
+
+	/** Tombstone de um rascunho e seus itens (dentro de uma transação aberta). */
+	private async excluirRascunhoNaTransacao(
+		tenant: string,
+		existente: Pedido,
+		agora: string,
+	): Promise<void> {
+		const itensExistentes = await this.obterItensVivos(tenant, existente.id);
+		const { pedido, itens } = excluirRascunhoPedido({
+			existente,
+			itensExistentes,
+			tenantId: tenant,
+			agora,
+		});
+
+		const mutacoesOutbox = [
+			criarMutacaoParaRegistro({
+				tenantId: tenant,
+				entity: "pedidos",
+				registro: pedido,
+				existiaAntes: true,
+				agora,
+				gerarId: this.gerarId,
+			}),
+			...itens.map((item) =>
+				criarMutacaoParaRegistro({
+					tenantId: tenant,
+					entity: "itens_pedido",
+					registro: item,
+					existiaAntes: true,
+					agora,
+					gerarId: this.gerarId,
+				}),
+			),
+		];
+
+		await Promise.all([
+			this.db.pedidos.put(pedido),
+			itens.length > 0
+				? this.db.itens_pedido.bulkPut(itens)
+				: Promise.resolve(),
+			this.db.outbox.bulkAdd(mutacoesOutbox),
+		]);
+	}
+
+	/**
+	 * Pedidos vivos da cotação do pedido informado (todos do mesmo
+	 * `cotacao_grupo_id`), em ordem de criação. Pedido avulso: só ele.
+	 */
+	private async obterPedidosDaCotacao(
+		tenantId: string,
+		pedidoId: string,
+	): Promise<Pedido[] | undefined> {
+		const referencia = await this.obterPedidoVivo(tenantId, pedidoId);
+		if (!referencia) return undefined;
+		if (!referencia.cotacao_grupo_id) return [referencia];
+
+		const doGrupo = await this.db.pedidos
+			.where("[tenant_id+cotacao_grupo_id]")
+			.equals([tenantId, referencia.cotacao_grupo_id])
+			.filter((p) => p.deleted_at === null)
+			.toArray();
+		return ordenarPedidosDaCotacao(doGrupo);
 	}
 
 	private async validarContextoEVinculos(
@@ -367,6 +557,21 @@ export class PedidoDexieAdapter implements PedidoRepository {
 			throw new ContextoVendaInvalidoError(
 				"A tabela de preço selecionada não pertence à representada informada.",
 			);
+		}
+
+		if (dados.transportadora_id) {
+			const transportadora = await this.db.transportadoras.get(
+				dados.transportadora_id,
+			);
+			if (
+				!transportadora ||
+				transportadora.tenant_id !== tenantId ||
+				transportadora.deleted_at !== null
+			) {
+				throw new ContextoVendaInvalidoError(
+					"A transportadora selecionada não foi encontrada neste tenant.",
+				);
+			}
 		}
 
 		const idsProdutos = [...new Set(dados.itens.map((i) => i.produto_id))];
