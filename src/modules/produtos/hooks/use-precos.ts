@@ -1,6 +1,8 @@
+import { useMemo } from "react";
 import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
 import type { ItemPreco } from "../domain/item-preco.schema";
 import type { PrecoResolvido } from "../domain/preco";
+import type { ReajusteTabelaInput } from "../domain/reajuste-tabela";
 import type { TabelaPreco } from "../domain/tabela-preco.schema";
 import type { PrecoCatalogo } from "../repositories/preco.repository";
 import { precoRepository } from "../repositories/preco-dexie.adapter";
@@ -139,4 +141,33 @@ export function usePrecosDaTabela(
 		precosPorProduto: resolucao ?? MAPA_PRECOS_TABELA_VAZIO,
 		isLoading: resolucao === undefined,
 	};
+}
+
+/** Itens de preço vivos de uma tabela, por `produto_id` (qualquer vigência). */
+export function useItensDaTabela(
+	tenantId: string,
+	tabelaId: string | undefined,
+) {
+	const itens = useLiveRepositoryQuery(() => {
+		if (!tenantId || !tabelaId) {
+			return Promise.resolve(new Map<string, ItemPreco>());
+		}
+		return precoRepository.listarItensDaTabela(tenantId, tabelaId);
+	}, [tenantId, tabelaId]);
+
+	return {
+		itensPorProduto: itens ?? MAPA_ITENS_VAZIO,
+		isLoading: itens === undefined,
+	};
+}
+
+/** Reajuste em lote com o tenant já injetado. */
+export function useReajusteTabela(tenantId: string) {
+	return useMemo(
+		() => ({
+			reajustar: (input: ReajusteTabelaInput) =>
+				precoRepository.reajustarTabela(tenantId, input),
+		}),
+		[tenantId],
+	);
 }

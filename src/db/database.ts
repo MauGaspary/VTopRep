@@ -3,6 +3,7 @@ import type { Cliente } from "../modules/clientes/domain/cliente.schema";
 import type { ClienteContato } from "../modules/clientes/domain/cliente-contato.schema";
 import type { ClienteEndereco } from "../modules/clientes/domain/cliente-endereco.schema";
 import type { ClienteMetrica } from "../modules/clientes/domain/cliente-metrica.schema";
+import type { MapeamentoImportacaoSalvo } from "../modules/importacao/domain/importacao.schema";
 import type { ItemPedido } from "../modules/pedidos/domain/item-pedido.schema";
 import type { Pedido } from "../modules/pedidos/domain/pedido.schema";
 import type { ItemPreco } from "../modules/produtos/domain/item-preco.schema";
@@ -31,6 +32,8 @@ export class AppDatabase extends Dexie {
 	outbox!: Table<OutboxMutation, string>;
 	representadas!: Table<Representada, string>;
 	transportadoras!: Table<Transportadora, string>;
+	/** Preferência do aparelho (não sincroniza): colunas do CSV por representada. */
+	mapeamentos_importacao!: Table<MapeamentoImportacaoSalvo, [string, string]>;
 
 	constructor(nome = NOME_BANCO_PADRAO) {
 		super(nome);
@@ -113,6 +116,12 @@ export class AppDatabase extends Dexie {
 		this.version(10)
 			.stores({ clientes_tabelas_preco: null })
 			.upgrade(migrarParaV10);
+
+		// v11: mapeamento de colunas da importação de CSV por representada
+		// (TODO 2.9). Fica só no aparelho; não entra na Outbox.
+		this.version(11).stores({
+			mapeamentos_importacao: "[tenant_id+representada_id], tenant_id",
+		});
 	}
 }
 

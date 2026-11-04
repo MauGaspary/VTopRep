@@ -6,8 +6,9 @@ import {
 	Plus,
 	RotateCcw,
 	Settings2,
+	Upload,
 } from "lucide-react";
-import { useMemo, useState } from "react";
+import { useDeferredValue, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
 import { Page } from "../../../shared/components/layout/Page";
@@ -22,6 +23,7 @@ import {
 	RepresentadaDot,
 	SearchInput,
 	Select,
+	ShowMore,
 } from "../../../shared/components/ui";
 import { dataLocal } from "../../../shared/domain/datas";
 import {
@@ -30,6 +32,10 @@ import {
 } from "../../../shared/domain/decimal-br";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
 import { ROTULOS_FRETE } from "../../../shared/domain/frete";
+import {
+	PASSO_LISTA_INCREMENTAL,
+	useListaIncremental,
+} from "../../../shared/hooks/use-lista-incremental";
 import {
 	formatarResumoComissaoRepresentada,
 	obterCorRepresentada,
@@ -114,9 +120,11 @@ export function CatalogoView({
 		? tabelaSelecionadaId
 		: "";
 
+	// Filtra com prioridade baixa: a digitação não espera a lista redesenhar.
+	const buscaAdiada = useDeferredValue(termoBusca);
 	const produtosDaRepresentada = useMemo(() => {
 		if (!representadaAtiva) return [];
-		const termo = termoBusca.trim().toLowerCase();
+		const termo = buscaAdiada.trim().toLowerCase();
 		return todosProdutos.filter((p) => {
 			if (p.representada_id !== representadaAtiva.id) return false;
 			if (!mostrarInativos && !p.ativo) return false;
@@ -126,7 +134,11 @@ export function CatalogoView({
 				p.descricao.toLowerCase().includes(termo)
 			);
 		});
-	}, [todosProdutos, representadaAtiva, mostrarInativos, termoBusca]);
+	}, [todosProdutos, representadaAtiva, mostrarInativos, buscaAdiada]);
+	const lista = useListaIncremental(
+		produtosDaRepresentada,
+		`${representadaAtiva?.id}:${buscaAdiada}:${mostrarInativos}`,
+	);
 
 	const handleInativar = async (produto: Produto) => {
 		const confirmado = window.confirm(
@@ -164,6 +176,13 @@ export function CatalogoView({
 							>
 								<FilePlus2 aria-hidden="true" />
 								Orçar fábrica
+							</Link>
+							<Link
+								to={`/catalogo/importar?representada=${representadaAtiva.id}`}
+								className={buttonClassName({ variant: "secondary" })}
+							>
+								<Upload aria-hidden="true" />
+								Importar CSV
 							</Link>
 							<Link
 								to={`/produtos/novo?representada=${representadaAtiva.id}`}
@@ -452,7 +471,7 @@ export function CatalogoView({
 										</tr>
 									</thead>
 									<tbody className="divide-y divide-border">
-										{produtosDaRepresentada.map((produto) => {
+										{lista.visiveis.map((produto) => {
 											const isInativo = !produto.ativo;
 											const precoEspecifico = tabelaEspecificaValida
 												? precosTabelaEspecifica.get(produto.id)
@@ -585,6 +604,12 @@ export function CatalogoView({
 										})}
 									</tbody>
 								</table>
+								<ShowMore
+									restantes={lista.restantes}
+									passo={PASSO_LISTA_INCREMENTAL}
+									onMostrarMais={lista.mostrarMais}
+									onMostrarTodos={lista.mostrarTodos}
+								/>
 							</section>
 						)}
 					</div>

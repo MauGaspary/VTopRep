@@ -269,17 +269,19 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const repId = representadaId ? IdSchema.parse(representadaId) : undefined;
 
-		return this.db.produtos
+		// `toArray()` (getAll) e filtro em JS: bem mais rápido que o cursor do
+		// `.filter()` do Dexie em catálogos com milhares de SKUs (TODO 2.9.5).
+		const doTenant = await this.db.produtos
 			.where("tenant_id")
 			.equals(tenant)
-			.filter(
-				(p) =>
-					p.deleted_at === null &&
-					filtroEstado(p) &&
-					(repId === undefined || p.representada_id === repId) &&
-					correspondeBuscaProduto(p, termoBusca),
-			)
 			.toArray();
+		return doTenant.filter(
+			(p) =>
+				p.deleted_at === null &&
+				filtroEstado(p) &&
+				(repId === undefined || p.representada_id === repId) &&
+				correspondeBuscaProduto(p, termoBusca),
+		);
 	}
 
 	private buscarPorSku(

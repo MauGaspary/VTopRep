@@ -4,11 +4,13 @@ import { TenantProvider } from "./config/tenant/TenantContext";
 import { useTenant } from "./config/tenant/useTenant";
 import { ClienteFormView } from "./modules/clientes/components/cliente-form-view";
 import { ClientesListView } from "./modules/clientes/components/clientes-list-view";
+import { ImportarCsvView } from "./modules/importacao/components/importar-csv-view";
 import { HistoricoClienteView } from "./modules/pedidos/components/historico-cliente-view";
 import { OrcamentoFormView } from "./modules/pedidos/components/orcamento-form-view";
 import { PedidosListView } from "./modules/pedidos/components/pedidos-list-view";
 import { CatalogoView } from "./modules/produtos/components/catalogo-view";
 import { ProdutoFormView } from "./modules/produtos/components/produto-form-view";
+import { ReajusteTabelaView } from "./modules/produtos/components/reajuste-tabela-view";
 import { RepresentadaFormView } from "./modules/representadas/components/representada-form-view";
 import { RepresentadasListView } from "./modules/representadas/components/representadas-list-view";
 import { TransportadoraFormView } from "./modules/transportadoras/components/transportadora-form-view";
@@ -31,6 +33,7 @@ function AppRoutes() {
 					element={<CatalogoView tenantId={config.id} />}
 				/>
 				<Route path="/catalogo/novo" element={<ProdutoFormView />} />
+				<Route path="/catalogo/importar" element={<ImportarCsvView />} />
 				<Route path="/catalogo/:id/editar" element={<ProdutoFormView />} />
 				<Route path="/produtos" element={<Navigate to="/catalogo" replace />} />
 				<Route path="/produtos/novo" element={<ProdutoFormView />} />
@@ -40,6 +43,10 @@ function AppRoutes() {
 				<Route
 					path="/representadas/:id/editar"
 					element={<RepresentadaFormView />}
+				/>
+				<Route
+					path="/representadas/:id/reajuste"
+					element={<ReajusteTabelaView />}
 				/>
 				<Route path="/transportadoras" element={<TransportadorasListView />} />
 				<Route

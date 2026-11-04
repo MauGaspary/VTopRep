@@ -275,4 +275,87 @@ describe("PrecoDexieAdapter", () => {
 			).toEqual([tabRep2.id]);
 		});
 	});
+
+	describe("reajustarTabela", () => {
+		const reajuste = new PrecoDexieAdapter({ agora: () => AGORA });
+
+		beforeEach(async () => {
+			await db.outbox.clear();
+		});
+
+		it("cria a tabela reajustada, encerra a origem e registra na Outbox", async () => {
+			const origem = tabela({ nome_tabela: "2026" });
+			await db.tabelas_preco.add(origem);
+			await db.itens_preco.bulkAdd([
+				itemPreco(origem, { preco_base_centavos: 1000 }),
+				itemPreco(origem, { produto_id: PRODUTO_B, preco_base_centavos: 333 }),
+				itemPreco(origem, {
+					produto_id: PRODUTO_B,
+					preco_base_centavos: 1,
+					deleted_at: AGORA,
+				}),
+			]);
+
+			const resultado = await reajuste.reajustarTabela(TENANT, {
+				tabela_origem_id: origem.id,
+				percentual_centesimos: 500,
+				nome_tabela: "2026 +5%",
+				vigencia_inicio: "2026-12-01",
+				vigencia_fim: null,
+			});
+
+			expect(resultado.itens).toBe(2);
+			expect(resultado.origemEncerrada?.vigencia_fim).toBe("2026-11-30");
+			expect((await db.tabelas_preco.get(origem.id))?.vigencia_fim).toBe(
+				"2026-11-30",
+			);
+			const itens = await reajuste.listarItensDaTabela(
+				TENANT,
+				resultado.tabela.id,
+			);
+			expect(itens.get(PRODUTO_A)?.preco_base_centavos).toBe(1050);
+			expect(itens.get(PRODUTO_B)?.preco_base_centavos).toBe(350);
+
+			const outbox = await db.outbox.toArray();
+			expect(outbox.map((m) => `${m.entity}:${m.action}`).sort()).toEqual([
+				"itens_preco:INSERT",
+				"itens_preco:INSERT",
+				"tabelas_preco:INSERT",
+				"tabelas_preco:UPDATE",
+			]);
+		});
+
+		it("não grava nada quando a nova começa antes da origem", async () => {
+			const origem = tabela({ vigencia_inicio: "2026-06-01" });
+			await db.tabelas_preco.add(origem);
+			await expect(
+				reajuste.reajustarTabela(TENANT, {
+					tabela_origem_id: origem.id,
+					percentual_centesimos: 500,
+					nome_tabela: "Nova",
+					vigencia_inicio: "2026-06-01",
+					vigencia_fim: null,
+				}),
+			).rejects.toThrow(/precisa começar depois/);
+			expect(await db.tabelas_preco.count()).toBe(1);
+			expect(await db.outbox.count()).toBe(0);
+		});
+
+		it("recusa tabela de outro tenant", async () => {
+			const alheia = tabela({ tenant_id: OUTRO_TENANT });
+			await db.tabelas_preco.add(alheia);
+			await expect(
+				reajuste.reajustarTabela(TENANT, {
+					tabela_origem_id: alheia.id,
+					percentual_centesimos: 500,
+					nome_tabela: "Nova",
+					vigencia_inicio: "2026-12-01",
+					vigencia_fim: null,
+				}),
+			).rejects.toThrow(/não encontrada/);
+			expect((await reajuste.listarItensDaTabela(TENANT, alheia.id)).size).toBe(
+				0,
+			);
+		});
+	});
 });

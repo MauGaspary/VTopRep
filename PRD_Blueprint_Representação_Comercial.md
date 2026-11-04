@@ -148,6 +148,8 @@ Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada
 
 #### `tabelas_preco`
 A tabela de preço pertence à representada; o cliente não tem tabela própria. No orçamento, cada fábrica sugere a tabela **ativa e vigente de início mais recente** (empate: ordem alfabética do nome), e o representante pode trocar a tabela em cada pedido. Sem tabela vigente, o orçamento pede a escolha manual. Variações por estado (ICMS, ST) estão no `BACKLOG.md` 1.5.
+
+**Substituição de tabela:** ao criar uma tabela que substitui outra (importação de CSV com "Substitui a tabela" ou reajuste em lote), a substituída passa a terminar na **véspera do início da nova** (só se ainda terminava depois disso), e a nova precisa começar depois do início da substituída. Assim as duas nunca ficam vigentes ao mesmo tempo. Pedidos já gravados não mudam, porque o item do pedido guarda o próprio preço.
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `representada_id: UUID` (FK)
@@ -169,6 +171,18 @@ A tabela de preço pertence à representada; o cliente não tem tabela própria.
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
+
+#### Importação de produtos e preços por CSV (TODO 2.9)
+* **Arquivo:** CSV com separador `;`, `,` ou tabulação (detectado), UTF-8 ou Windows-1252 (detectado), BOM e campos entre aspas. Arquivos `.xlsx` são recusados com a orientação de salvar como CSV. A linha do cabeçalho é detectada (títulos acima dela são ignorados) e pode ser trocada na tela.
+* **Preço:** convertido em centavos por análise de texto, sem ponto flutuante ("1.234,56", "1234.56", "R$ 1.234,56"). O separador decimal é decidido pela coluna inteira; sem pistas, vale a vírgula. Mais de 2 casas decimais são arredondadas *half-even* e geram aviso na linha.
+* **Validação por linha:** SKU vazio, preço ou múltiplo inválido e produto novo sem descrição viram erro e a linha fica de fora. SKU repetido com os mesmos dados vale a primeira linha (aviso); com dados diferentes, todas as ocorrências viram erro.
+* **Cadastro:** SKU existente é atualizado só nos campos preenchidos no arquivo; inativo que reaparece é reativado; novo recebe unidade `UN` e múltiplo 1 quando não vierem. Produtos ativos ausentes do arquivo são mantidos (padrão) ou inativados, por escolha do representante. Um SKU presente numa linha com erro nunca conta como ausente.
+* **Preços:** gravados numa tabela existente (só os que mudaram) ou numa nova tabela, que pode substituir outra (regra em `tabelas_preco`). Linha sem preço não mexe no preço já existente.
+* **Gravação:** a prévia e a gravação usam a mesma função pura; a gravação recalcula o plano com os dados atuais dentro de uma única transação Dexie (produtos, tabelas, itens de preço e Outbox), em lotes de 500.
+* **`mapeamentos_importacao` (só no aparelho, não sincroniza):** `[tenant_id+representada_id]` (PK), `colunas` (nome do cabeçalho escolhido para SKU, descrição, unidade, múltiplo e preço; `null` = não importar) e `updated_at`. Guarda o nome, não a posição, porque a fábrica pode reordenar as colunas.
+
+#### Reajuste em lote (TODO 2.9.4)
+Cria uma tabela nova a partir de outra da mesma representada, com todos os itens vivos reajustados por `preço + aplicarPercentual(preço, ±X)` (centésimos de %, *half-even*; de -99,99% a +1.000%), mantendo o desconto máximo de cada item. A origem é encerrada na véspera do início da nova (regra em `tabelas_preco`). Tudo numa transação com a Outbox.
 
 #### `pedidos`
 * `id: UUID` (PK gerada pelo cliente no Dexie via UUIDv4)

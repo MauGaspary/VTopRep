@@ -163,6 +163,12 @@ export function correspondeBuscaProduto(
 	return sku.includes(termo) || descricao.includes(termo);
 }
 
+/**
+ * Comparador reaproveitado: `localeCompare` com opções cria um collator a cada
+ * chamada, o que pesa ao ordenar milhares de SKUs (TODO 2.9.5).
+ */
+const COLLATOR_DESCRICAO = new Intl.Collator("pt-BR", { sensitivity: "base" });
+
 export function ordenarProdutosComInativosNoFim(
 	produtos: Produto[],
 ): Produto[] {
@@ -170,8 +176,6 @@ export function ordenarProdutosComInativosNoFim(
 		if (a.ativo !== b.ativo) {
 			return a.ativo ? -1 : 1;
 		}
-		return a.descricao.localeCompare(b.descricao, "pt-BR", {
-			sensitivity: "base",
-		});
+		return COLLATOR_DESCRICAO.compare(a.descricao, b.descricao);
 	});
 }

@@ -168,25 +168,25 @@ Base para a Fase 4 (recompra, Raio-X e Curva ABC).
 **Escopo:** arquivos CSV (exportados do Excel com "Salvar como CSV"). Importação de PDF fica no `BACKLOG.md` 1.4; até lá, o representante pede à fábrica a planilha em CSV ou Excel.
 
 ### 2.9.1. Leitura e Mapeamento de Colunas
-- [ ] **Parser Puro:** Ler CSV com separador `;` ou `,` detectado, campos entre aspas, BOM e encoding UTF-8 ou Windows-1252, com testes.
-- [ ] **Mapeamento:** Ligar as colunas do arquivo aos campos SKU (obrigatório), descrição, unidade, múltiplo de embalagem e preço. Salvar o mapeamento por representada para as próximas importações.
-- [ ] **Preço sem Ponto Flutuante:** Converter `"1.234,56"`, `"1234.56"` e `"R$ 1.234,56"` para centavos por parsing de texto, com testes de borda.
-- [ ] **Validação por Linha (Zod):** Erros apontando a linha (SKU vazio, preço inválido, SKU repetido no arquivo).
+- [x] **Parser Puro:** Ler CSV com separador `;` ou `,` detectado, campos entre aspas, BOM e encoding UTF-8 ou Windows-1252, com testes.
+- [x] **Mapeamento:** Ligar as colunas do arquivo aos campos SKU (obrigatório), descrição, unidade, múltiplo de embalagem e preço. Salvar o mapeamento por representada para as próximas importações (só no aparelho, Dexie v11 `mapeamentos_importacao`, pelo nome do cabeçalho).
+- [x] **Preço sem Ponto Flutuante:** Converter `"1.234,56"`, `"1234.56"` e `"R$ 1.234,56"` para centavos por parsing de texto, com testes de borda.
+- [x] **Validação por Linha (Zod):** Erros apontando a linha (SKU vazio, preço inválido, SKU repetido no arquivo). Mais de 2 casas decimais: arredonda *half-even* e avisa na linha.
 
 ### 2.9.2. Prévia das Mudanças
-- [ ] **Lógica Pura:** Comparar o arquivo com o cadastro: produtos novos, alterados (descrição, unidade, múltiplo), preços que subiram ou caíram (com %), inalterados, ausentes no arquivo e inativos que reaparecem (reativar).
-- [ ] **UI de Prévia:** Contadores e filtros por tipo de mudança. Para os ausentes, o representante escolhe entre **manter** (padrão) ou **inativar**.
+- [x] **Lógica Pura:** Comparar o arquivo com o cadastro: produtos novos, alterados (descrição, unidade, múltiplo), preços que subiram ou caíram (com %), inalterados, ausentes no arquivo e inativos que reaparecem (reativar).
+- [x] **UI de Prévia:** Contadores e filtros por tipo de mudança. Para os ausentes, o representante escolhe entre **manter** (padrão) ou **inativar**.
 
 ### 2.9.3. Gravação
-- [ ] **Destino:** Atualizar uma tabela existente ou criar uma **nova tabela** com nome e data de início (pode ser futura). Pedidos já gravados não mudam, porque guardam o preço no item.
-- [ ] **Transação:** Gravar produtos, tabela, `itens_preco` e Outbox numa transação, em lotes, com `tenant_id` validado e SKU normalizado. Teste com cerca de 5.000 linhas.
+- [x] **Destino:** Atualizar uma tabela existente ou criar uma **nova tabela** com nome e data de início (pode ser futura), opcionalmente substituindo outra (encerrada na véspera do início da nova). Pedidos já gravados não mudam, porque guardam o preço no item.
+- [x] **Transação:** Gravar produtos, tabela, `itens_preco` e Outbox numa transação, em lotes, com `tenant_id` validado e SKU normalizado. Teste com cerca de 5.000 linhas.
 
 ### 2.9.4. Reajuste em Lote
-- [ ] **Clonar Tabela com Reajuste:** Nova tabela a partir de uma existente, com +/- X% (centésimos de %, *half-even*) e nova vigência, com prévia antes de gravar.
+- [x] **Clonar Tabela com Reajuste:** Nova tabela a partir de uma existente, com +/- X% (centésimos de %, *half-even*) e nova vigência, com prévia antes de gravar. A origem é encerrada na véspera do início da nova (decisão do usuário).
 
 ### 2.9.5. Desempenho do Catálogo
-- [ ] **Medição no Navegador:** Medir a busca do catálogo com alguns milhares de SKUs no navegador real (o `fake-indexeddb` não é representativo) e, se necessário, adotar índice de prefixo ou busca incremental.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Medição no Navegador:** Medir a busca do catálogo com alguns milhares de SKUs no navegador real (o `fake-indexeddb` não é representativo) e, se necessário, adotar índice de prefixo ou busca incremental. *Medido no Chrome (modo dev) com 5.000 SKUs: importação em ~2 s; abrir o catálogo recarregando a página caiu de ~4 s para ~1,2 s (navegando dentro do app, ~0,2–0,5 s) e a busca de ~1,6 s para ~0,1 s com renderização incremental (100 por vez), `useDeferredValue`, `getAll` no lugar do cursor do Dexie e `Intl.Collator` reaproveitado. Índice de prefixo não foi necessário.*
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 

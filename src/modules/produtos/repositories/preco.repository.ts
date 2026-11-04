@@ -1,6 +1,14 @@
 import type { ItemPreco } from "../domain/item-preco.schema";
 import type { ResolucaoPreco, ResolucaoPrecosTabela } from "../domain/preco";
+import type { ReajusteTabelaInput } from "../domain/reajuste-tabela";
 import type { TabelaPreco } from "../domain/tabela-preco.schema";
+
+export interface ResultadoReajuste {
+	tabela: TabelaPreco;
+	itens: number;
+	/** Origem com o novo fim de vigência; `null` se ela já terminava antes. */
+	origemEncerrada: TabelaPreco | null;
+}
 
 export interface PrecoCatalogo {
 	tabela_id: string;
@@ -60,4 +68,17 @@ export interface PrecoRepository {
 	listarTabelasDisponiveisPorRepresentada(
 		tenantId: string,
 	): Promise<Map<string, TabelaPreco[]>>;
+	/** Itens de preço vivos da tabela, um por produto (por `produto_id`). */
+	listarItensDaTabela(
+		tenantId: string,
+		tabelaId: string,
+	): Promise<Map<string, ItemPreco>>;
+	/**
+	 * Cria uma tabela com os preços da origem reajustados e encerra a origem na
+	 * véspera do início da nova, numa transação com a Outbox.
+	 */
+	reajustarTabela(
+		tenantId: string,
+		input: ReajusteTabelaInput,
+	): Promise<ResultadoReajuste>;
 }

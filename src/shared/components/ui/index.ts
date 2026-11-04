@@ -12,3 +12,4 @@ export * from "./PageHeader";
 export * from "./RepresentadaTag";
 export * from "./SearchInput";
 export * from "./Select";
+export * from "./ShowMore";

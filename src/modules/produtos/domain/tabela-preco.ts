@@ -1,4 +1,4 @@
-import { formatarDataBr } from "../../../shared/domain/datas";
+import { DataSchema, formatarDataBr } from "../../../shared/domain/datas";
 import { garantirMesmoTenant } from "../../../shared/domain/tenant";
 import { tabelaDisponivel } from "./preco";
 import {
@@ -225,4 +225,57 @@ export function sincronizarTabelasRepresentada({
 	}
 
 	return { tabelas, gravar };
+}
+
+function somarDias(data: string, dias: number): string {
+	const [ano, mes, dia] = DataSchema.parse(data).split("-").map(Number);
+	const instante = new Date(
+		Date.UTC(ano ?? 0, (mes ?? 1) - 1, (dia ?? 1) + dias),
+	);
+	return instante.toISOString().slice(0, 10);
+}
+
+/** Dia anterior a uma data de calendário (`AAAA-MM-DD`), sem fuso. */
+export function diaAnterior(data: string): string {
+	return somarDias(data, -1);
+}
+
+/** Dia seguinte a uma data de calendário (`AAAA-MM-DD`), sem fuso. */
+export function diaSeguinte(data: string): string {
+	return somarDias(data, 1);
+}
+
+export class InicioSubstitutaInvalidoError extends Error {
+	readonly tabela: TabelaPreco;
+
+	constructor(tabela: TabelaPreco) {
+		super(
+			`A nova tabela precisa começar depois de ${formatarDataBr(tabela.vigencia_inicio)}, início da tabela "${tabela.nome_tabela}".`,
+		);
+		this.name = "InicioSubstitutaInvalidoError";
+		this.tabela = tabela;
+	}
+}
+
+/**
+ * Encerra a tabela substituída na véspera do início da nova, para que as duas
+ * não fiquem vigentes ao mesmo tempo. Retorna `null` se ela já termina antes.
+ * A nova precisa começar depois do início da substituída.
+ */
+export function encerrarTabelaNaVespera(
+	tabela: TabelaPreco,
+	tenantId: string,
+	inicioNova: string,
+	agora: string,
+): TabelaPreco | null {
+	garantirMesmoTenant(tabela, tenantId);
+	if (inicioNova <= tabela.vigencia_inicio) {
+		throw new InicioSubstitutaInvalidoError(tabela);
+	}
+	if (tabela.vigencia_fim && tabela.vigencia_fim < inicioNova) return null;
+	return TabelaPrecoSchema.parse({
+		...tabela,
+		vigencia_fim: diaAnterior(inicioNova),
+		updated_at: agora,
+	});
 }

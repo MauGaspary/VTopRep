@@ -10,6 +10,7 @@ import {
 import {
 	type FormEvent,
 	useCallback,
+	useDeferredValue,
 	useEffect,
 	useMemo,
 	useRef,
@@ -34,6 +35,7 @@ import {
 	RepresentadaDot,
 	SearchInput,
 	Select,
+	ShowMore,
 } from "../../../shared/components/ui";
 import { formatarCnpj } from "../../../shared/domain/cnpj";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
@@ -41,6 +43,10 @@ import { dataLocal, formatarDataBr } from "../../../shared/domain/datas";
 import { formatarCentavos } from "../../../shared/domain/decimal-br";
 import { somarCentavos } from "../../../shared/domain/dinheiro";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
+import {
+	PASSO_LISTA_INCREMENTAL,
+	useListaIncremental,
+} from "../../../shared/hooks/use-lista-incremental";
 import { ClienteQuickCreateDialog } from "../../clientes/components/cliente-quick-create-dialog";
 import {
 	type Cliente,
@@ -418,15 +424,21 @@ function OrcamentoForm({
 		return mapa;
 	}, [todosProdutos]);
 
+	// Filtra com prioridade baixa: a digitação não espera a lista redesenhar.
+	const buscaCatalogoAdiada = useDeferredValue(buscaCatalogo);
 	const produtosCatalogoRepresentada = useMemo(() => {
 		if (!representadaAtivaId) return [];
 		return todosProdutos.filter(
 			(p) =>
 				p.ativo &&
 				p.representada_id === representadaAtivaId &&
-				correspondeBuscaProduto(p, buscaCatalogo),
+				correspondeBuscaProduto(p, buscaCatalogoAdiada),
 		);
-	}, [todosProdutos, representadaAtivaId, buscaCatalogo]);
+	}, [todosProdutos, representadaAtivaId, buscaCatalogoAdiada]);
+	const listaCatalogo = useListaIncremental(
+		produtosCatalogoRepresentada,
+		`${representadaAtivaId}:${buscaCatalogoAdiada}`,
+	);
 
 	const quantidadeNoOrcamentoPorProduto = useMemo(() => {
 		const mapa = new Map<string, number>();
@@ -1016,7 +1028,7 @@ function OrcamentoForm({
 								!carregandoPrecos &&
 								produtosCatalogoRepresentada.length > 0 && (
 									<ul className="max-h-[540px] divide-y divide-border overflow-y-auto">
-										{produtosCatalogoRepresentada.map((produto) => {
+										{listaCatalogo.visiveis.map((produto) => {
 											const preco = precosCatalogo.get(produto.id);
 											const qtdAtual =
 												quantidadeNoOrcamentoPorProduto.get(produto.id) ?? 0;
@@ -1080,6 +1092,16 @@ function OrcamentoForm({
 												</li>
 											);
 										})}
+										{listaCatalogo.restantes > 0 && (
+											<li>
+												<ShowMore
+													restantes={listaCatalogo.restantes}
+													passo={PASSO_LISTA_INCREMENTAL}
+													onMostrarMais={listaCatalogo.mostrarMais}
+													onMostrarTodos={listaCatalogo.mostrarTodos}
+												/>
+											</li>
+										)}
 									</ul>
 								)}
 						</div>

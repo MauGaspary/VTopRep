@@ -1,4 +1,4 @@
-import { Plus } from "lucide-react";
+import { Percent, Plus } from "lucide-react";
 import { type FormEvent, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router";
 import { useTenant } from "../../../config/tenant/useTenant";
@@ -446,13 +446,28 @@ function RepresentadaForm({
 									</div>
 									<div className="flex items-center gap-2">
 										{tab.id ? (
-											<Button
-												variant="secondary"
-												size="sm"
-												onClick={() => alterarStatusTabela(idx, !tab.ativo)}
-											>
-												{tab.ativo ? "Inativar tabela" : "Reativar tabela"}
-											</Button>
+											<>
+												{representada && (
+													<Link
+														to={`/representadas/${representada.id}/reajuste?tabela=${tab.id}`}
+														title="Nova tabela com todos os preços reajustados (+/- %)"
+														className={buttonClassName({
+															variant: "ghost",
+															size: "sm",
+														})}
+													>
+														<Percent aria-hidden="true" className="size-3.5" />
+														Reajustar
+													</Link>
+												)}
+												<Button
+													variant="secondary"
+													size="sm"
+													onClick={() => alterarStatusTabela(idx, !tab.ativo)}
+												>
+													{tab.ativo ? "Inativar tabela" : "Reativar tabela"}
+												</Button>
+											</>
 										) : (
 											tabelas.length > 1 && (
 												<Button
