@@ -1,6 +1,9 @@
 @import "tailwindcss";
 @import "@fontsource-variable/inter";
 
+/* `dark:` segue a escolha do usuário (TemaProvider), não só o sistema. */
+@custom-variant dark (&:where([data-tema="escuro"], [data-tema="escuro"] *));
+
 /*
  * Design tokens do tema (HSL sem o wrapper `hsl()`), baseados no design system
  * Linear (./DESIGN.md):
@@ -9,7 +12,9 @@
  * - uma única cor cromática (`--primary`), reservada a CTA, foco, item ativo e
  *   links. É sobrescrita em runtime pelo TenantProvider (white-label).
  * O tema claro é o padrão (uso em campo, sob luz do dia); o escuro segue a
- * escada original do Linear.
+ * escada original do Linear e é ligado por `data-tema="escuro"` no <html>
+ * (preferência do aparelho, aplicada pelo script do index.html e pelo
+ * TemaProvider).
  */
 :root {
 	--sidebar: 180 4% 96%;
@@ -20,7 +25,7 @@
 	--card-foreground: 210 6% 6%;
 	--muted: 210 9% 96%;
 	--muted-foreground: 218 5% 41%;
-	--subtle-foreground: 219 6% 57%;
+	--subtle-foreground: 219 6% 45%;
 	--border: 220 9% 91%;
 	--input: 220 6% 84%;
 	--ring: 234 56% 60%;
@@ -39,28 +44,30 @@
 		sans-serif;
 	--mono: ui-monospace, "SF Mono", "JetBrains Mono", Menlo, Consolas, monospace;
 
-	color-scheme: light dark;
+	color-scheme: light;
 }
 
-@media (prefers-color-scheme: dark) {
-	:root {
-		--sidebar: 240 33% 1%;
-		--sidebar-foreground: 180 7% 97%;
-		--background: 210 6% 6%;
-		--foreground: 180 7% 97%;
-		--card: 210 5% 8%;
-		--card-foreground: 180 7% 97%;
-		--muted: 220 4% 12%;
-		--muted-foreground: 219 6% 57%;
-		--subtle-foreground: 218 5% 41%;
-		--border: 223 9% 15%;
-		--input: 240 5% 22%;
-		--secondary: 210 4% 10%;
-		--secondary-foreground: 180 7% 97%;
-		--destructive: 0 72% 63%;
-		--warning: 38 92% 60%;
-		--success: 134 62% 45%;
-	}
+:root[data-tema="escuro"] {
+	color-scheme: dark;
+	--sidebar: 240 33% 1%;
+	--sidebar-foreground: 180 7% 97%;
+	--background: 210 6% 6%;
+	--foreground: 180 7% 97%;
+	--card: 210 5% 8%;
+	--card-foreground: 180 7% 97%;
+	--muted: 220 4% 12%;
+	--muted-foreground: 219 6% 57%;
+	--subtle-foreground: 218 5% 53%;
+	--ring: 234 56% 64%;
+	--primary: 234 56% 64%;
+	--primary-foreground: 210 6% 6%;
+	--border: 223 9% 15%;
+	--input: 240 5% 22%;
+	--secondary: 210 4% 10%;
+	--secondary-foreground: 180 7% 97%;
+	--destructive: 0 72% 63%;
+	--warning: 38 92% 60%;
+	--success: 134 62% 45%;
 }
 
 @theme inline {

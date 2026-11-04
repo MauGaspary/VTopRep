@@ -2,6 +2,7 @@ import { NavLink } from "react-router";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { NAV_GROUPS } from "./navigation";
 import { TenantBrand } from "./TenantBrand";
+import { ThemeToggle } from "./ThemeToggle";
 
 /** Barra lateral fixa (desktop/tablet, ≥ md). */
 export function Sidebar() {
@@ -47,7 +48,8 @@ export function Sidebar() {
 				))}
 			</nav>
 
-			<div className="border-t border-border px-2 pt-3">
+			<div className="flex flex-col gap-3 border-t border-border px-2 pt-3">
+				<ThemeToggle />
 				<ConnectionStatus />
 			</div>
 		</aside>

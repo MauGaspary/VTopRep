@@ -1,4 +1,3 @@
-import type { ClienteTabelaPreco } from "../domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../domain/item-preco.schema";
 import type { ResolucaoPreco, ResolucaoPrecosTabela } from "../domain/preco";
 import type { TabelaPreco } from "../domain/tabela-preco.schema";
@@ -39,18 +38,12 @@ export interface PrecoRepository {
 		tenantId: string,
 		data: string,
 	): Promise<Map<string, PrecoCatalogo>>;
-	/** Tabela padrão do cliente se vigente; senão, a vigente mais recente. */
+	/** Tabela vigente de início mais recente da representada (sugestão do pedido). */
 	obterTabelaSugerida(
 		tenantId: string,
-		clienteId: string,
 		representadaId: string,
 		data: string,
 	): Promise<TabelaPreco | null>;
-	obterTabelaPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		representadaId: string,
-	): Promise<ClienteTabelaPreco | null>;
 	resolverPreco(
 		tenantId: string,
 		tabelaId: string,
@@ -63,31 +56,8 @@ export interface PrecoRepository {
 		tabelaId: string,
 		data: string,
 	): Promise<ResolucaoPrecosTabela>;
-	/** Define (ou troca) a tabela padrão do cliente para a representada da tabela. */
-	definirTabelaPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		tabelaId: string,
-	): Promise<ClienteTabelaPreco>;
-	/** Remove a tabela padrão (tombstone). `null` se não havia padrão. */
-	removerTabelaPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		representadaId: string,
-	): Promise<ClienteTabelaPreco | null>;
-	/** Associações vivas de tabela padrão do cliente, indexadas por `representada_id`. */
-	obterTabelasPadraoDoCliente(
-		tenantId: string,
-		clienteId: string,
-	): Promise<Map<string, ClienteTabelaPreco>>;
 	/** Tabelas disponíveis (ativas e não excluídas) agrupadas por `representada_id`. */
 	listarTabelasDisponiveisPorRepresentada(
 		tenantId: string,
 	): Promise<Map<string, TabelaPreco[]>>;
-	/** Sincroniza as escolhas de tabela padrão do cliente por representada (`""` remove o vínculo). */
-	sincronizarTabelasPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		escolhasPorRepresentada: Readonly<Record<string, string>>,
-	): Promise<void>;
 }

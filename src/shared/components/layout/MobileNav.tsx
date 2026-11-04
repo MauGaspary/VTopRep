@@ -2,13 +2,17 @@ import { NavLink } from "react-router";
 import { ConnectionStatus } from "./ConnectionStatus";
 import { NAV_ITEMS } from "./navigation";
 import { TenantBrand } from "./TenantBrand";
+import { ThemeToggle } from "./ThemeToggle";
 
 /** Barra superior compacta (mobile, < md). */
 export function MobileTopBar() {
 	return (
 		<header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-border bg-background/85 px-4 backdrop-blur md:hidden">
 			<TenantBrand />
-			<ConnectionStatus compact />
+			<div className="flex shrink-0 items-center gap-3">
+				<ThemeToggle compact />
+				<ConnectionStatus compact />
+			</div>
 		</header>
 	);
 }

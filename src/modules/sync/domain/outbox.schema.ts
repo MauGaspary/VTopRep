@@ -9,7 +9,6 @@ export const ENTIDADES_SINCRONIZAVEIS = [
 	"clientes_enderecos",
 	"clientes_contatos",
 	"clientes_metricas",
-	"clientes_tabelas_preco",
 	"produtos",
 	"tabelas_preco",
 	"itens_preco",

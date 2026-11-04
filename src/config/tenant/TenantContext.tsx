@@ -1,4 +1,6 @@
 import { createContext, type ReactNode, useEffect, useState } from "react";
+import { ajustarCorPrimariaParaTema } from "../../shared/domain/tema";
+import { useTema } from "../tema/useTema";
 import type { TenantConfig } from "./tenant.schema";
 
 interface TenantContextData {
@@ -31,18 +33,25 @@ interface TenantProviderProps {
 export function TenantProvider({ children }: TenantProviderProps) {
 	const [config] = useState<TenantConfig>(defaultMockConfig);
 
-	// White-label: aplica a cor primária do tenant ao token HSL do tema.
+	const { tema } = useTema();
+
+	// White-label: aplica a cor primária do tenant ao token HSL do tema,
+	// ajustada para manter contraste AA no tema claro e no escuro.
 	useEffect(() => {
 		const cor = config.visual.primaryColorHsl;
 		if (!cor) return;
+		const cores = ajustarCorPrimariaParaTema(cor, tema);
+		if (!cores) return;
 		const root = document.documentElement;
-		root.style.setProperty("--primary", cor);
-		root.style.setProperty("--ring", cor);
+		root.style.setProperty("--primary", cores.primaria);
+		root.style.setProperty("--ring", cores.primaria);
+		root.style.setProperty("--primary-foreground", cores.textoSobrePrimaria);
 		return () => {
 			root.style.removeProperty("--primary");
 			root.style.removeProperty("--ring");
+			root.style.removeProperty("--primary-foreground");
 		};
-	}, [config.visual.primaryColorHsl]);
+	}, [config.visual.primaryColorHsl, tema]);
 
 	return (
 		<TenantContext.Provider value={{ config }}>

@@ -1,9 +1,5 @@
 import { garantirMesmoTenant } from "../../../shared/domain/tenant";
 import {
-	type ClienteTabelaPreco,
-	ClienteTabelaPrecoSchema,
-} from "./cliente-tabela-preco.schema";
-import {
 	type ItemPreco,
 	ItemPrecoSchema,
 	type PrecoProdutoInput,
@@ -21,18 +17,6 @@ export class TabelaPrecoNaoEncontradaError extends Error {
 		);
 		this.name = "TabelaPrecoNaoEncontradaError";
 		this.tabelaId = tabelaId;
-	}
-}
-
-export class ClienteNaoVinculadoError extends Error {
-	readonly clienteId: string;
-
-	constructor(clienteId: string) {
-		super(
-			`O cliente informado (${clienteId}) não foi encontrado neste tenant.`,
-		);
-		this.name = "ClienteNaoVinculadoError";
-		this.clienteId = clienteId;
 	}
 }
 
@@ -60,25 +44,29 @@ export function listarTabelasVigentes(
 ): TabelaPreco[] {
 	return tabelas
 		.filter((t) => tabelaDisponivel(t) && tabelaVigenteEm(t, data))
-		.sort(
-			(a, b) =>
-				b.vigencia_inicio.localeCompare(a.vigencia_inicio) ||
-				a.nome_tabela.localeCompare(b.nome_tabela, "pt-BR", {
-					sensitivity: "base",
-				}),
-		);
+		.sort(compararPorVigenciaMaisRecente);
+}
+
+/** Início de vigência mais recente primeiro; empate em ordem alfabética do nome. */
+function compararPorVigenciaMaisRecente(a: TabelaPreco, b: TabelaPreco) {
+	return (
+		b.vigencia_inicio.localeCompare(a.vigencia_inicio) ||
+		a.nome_tabela.localeCompare(b.nome_tabela, "pt-BR", {
+			sensitivity: "base",
+		})
+	);
 }
 
 /**
- * Sugestão de tabela para o pedido: a padrão do cliente, se estiver entre as
- * vigentes; senão, a de vigência mais recente. O representante pode trocar.
+ * Sugestão de tabela para o pedido: a tabela da representada vigente de
+ * início mais recente (empate: ordem alfabética). A tabela pertence à fábrica;
+ * o cliente não tem tabela própria. O representante pode trocar no pedido.
+ * Sem tabela vigente → `null` (o orçamento pede a escolha manual).
  */
 export function escolherTabelaSugerida(
 	vigentes: readonly TabelaPreco[],
-	tabelaPadraoId: string | null,
 ): TabelaPreco | null {
-	const padrao = vigentes.find((t) => t.id === tabelaPadraoId);
-	return padrao ?? vigentes[0] ?? null;
+	return [...vigentes].sort(compararPorVigenciaMaisRecente)[0] ?? null;
 }
 
 /**
@@ -200,104 +188,6 @@ export function resolverPrecosDaTabela({
 		precos.set(produtoId, paraPrecoResolvido(item));
 	}
 	return { ok: true, precos };
-}
-
-interface DefinirTabelaPadraoParams {
-	/** Associação viva atual do cliente para a representada da tabela, se houver. */
-	existente: ClienteTabelaPreco | null;
-	tenantId: string;
-	clienteId: string;
-	tabela: TabelaPreco;
-	id: string;
-	agora: string;
-}
-
-/**
- * Define a tabela padrão do cliente para a representada da tabela. Reaproveita
- * a associação existente (mesmo id). Idempotente se a tabela já for a padrão.
- */
-export function definirTabelaPadrao({
-	existente,
-	tenantId,
-	clienteId,
-	tabela,
-	id,
-	agora,
-}: DefinirTabelaPadraoParams): ClienteTabelaPreco {
-	garantirMesmoTenant(tabela, tenantId);
-	if (!tabelaDisponivel(tabela)) {
-		throw new TabelaPrecoNaoEncontradaError(tabela.id);
-	}
-
-	if (existente) {
-		garantirMesmoTenant(existente, tenantId);
-		if (
-			existente.cliente_id !== clienteId ||
-			existente.representada_id !== tabela.representada_id
-		) {
-			throw new Error(
-				"Associação existente não corresponde ao cliente e à representada da tabela",
-			);
-		}
-		if (existente.tabela_id === tabela.id && existente.deleted_at === null) {
-			return existente;
-		}
-		return ClienteTabelaPrecoSchema.parse({
-			...existente,
-			tabela_id: tabela.id,
-			updated_at: agora,
-			deleted_at: null,
-		});
-	}
-
-	return ClienteTabelaPrecoSchema.parse({
-		id,
-		tenant_id: tenantId,
-		cliente_id: clienteId,
-		representada_id: tabela.representada_id,
-		tabela_id: tabela.id,
-		created_at: agora,
-		updated_at: agora,
-		deleted_at: null,
-	});
-}
-
-/** Remove a tabela padrão (tombstone). Idempotente. */
-export function removerTabelaPadrao(
-	existente: ClienteTabelaPreco,
-	tenantId: string,
-	agora: string,
-): ClienteTabelaPreco {
-	garantirMesmoTenant(existente, tenantId);
-	if (existente.deleted_at !== null) return existente;
-	return { ...existente, updated_at: agora, deleted_at: agora };
-}
-
-/**
- * Associações vivas de tabela padrão de um cliente, indexadas por `representada_id`.
- * Se houver duplicatas para a mesma representada (sincronização offline), vence a
- * de `updated_at` mais recente.
- */
-export function indexarTabelasPadraoDoCliente(
-	associacoes: readonly ClienteTabelaPreco[],
-	tenantId: string,
-	clienteId: string,
-): Map<string, ClienteTabelaPreco> {
-	const porRepresentada = new Map<string, ClienteTabelaPreco>();
-	for (const assoc of associacoes) {
-		if (
-			assoc.tenant_id !== tenantId ||
-			assoc.cliente_id !== clienteId ||
-			assoc.deleted_at !== null
-		) {
-			continue;
-		}
-		const atual = porRepresentada.get(assoc.representada_id);
-		if (!atual || assoc.updated_at > atual.updated_at) {
-			porRepresentada.set(assoc.representada_id, assoc);
-		}
-	}
-	return porRepresentada;
 }
 
 /**

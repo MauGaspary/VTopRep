@@ -1,6 +1,4 @@
-import { useMemo } from "react";
 import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
-import type { ClienteTabelaPreco } from "../domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../domain/item-preco.schema";
 import type { PrecoResolvido } from "../domain/preco";
 import type { TabelaPreco } from "../domain/tabela-preco.schema";
@@ -9,8 +7,6 @@ import { precoRepository } from "../repositories/preco-dexie.adapter";
 
 const MAPA_ITENS_VAZIO: ReadonlyMap<string, ItemPreco> = new Map();
 const MAPA_CATALOGO_VAZIO: ReadonlyMap<string, PrecoCatalogo> = new Map();
-const MAPA_PADRAO_CLIENTE_VAZIO: ReadonlyMap<string, ClienteTabelaPreco> =
-	new Map();
 const MAPA_TABELAS_POR_REP_VAZIO: ReadonlyMap<string, TabelaPreco[]> =
 	new Map();
 const MAPA_PRECOS_TABELA_VAZIO: ReadonlyMap<string, PrecoResolvido> = new Map();
@@ -121,24 +117,6 @@ export function useTabelasDisponiveisPorRepresentada(tenantId: string) {
 	};
 }
 
-/** Associações vivas de tabela padrão de um cliente, indexadas por `representada_id`. */
-export function useTabelasPadraoDoCliente(
-	tenantId: string,
-	clienteId: string | undefined,
-) {
-	const tabelasPadrao = useLiveRepositoryQuery(() => {
-		if (!tenantId || !clienteId) {
-			return Promise.resolve(new Map<string, ClienteTabelaPreco>());
-		}
-		return precoRepository.obterTabelasPadraoDoCliente(tenantId, clienteId);
-	}, [tenantId, clienteId]);
-
-	return {
-		tabelasPadrao: tabelasPadrao ?? MAPA_PADRAO_CLIENTE_VAZIO,
-		isLoading: tabelasPadrao === undefined,
-	};
-}
-
 /** Todos os preços de uma tabela específica vigentes na data, indexados por `produto_id`. */
 export function usePrecosDaTabela(
 	tenantId: string,
@@ -161,33 +139,4 @@ export function usePrecosDaTabela(
 		precosPorProduto: resolucao ?? MAPA_PRECOS_TABELA_VAZIO,
 		isLoading: resolucao === undefined,
 	};
-}
-
-export function usePrecoActions(tenantId: string) {
-	return useMemo(
-		() => ({
-			definirTabelaPadraoCliente: (clienteId: string, tabelaId: string) =>
-				precoRepository.definirTabelaPadraoCliente(
-					tenantId,
-					clienteId,
-					tabelaId,
-				),
-			removerTabelaPadraoCliente: (clienteId: string, representadaId: string) =>
-				precoRepository.removerTabelaPadraoCliente(
-					tenantId,
-					clienteId,
-					representadaId,
-				),
-			sincronizarTabelasPadraoCliente: (
-				clienteId: string,
-				escolhasPorRepresentada: Readonly<Record<string, string>>,
-			) =>
-				precoRepository.sincronizarTabelasPadraoCliente(
-					tenantId,
-					clienteId,
-					escolhasPorRepresentada,
-				),
-		}),
-		[tenantId],
-	);
 }

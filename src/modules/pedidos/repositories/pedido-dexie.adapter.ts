@@ -67,6 +67,21 @@ export class PedidoDexieAdapter implements PedidoRepository {
 		return ordenarPedidosPorDataDesc(lista);
 	}
 
+	async listarPorCliente(
+		tenantId: string,
+		clienteId: string,
+	): Promise<Pedido[]> {
+		const tenant = TenantIdSchema.parse(tenantId);
+		const cliente = IdSchema.parse(clienteId);
+
+		const lista = await this.db.pedidos
+			.where("[tenant_id+cliente_id]")
+			.equals([tenant, cliente])
+			.filter((p) => p.deleted_at === null)
+			.toArray();
+		return ordenarPedidosPorDataDesc(lista);
+	}
+
 	async obterPorId(
 		tenantId: string,
 		id: string,

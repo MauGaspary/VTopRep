@@ -15,6 +15,8 @@ import type {
 export interface PedidoRepository {
 	/** Lista todos os orçamentos e pedidos não excluídos do tenant (mais recentes primeiro). */
 	listar(tenantId: string, status?: StatusPedido): Promise<Pedido[]>;
+	/** Histórico do cliente: orçamentos e pedidos não excluídos (mais recentes primeiro). */
+	listarPorCliente(tenantId: string, clienteId: string): Promise<Pedido[]>;
 	/** Obtém um orçamento ou pedido com seus itens vivos. */
 	obterPorId(tenantId: string, id: string): Promise<PedidoCompleto | undefined>;
 	/** Monta os dados completos do espelho do orçamento/pedido para geração de PDF e envio. */

@@ -1,12 +1,6 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import { db } from "../../../db/database";
-import type { Cliente } from "../../clientes/domain/cliente.schema";
-import type { ClienteTabelaPreco } from "../domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../domain/item-preco.schema";
-import {
-	ClienteNaoVinculadoError,
-	TabelaPrecoNaoEncontradaError,
-} from "../domain/preco";
 import type { TabelaPreco } from "../domain/tabela-preco.schema";
 import { PrecoDexieAdapter } from "./preco-dexie.adapter";
 
@@ -14,7 +8,6 @@ const TENANT = "11111111-1111-4111-a111-111111111111";
 const OUTRO_TENANT = "22222222-2222-4222-a222-222222222222";
 const REPRESENTADA = "33333333-3333-4333-a333-333333333333";
 const OUTRA_REPRESENTADA = "44444444-4444-4444-a444-444444444444";
-const CLIENTE = "55555555-5555-4555-a555-555555555555";
 const PRODUTO_A = "66666666-6666-4666-a666-666666666666";
 const PRODUTO_B = "77777777-7777-4777-a777-777777777777";
 const CRIADO_EM = "2026-01-01T00:00:00.000Z";
@@ -51,45 +44,11 @@ const itemPreco = (
 	...overrides,
 });
 
-const cliente = (overrides: Partial<Cliente> = {}): Cliente => ({
-	id: CLIENTE,
-	tenant_id: TENANT,
-	cnpj_cpf: "11222333000181",
-	razao_social: "Mercado Bom Preço Ltda",
-	nome_fantasia: null,
-	tipo_cliente: "REVENDA",
-	ativo: true,
-	created_at: CRIADO_EM,
-	updated_at: CRIADO_EM,
-	deleted_at: null,
-	...overrides,
-});
-
-const associacao = (
-	overrides: Partial<ClienteTabelaPreco> = {},
-): ClienteTabelaPreco => ({
-	id: crypto.randomUUID(),
-	tenant_id: TENANT,
-	cliente_id: CLIENTE,
-	representada_id: REPRESENTADA,
-	tabela_id: crypto.randomUUID(),
-	created_at: CRIADO_EM,
-	updated_at: CRIADO_EM,
-	deleted_at: null,
-	...overrides,
-});
-
 describe("PrecoDexieAdapter", () => {
-	const adapter = new PrecoDexieAdapter({ agora: () => AGORA });
+	const adapter = new PrecoDexieAdapter();
 
 	beforeEach(async () => {
-		await Promise.all([
-			db.tabelas_preco.clear(),
-			db.itens_preco.clear(),
-			db.clientes.clear(),
-			db.clientes_tabelas_preco.clear(),
-		]);
-		await db.clientes.add(cliente());
+		await Promise.all([db.tabelas_preco.clear(), db.itens_preco.clear()]);
 	});
 
 	describe("listarTabelasVigentes", () => {
@@ -193,125 +152,37 @@ describe("PrecoDexieAdapter", () => {
 		});
 	});
 
-	describe("tabela padrão do cliente", () => {
-		it("define, sugere e troca a tabela padrão", async () => {
+	describe("obterTabelaSugerida", () => {
+		it("sugere a vigente de início mais recente da representada", async () => {
+			const antiga = tabela({ vigencia_inicio: "2025-01-01" });
 			const recente = tabela({ vigencia_inicio: "2026-06-01" });
-			const especial = tabela({ nome_tabela: "Especial" });
-			await db.tabelas_preco.bulkAdd([recente, especial]);
-
-			expect(
-				await adapter.obterTabelaSugerida(TENANT, CLIENTE, REPRESENTADA, HOJE),
-			).toEqual(recente);
-
-			const definida = await adapter.definirTabelaPadraoCliente(
-				TENANT,
-				CLIENTE,
-				especial.id,
-			);
-			expect(definida).toMatchObject({
-				cliente_id: CLIENTE,
-				representada_id: REPRESENTADA,
-				tabela_id: especial.id,
+			const futura = tabela({ vigencia_inicio: "2027-01-01" });
+			const outraRep = tabela({
+				representada_id: OUTRA_REPRESENTADA,
+				vigencia_inicio: "2026-09-01",
 			});
-			expect(
-				await adapter.obterTabelaSugerida(TENANT, CLIENTE, REPRESENTADA, HOJE),
-			).toEqual(especial);
-
-			const trocada = await adapter.definirTabelaPadraoCliente(
-				TENANT,
-				CLIENTE,
-				recente.id,
-			);
-			expect(trocada.id).toBe(definida.id);
-			expect(await db.clientes_tabelas_preco.count()).toBe(1);
-		});
-
-		it("cai na vigente mais recente quando a padrão saiu de vigência", async () => {
-			const recente = tabela({ vigencia_inicio: "2026-06-01" });
-			const padrao = tabela({ vigencia_fim: "2026-05-31" });
-			await db.tabelas_preco.bulkAdd([recente, padrao]);
-			await db.clientes_tabelas_preco.add(associacao({ tabela_id: padrao.id }));
-
-			expect(
-				await adapter.obterTabelaSugerida(TENANT, CLIENTE, REPRESENTADA, HOJE),
-			).toEqual(recente);
-		});
-
-		it("com duas associações vivas (criadas offline em aparelhos diferentes), vale a mais recente", async () => {
-			const a = tabela();
-			const b = tabela();
-			await db.tabelas_preco.bulkAdd([a, b]);
-			const velha = associacao({ tabela_id: a.id });
-			const nova = associacao({
-				tabela_id: b.id,
-				updated_at: "2026-10-01T00:00:00.000Z",
-			});
-			await db.clientes_tabelas_preco.bulkAdd([velha, nova]);
-
-			expect(
-				await adapter.obterTabelaPadraoCliente(TENANT, CLIENTE, REPRESENTADA),
-			).toEqual(nova);
-
-			await adapter.definirTabelaPadraoCliente(TENANT, CLIENTE, a.id);
-
-			expect(await db.clientes_tabelas_preco.get(nova.id)).toMatchObject({
-				tabela_id: a.id,
-				deleted_at: null,
-			});
-			expect(await db.clientes_tabelas_preco.get(velha.id)).toMatchObject({
-				deleted_at: AGORA,
-			});
-		});
-
-		it("remove a padrão com tombstone", async () => {
-			const t = tabela();
-			await db.tabelas_preco.add(t);
-			await adapter.definirTabelaPadraoCliente(TENANT, CLIENTE, t.id);
-
-			const removida = await adapter.removerTabelaPadraoCliente(
-				TENANT,
-				CLIENTE,
-				REPRESENTADA,
-			);
-
-			expect(removida?.deleted_at).toBe(AGORA);
-			expect(
-				await adapter.obterTabelaPadraoCliente(TENANT, CLIENTE, REPRESENTADA),
-			).toBeNull();
-			expect(await db.clientes_tabelas_preco.count()).toBe(1);
-			expect(
-				await adapter.removerTabelaPadraoCliente(TENANT, CLIENTE, REPRESENTADA),
-			).toBeNull();
-		});
-
-		it("recusa cliente inexistente, excluído ou de outro tenant", async () => {
-			const t = tabela();
-			await db.tabelas_preco.add(t);
-			const excluido = cliente({ id: crypto.randomUUID(), deleted_at: AGORA });
-			const alheio = cliente({
-				id: crypto.randomUUID(),
+			const outroTenant = tabela({
 				tenant_id: OUTRO_TENANT,
+				vigencia_inicio: "2026-10-01",
 			});
-			await db.clientes.bulkAdd([excluido, alheio]);
+			await db.tabelas_preco.bulkAdd([
+				antiga,
+				recente,
+				futura,
+				outraRep,
+				outroTenant,
+			]);
 
-			for (const id of [crypto.randomUUID(), excluido.id, alheio.id]) {
-				await expect(
-					adapter.definirTabelaPadraoCliente(TENANT, id, t.id),
-				).rejects.toThrow(ClienteNaoVinculadoError);
-			}
+			expect(
+				(await adapter.obterTabelaSugerida(TENANT, REPRESENTADA, HOJE))?.id,
+			).toBe(recente.id);
 		});
 
-		it("recusa tabela inativa ou de outro tenant", async () => {
-			const inativa = tabela({ ativo: false });
-			const alheia = tabela({ tenant_id: OUTRO_TENANT });
-			await db.tabelas_preco.bulkAdd([inativa, alheia]);
-
-			for (const id of [inativa.id, alheia.id]) {
-				await expect(
-					adapter.definirTabelaPadraoCliente(TENANT, CLIENTE, id),
-				).rejects.toThrow(TabelaPrecoNaoEncontradaError);
-			}
-			expect(await db.clientes_tabelas_preco.count()).toBe(0);
+		it("sem tabela vigente, não sugere nenhuma", async () => {
+			await db.tabelas_preco.add(tabela({ ativo: false }));
+			expect(
+				await adapter.obterTabelaSugerida(TENANT, REPRESENTADA, HOJE),
+			).toBeNull();
 		});
 	});
 
@@ -378,7 +249,7 @@ describe("PrecoDexieAdapter", () => {
 			});
 		});
 
-		it("lista tabelas disponíveis por representada e sincroniza escolhas de tabela padrão do cliente", async () => {
+		it("lista tabelas disponíveis por representada", async () => {
 			const tabRep1 = tabela({
 				representada_id: REPRESENTADA,
 				nome_tabela: "Atacado Rep 1",
@@ -402,33 +273,6 @@ describe("PrecoDexieAdapter", () => {
 			expect(
 				disponiveisPorRep.get(OUTRA_REPRESENTADA)?.map((t) => t.id),
 			).toEqual([tabRep2.id]);
-
-			await adapter.sincronizarTabelasPadraoCliente(TENANT, CLIENTE, {
-				[REPRESENTADA]: tabRep1.id,
-				[OUTRA_REPRESENTADA]: tabRep2.id,
-			});
-
-			const padroes = await adapter.obterTabelasPadraoDoCliente(
-				TENANT,
-				CLIENTE,
-			);
-			expect(padroes.get(REPRESENTADA)?.tabela_id).toBe(tabRep1.id);
-			expect(padroes.get(OUTRA_REPRESENTADA)?.tabela_id).toBe(tabRep2.id);
-
-			// Remover a tabela padrão da primeira representada e manter a segunda
-			await adapter.sincronizarTabelasPadraoCliente(TENANT, CLIENTE, {
-				[REPRESENTADA]: "",
-				[OUTRA_REPRESENTADA]: tabRep2.id,
-			});
-
-			const padroesAposRemocao = await adapter.obterTabelasPadraoDoCliente(
-				TENANT,
-				CLIENTE,
-			);
-			expect(padroesAposRemocao.has(REPRESENTADA)).toBe(false);
-			expect(padroesAposRemocao.get(OUTRA_REPRESENTADA)?.tabela_id).toBe(
-				tabRep2.id,
-			);
 		});
 	});
 });

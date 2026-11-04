@@ -150,7 +150,6 @@ describe("Fila Outbox e Resolução de Conflitos (Domínio)", () => {
 			expect(obterPoliticaConflito("transportadoras")).toBe("LWW_CAMPO");
 			expect(obterPoliticaConflito("clientes_enderecos")).toBe("LWW_CAMPO");
 			expect(obterPoliticaConflito("clientes_contatos")).toBe("LWW_CAMPO");
-			expect(obterPoliticaConflito("clientes_tabelas_preco")).toBe("LWW_CAMPO");
 			expect(obterPoliticaConflito("produtos")).toBe("SERVER_WINS");
 			expect(obterPoliticaConflito("representadas")).toBe("SERVER_WINS");
 			expect(obterPoliticaConflito("tabelas_preco")).toBe("SERVER_WINS");

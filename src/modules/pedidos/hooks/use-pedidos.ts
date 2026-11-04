@@ -1,8 +1,17 @@
 import { useMemo } from "react";
 import type { TenantConfig } from "../../../config/tenant/tenant.schema";
 import { useLiveRepositoryQuery } from "../../../shared/hooks/use-live-repository-query";
+import type { PrecoResolvido } from "../../produtos/domain/preco";
+import { precoRepository } from "../../produtos/repositories/preco-dexie.adapter";
+import { produtoRepository } from "../../produtos/repositories/produto-dexie.adapter";
+import { representadaRepository } from "../../representadas/repositories/representada-dexie.adapter";
 import type { CotacaoInput } from "../domain/cotacao.schema";
 import type { PedidoInput, StatusPedido } from "../domain/pedido.schema";
+import {
+	montarRepeticaoCotacao,
+	type PrecificacaoAtual,
+	type RepeticaoCotacao,
+} from "../domain/repetir-pedido";
 import { pedidoRepository } from "../repositories/pedido-dexie.adapter";
 
 export function usePedidos(tenantId: string, status?: StatusPedido) {
@@ -14,6 +23,81 @@ export function usePedidos(tenantId: string, status?: StatusPedido) {
 	return {
 		pedidos: pedidos ?? [],
 		isLoading: pedidos === undefined,
+	};
+}
+
+/** Histórico de orçamentos e pedidos do cliente (mais recentes primeiro). */
+export function usePedidosDoCliente(
+	tenantId: string,
+	clienteId: string | undefined,
+) {
+	const pedidos = useLiveRepositoryQuery(() => {
+		if (!clienteId) return Promise.resolve([]);
+		return pedidoRepository.listarPorCliente(tenantId, clienteId);
+	}, [tenantId, clienteId]);
+
+	return {
+		pedidos: pedidos ?? [],
+		isLoading: pedidos === undefined,
+	};
+}
+
+/**
+ * Valores de um novo orçamento repetindo o pedido (ou a cotação inteira) com
+ * os preços da tabela vigente hoje. `null` quando o pedido não existe.
+ */
+export function useRepeticaoCotacao(
+	tenantId: string,
+	pedidoId: string | undefined,
+	hoje: string,
+) {
+	const repeticao =
+		useLiveRepositoryQuery(async (): Promise<RepeticaoCotacao | null> => {
+			if (!pedidoId) return null;
+			const cotacao = await pedidoRepository.obterCotacao(tenantId, pedidoId);
+			if (!cotacao) return null;
+
+			const [produtos, representadasAtivas] = await Promise.all([
+				produtoRepository.listarTodos(tenantId),
+				representadaRepository.listar(tenantId),
+			]);
+			const precificacao = new Map<string, PrecificacaoAtual>();
+			for (const { pedido } of cotacao.pedidos) {
+				const repId = pedido.representada_id;
+				if (precificacao.has(repId)) continue;
+				const tabela = await precoRepository.obterTabelaSugerida(
+					tenantId,
+					repId,
+					hoje,
+				);
+				const resolucao = tabela
+					? await precoRepository.resolverPrecosDaTabela(
+							tenantId,
+							tabela.id,
+							hoje,
+						)
+					: null;
+				precificacao.set(repId, {
+					tabelaId: tabela?.id ?? null,
+					precosPorProduto:
+						resolucao?.ok === true
+							? resolucao.precos
+							: new Map<string, PrecoResolvido>(),
+				});
+			}
+
+			return montarRepeticaoCotacao({
+				pedidos: cotacao.pedidos,
+				produtosPorId: new Map(produtos.map((p) => [p.id, p])),
+				representadasAtivasIds: new Set(representadasAtivas.map((r) => r.id)),
+				precificacaoPorRepresentada: precificacao,
+				gerarLocalId: () => crypto.randomUUID(),
+			});
+		}, [tenantId, pedidoId, hoje]);
+
+	return {
+		repeticao,
+		isLoading: repeticao === undefined,
 	};
 }
 

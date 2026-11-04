@@ -36,7 +36,7 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 ### 1.6. Módulo de Clientes (CRM Base)
 - [x] **Repositório:** Implementar operações de CRUD no Dexie com inserção transacional (Cliente + Endereços + Contatos).
 - [x] **UI:** Criar tela de listagem densa de clientes na carteira.
-- [x] **UI:** Criar formulário de cadastro/edição permitindo adicionar múltiplos contatos, endereços e tabelas padrão por representada.
+- [x] **UI:** Criar formulário de cadastro/edição permitindo adicionar múltiplos contatos, endereços e tabelas padrão por representada (tabelas padrão removidas na Fase 2.7).
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.7. Módulo de Produtos
@@ -55,9 +55,9 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 ### 2.1. Tabelas de Preços e Resolução Dinâmica
 - [x] **Lógica Pura:** Resolução de preço pela tabela selecionada e vigência (`src/modules/produtos/domain/preco.ts`), com motivo quando não há preço (`tabela_nao_encontrada`, `tabela_inativa`, `fora_de_vigencia`, `produto_sem_preco`).
 - [x] **Repositório:** `PrecoRepository` + adaptador Dexie (`preco-dexie.adapter.ts`), com índice `[tenant_id+tabela_id+produto_id]` (Dexie v6).
-- [x] **Tabela por Cliente:** `clientes_tabelas_preco` (tabela padrão por cliente e representada), usada para sugerir a tabela do pedido.
+- [x] **Tabela por Cliente:** `clientes_tabelas_preco` (tabela padrão por cliente e representada), usada para sugerir a tabela do pedido. *Removida na Fase 2.7: a tabela passou a ser exclusiva da representada.*
 - [x] **UI de Tabelas e Preços:** Criação automática de *Tabela Padrão* e gestão de tabelas no cadastro da representada, preços por tabela no formulário do produto e exibição/seleção de tabela no catálogo.
-- [x] **UI de Vínculo:** Escolha da tabela padrão no cadastro do cliente e da tabela no orçamento.
+- [x] **UI de Vínculo:** Escolha da tabela padrão no cadastro do cliente e da tabela no orçamento. *Escolha no cliente removida na Fase 2.7.*
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 2.2. Motor Financeiro do Orçamento (Cálculos Puros)
@@ -111,19 +111,19 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 
 ## Fase 2.6: Alternância de Tema (Claro / Escuro)
 
-O representante escolhe o tema no próprio aparelho. O **claro continua sendo o padrão** (uso em campo, sob luz do dia). Hoje o tema escuro existe nos tokens de `src/index.css`, mas só é ativado pelo `prefers-color-scheme` do sistema operacional.
+O representante escolhe o tema no próprio aparelho. O **claro continua sendo o padrão** (uso em campo, sob luz do dia). O tema escuro é ligado por `data-tema="escuro"` no `<html>` (seletor Claro / Escuro / Sistema na barra lateral e na barra superior do celular).
 
 ### 2.6.1. Preferência e Aplicação do Tema
-- [ ] **Contrato & Lógica Pura:** `PreferenciaTemaSchema = z.enum(["claro", "escuro", "sistema"])` em `src/shared/domain/tema.ts`, padrão `claro`, e `resolverTema(preferencia, sistemaEscuro): "claro" | "escuro"`, com testes.
-- [ ] **Persistência por Aparelho:** Guardar a preferência no `localStorage` por meio de um repositório em `src/shared/repositories/`. Não sincroniza (não é dado de negócio). Valor ausente ou inválido volta para `claro`.
-- [ ] **CSS e Tailwind:** Trocar o `@media (prefers-color-scheme: dark)` por um atributo no `<html>` (`data-tema="escuro"`) e declarar `@custom-variant dark` no Tailwind v4, para que as classes `dark:` sigam a escolha do usuário.
-- [ ] **Sem Flash:** Script inline no `index.html` aplica o tema antes de o React montar. No modo `sistema`, acompanhar `matchMedia` ao vivo.
+- [x] **Contrato & Lógica Pura:** `PreferenciaTemaSchema = z.enum(["claro", "escuro", "sistema"])` em `src/shared/domain/tema.ts`, padrão `claro`, e `resolverTema(preferencia, sistemaEscuro): "claro" | "escuro"`, com testes.
+- [x] **Persistência por Aparelho:** Guardar a preferência no `localStorage` por meio de um repositório em `src/shared/repositories/`. Não sincroniza (não é dado de negócio). Valor ausente ou inválido volta para `claro`.
+- [x] **CSS e Tailwind:** Trocar o `@media (prefers-color-scheme: dark)` por um atributo no `<html>` (`data-tema="escuro"`) e declarar `@custom-variant dark` no Tailwind v4, para que as classes `dark:` sigam a escolha do usuário.
+- [x] **Sem Flash:** Script inline no `index.html` aplica o tema antes de o React montar. No modo `sistema`, acompanhar `matchMedia` ao vivo.
 
 ### 2.6.2. Interface
-- [ ] **Controle:** Seletor segmentado *Claro / Escuro / Sistema* no rodapé da `Sidebar` e no `MobileNav`, reaproveitando os componentes de `src/shared/components/ui/`.
-- [ ] **Revisão de Contraste:** Percorrer todas as telas no tema escuro (listas, formulários, orçamento, `Combobox`, `Badge`, `Alert`, cores das representadas e cor primária do tenant) e garantir contraste AA nos dois temas.
-- [ ] **PDF:** O espelho PDF continua sempre claro (documento para impressão e envio).
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Controle:** Seletor segmentado *Claro / Escuro / Sistema* no rodapé da `Sidebar` e no `MobileNav`, reaproveitando os componentes de `src/shared/components/ui/`.
+- [x] **Revisão de Contraste:** Percorrer todas as telas no tema escuro (listas, formulários, orçamento, `Combobox`, `Badge`, `Alert`, cores das representadas e cor primária do tenant) e garantir contraste AA nos dois temas.
+- [x] **PDF:** O espelho PDF continua sempre claro (documento para impressão e envio).
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 
@@ -132,14 +132,14 @@ O representante escolhe o tema no próprio aparelho. O **claro continua sendo o 
 **Decisão:** a tabela de preço pertence à fábrica; o cliente não tem tabela própria. No orçamento, a sugestão é a **tabela vigente de início mais recente** da representada, e o representante pode trocar a tabela em cada pedido. Variações por estado (ICMS, ST e outros impostos) ficam no `BACKLOG.md` 1.5.
 
 ### 2.7.1. Regra de Sugestão
-- [ ] **Lógica Pura:** Simplificar `escolherTabelaSugerida` (`src/modules/produtos/domain/preco.ts`) para receber só as tabelas vigentes, sem `tabelaPadraoId`. Testes: várias vigentes → início mais recente; empate → ordem alfabética; nenhuma vigente → `null` (o orçamento pede a escolha manual).
-- [ ] **Rascunhos:** Ao reabrir um rascunho, manter a tabela gravada enquanto ela estiver vigente (comportamento atual de `resolverTabelaEfetivaGrupo`).
+- [x] **Lógica Pura:** Simplificar `escolherTabelaSugerida` (`src/modules/produtos/domain/preco.ts`) para receber só as tabelas vigentes, sem `tabelaPadraoId`. Testes: várias vigentes → início mais recente; empate → ordem alfabética; nenhuma vigente → `null` (o orçamento pede a escolha manual).
+- [x] **Rascunhos:** Ao reabrir um rascunho, manter a tabela gravada enquanto ela estiver vigente (comportamento atual de `resolverTabelaEfetivaGrupo`).
 
 ### 2.7.2. Remoção do Vínculo Cliente → Tabela
-- [ ] **Código:** Remover a seção de tabelas padrão do formulário do cliente, os hooks de `use-precos.ts`, os métodos do `PrecoRepository`/adaptador, as funções de definição de tabela padrão e os testes correspondentes.
-- [ ] **Dexie v10:** Remover a store `clientes_tabelas_preco`, tirá-la de `ENTIDADES_SINCRONIZAVEIS` e do seed, e descartar na migração as entradas pendentes da Outbox dessa entidade.
-- [ ] **PRD:** Remover `clientes_tabelas_preco` do dicionário de dados e do ERD e registrar a regra de sugestão em `tabelas_preco`.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Código:** Remover a seção de tabelas padrão do formulário do cliente, os hooks de `use-precos.ts`, os métodos do `PrecoRepository`/adaptador, as funções de definição de tabela padrão e os testes correspondentes.
+- [x] **Dexie v10:** Remover a store `clientes_tabelas_preco`, tirá-la de `ENTIDADES_SINCRONIZAVEIS` e do seed, e descartar na migração as entradas pendentes da Outbox dessa entidade.
+- [x] **PRD:** Remover `clientes_tabelas_preco` do dicionário de dados e do ERD e registrar a regra de sugestão em `tabelas_preco`.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 
@@ -148,18 +148,18 @@ O representante escolhe o tema no próprio aparelho. O **claro continua sendo o 
 Base para a Fase 4 (recompra, Raio-X e Curva ABC).
 
 ### 2.8.1. Consulta, Ordenação e Resumo
-- [ ] **Repositório:** `listarPorCliente(tenantId, clienteId)` usando o índice `[tenant_id+cliente_id]` que já existe em `pedidos`, com testes no `fake-indexeddb` (inclusive isolamento de tenant).
-- [ ] **Lógica Pura:** Ordenação por data (**padrão: mais recente → mais antigo**), valor, status ou representada; filtros por representada, status (com opção de esconder orçamentos em rascunho) e período.
-- [ ] **Resumo em Centavos:** Quantidade de pedidos, valor total, ticket médio e data da última compra, contando apenas pedidos `emitido` ou superior.
+- [x] **Repositório:** `listarPorCliente(tenantId, clienteId)` usando o índice `[tenant_id+cliente_id]` que já existe em `pedidos`, com testes no `fake-indexeddb` (inclusive isolamento de tenant).
+- [x] **Lógica Pura:** Ordenação por data (**padrão: mais recente → mais antigo**), valor, status ou representada; filtros por representada, status (com opção de esconder orçamentos em rascunho) e período.
+- [x] **Resumo em Centavos:** Quantidade de pedidos, valor total, ticket médio e data da última compra, contando apenas pedidos `emitido` ou superior.
 
 ### 2.8.2. Interface
-- [ ] **Aba "Pedidos" no Cliente:** Lista densa com data, número, representada (com a cor identificadora), status, valor e etiqueta de cotação. O clique abre o pedido.
-- [ ] **Atalho:** Botão "Novo orçamento" já com o cliente selecionado.
+- [x] **Aba "Pedidos" no Cliente:** Lista densa com data, número, representada (com a cor identificadora), status, valor e etiqueta de cotação. O clique abre o pedido.
+- [x] **Atalho:** Botão "Novo orçamento" já com o cliente selecionado.
 
 ### 2.8.3. Repetir Pedido
-- [ ] **Lógica Pura:** Montar os valores iniciais de um novo orçamento a partir de um pedido existente, mantendo produtos, quantidades e descontos e **buscando o preço na tabela vigente** (nunca copiar o preço antigo). Itens inativos ou sem preço viram aviso e não entram.
-- [ ] **UI:** Botão "Repetir pedido" no histórico e na tela do pedido. Em cotações, repete todas as fábricas.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Lógica Pura:** Montar os valores iniciais de um novo orçamento a partir de um pedido existente, mantendo produtos, quantidades e descontos e **buscando o preço na tabela vigente** (nunca copiar o preço antigo). Itens inativos ou sem preço viram aviso e não entram.
+- [x] **UI:** Botão "Repetir pedido" no histórico e na tela do pedido. Em cotações, repete todas as fábricas.
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 

@@ -1,8 +1,10 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router";
+import { TemaProvider } from "./config/tema/TemaContext";
 import { TenantProvider } from "./config/tenant/TenantContext";
 import { useTenant } from "./config/tenant/useTenant";
 import { ClienteFormView } from "./modules/clientes/components/cliente-form-view";
 import { ClientesListView } from "./modules/clientes/components/clientes-list-view";
+import { HistoricoClienteView } from "./modules/pedidos/components/historico-cliente-view";
 import { OrcamentoFormView } from "./modules/pedidos/components/orcamento-form-view";
 import { PedidosListView } from "./modules/pedidos/components/pedidos-list-view";
 import { CatalogoView } from "./modules/produtos/components/catalogo-view";
@@ -51,6 +53,10 @@ function AppRoutes() {
 				<Route path="/clientes" element={<ClientesListView />} />
 				<Route path="/clientes/novo" element={<ClienteFormView />} />
 				<Route path="/clientes/:id/editar" element={<ClienteFormView />} />
+				<Route
+					path="/clientes/:id/pedidos"
+					element={<HistoricoClienteView />}
+				/>
 				<Route path="*" element={<Navigate to="/catalogo" replace />} />
 			</Routes>
 			<DevSeedButton tenantId={config.id} />
@@ -60,10 +66,12 @@ function AppRoutes() {
 
 export default function App() {
 	return (
-		<TenantProvider>
-			<BrowserRouter>
-				<AppRoutes />
-			</BrowserRouter>
-		</TenantProvider>
+		<TemaProvider>
+			<TenantProvider>
+				<BrowserRouter>
+					<AppRoutes />
+				</BrowserRouter>
+			</TenantProvider>
+		</TemaProvider>
 	);
 }

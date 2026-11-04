@@ -198,6 +198,16 @@ export function ClientesListView() {
 													</Link>
 												)}
 												<Link
+													to={`/clientes/${c.id}/pedidos`}
+													className={buttonClassName({
+														variant: "ghost",
+														size: "sm",
+													})}
+													title="Histórico de pedidos do cliente"
+												>
+													Pedidos
+												</Link>
+												<Link
 													to={`/clientes/${c.id}/editar`}
 													className={buttonClassName({
 														variant: "secondary",

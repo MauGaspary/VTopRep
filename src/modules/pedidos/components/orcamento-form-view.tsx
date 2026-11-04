@@ -5,6 +5,7 @@ import {
 	Layers,
 	Package,
 	Plus,
+	Repeat,
 } from "lucide-react";
 import {
 	type FormEvent,
@@ -48,10 +49,7 @@ import {
 import { useCliente, useClientes } from "../../clientes/hooks/use-clientes";
 import { correspondeBuscaProduto } from "../../produtos/domain/produto";
 import type { Produto } from "../../produtos/domain/produto.schema";
-import {
-	usePrecosDaTabela,
-	useTabelasPadraoDoCliente,
-} from "../../produtos/hooks/use-precos";
+import { usePrecosDaTabela } from "../../produtos/hooks/use-precos";
 import { useTodosProdutos } from "../../produtos/hooks/use-produtos";
 import {
 	formatarResumoComissaoRepresentada,
@@ -87,17 +85,30 @@ import {
 	type PedidoFormErros,
 } from "../domain/pedido-form";
 import {
+	type RepeticaoCotacao,
+	ROTULOS_MOTIVO_NAO_REPETIDO,
+} from "../domain/repetir-pedido";
+import {
 	useCotacao,
 	useEspelhoCotacao,
 	usePedidoActions,
+	useRepeticaoCotacao,
 } from "../hooks/use-pedidos";
 import { EspelhoCotacaoActionsBar } from "./espelho-pedido-pdf";
 import { SecaoRepresentadaSacola } from "./secao-representada-sacola";
 
 export function OrcamentoFormView() {
 	const { id } = useParams();
+	const [searchParams] = useSearchParams();
 	const { config } = useTenant();
 	const { dados, isLoading: carregandoCotacao } = useCotacao(config.id, id);
+	// `/pedidos/novo?repetir=<pedidoId>`: novo orçamento a partir de um pedido.
+	const repetirId = id ? undefined : (searchParams.get("repetir") ?? undefined);
+	const { repeticao, isLoading: carregandoRepeticao } = useRepeticaoCotacao(
+		config.id,
+		repetirId,
+		dataLocal(new Date()),
+	);
 	const { clientes, isLoading: carregandoClientes } = useClientes(config.id);
 	const { representadas, isLoading: carregandoRepresentadas } =
 		useRepresentadas(config.id);
@@ -107,6 +118,7 @@ export function OrcamentoFormView() {
 
 	if (
 		(id && carregandoCotacao) ||
+		(repetirId && carregandoRepeticao) ||
 		carregandoClientes ||
 		carregandoRepresentadas ||
 		carregandoProdutos
@@ -131,10 +143,12 @@ export function OrcamentoFormView() {
 
 	return (
 		<OrcamentoForm
-			key={id ?? "novo"}
+			key={id ?? (repetirId ? `repetir:${repetirId}` : "novo")}
 			tenantId={config.id}
 			pedidoReferenciaId={id}
 			original={dados ?? undefined}
+			repeticao={repeticao ?? undefined}
+			repeticaoNaoEncontrada={Boolean(repetirId) && repeticao === null}
 			clientes={clientes}
 			representadas={representadas}
 			todosProdutos={produtos}
@@ -147,6 +161,9 @@ interface OrcamentoFormProps {
 	/** Pedido pelo qual a cotação foi aberta (`/pedidos/:id`). */
 	pedidoReferenciaId?: string;
 	original?: CotacaoCompleta;
+	/** Novo orçamento repetindo um pedido existente (preços da tabela vigente). */
+	repeticao?: RepeticaoCotacao;
+	repeticaoNaoEncontrada?: boolean;
 	clientes: ReadonlyArray<
 		Pick<
 			Cliente,
@@ -163,6 +180,8 @@ function OrcamentoForm({
 	tenantId,
 	pedidoReferenciaId,
 	original,
+	repeticao,
+	repeticaoNaoEncontrada = false,
 	clientes,
 	representadas,
 	todosProdutos,
@@ -204,15 +223,18 @@ function OrcamentoForm({
 			"",
 	);
 
-	const [valores, setValores] = useState<CotacaoFormValues>(() =>
-		valoresIniciaisCotacaoForm(original, {
-			clienteId: clienteInicialId,
-			representada: representadaInicial,
-		}),
+	const [valores, setValores] = useState<CotacaoFormValues>(
+		() =>
+			repeticao?.valores ??
+			valoresIniciaisCotacaoForm(original, {
+				clienteId: clienteInicialId,
+				representada: representadaInicial,
+			}),
 	);
 	const [representadaAtivaId, setRepresentadaAtivaId] = useState<string>(
 		() =>
 			original?.pedidos[0]?.pedido.representada_id ??
+			repeticao?.valores.grupos[0]?.representada_id ??
 			representadaInicial?.id ??
 			"",
 	);
@@ -229,10 +251,15 @@ function OrcamentoForm({
 		Boolean(original),
 	);
 	const [transportadoraManual, setTransportadoraManual] = useState<boolean>(
-		Boolean(original),
+		Boolean(original) || Boolean(repeticao?.valores.transportadora_id),
 	);
 	const [mostrarDetalhesContexto, setMostrarDetalhesContexto] =
-		useState<boolean>(Boolean(original?.pedidos[0]?.pedido.observacoes));
+		useState<boolean>(
+			Boolean(
+				original?.pedidos[0]?.pedido.observacoes ||
+					repeticao?.valores.observacoes,
+			),
+		);
 
 	const [buscaCatalogo, setBuscaCatalogo] = useState("");
 	const [erros, setErros] = useState<PedidoFormErros>({});
@@ -243,15 +270,11 @@ function OrcamentoForm({
 		original !== undefined &&
 		!cotacaoEditavel(original.pedidos.map((p) => p.pedido));
 
-	// Dados reativos do cliente selecionado (endereços, contatos e tabelas padrão)
+	// Dados reativos do cliente selecionado (endereços e contatos)
 	const { dados: clienteCompleto } = useCliente(
 		tenantId,
 		valores.cliente_id || undefined,
 		true,
-	);
-	const { tabelasPadrao } = useTabelasPadraoDoCliente(
-		tenantId,
-		valores.cliente_id || undefined,
 	);
 	const { transportadoras } = useTodasTransportadoras(tenantId);
 
@@ -616,7 +639,20 @@ function OrcamentoForm({
 				back={{ to: "/pedidos", label: "Orçamentos e Pedidos" }}
 				action={
 					statusOriginal && (
-						<div className="flex items-center gap-1.5">
+						<div className="flex flex-wrap items-center gap-1.5">
+							{pedidoReferenciaId && (
+								<Link
+									to={`/pedidos/novo?repetir=${pedidoReferenciaId}`}
+									className={buttonClassName({
+										variant: "secondary",
+										size: "sm",
+									})}
+									title="Novo orçamento com os mesmos itens, usando os preços da tabela vigente"
+								>
+									<Repeat aria-hidden="true" />
+									Repetir pedido
+								</Link>
+							)}
 							{valores.grupos.length > 1 && (
 								<Badge variant="outline">
 									<Layers aria-hidden="true" className="mr-1 size-3" />
@@ -642,6 +678,14 @@ function OrcamentoForm({
 						: "Este pedido já foi emitido e encontra-se em modo somente leitura para preservar a integridade comercial."}
 				</Alert>
 			)}
+
+			{repeticaoNaoEncontrada && (
+				<Alert variant="warning">
+					O pedido a repetir não foi encontrado. Monte o orçamento normalmente.
+				</Alert>
+			)}
+
+			{repeticao && <AvisoRepeticao repeticao={repeticao} />}
 
 			{espelho && <EspelhoCotacaoActionsBar espelho={espelho} />}
 
@@ -1099,10 +1143,6 @@ function OrcamentoForm({
 											representada={representadasPorId.get(
 												grupo.representada_id,
 											)}
-											tabelaPadraoDoClienteId={
-												tabelasPadrao.get(grupo.representada_id)?.tabela_id ??
-												null
-											}
 											somenteLeitura={somenteLeitura}
 											ativa={grupo.representada_id === representadaAtivaId}
 											percentualComissao={resumo?.percentualComissao ?? 0}
@@ -1205,5 +1245,34 @@ function OrcamentoForm({
 				}}
 			/>
 		</Page>
+	);
+}
+
+/** Resumo da repetição: preços atualizados e itens que ficaram de fora. */
+function AvisoRepeticao({ repeticao }: { repeticao: RepeticaoCotacao }) {
+	const { itensNaoRepetidos } = repeticao;
+	return (
+		<Alert variant={itensNaoRepetidos.length > 0 ? "warning" : "info"}>
+			<p>
+				Repetindo pedido anterior com os preços da tabela vigente hoje. Confira
+				as condições antes de salvar.
+			</p>
+			{itensNaoRepetidos.length > 0 && (
+				<>
+					<p className="mt-1.5 font-medium">
+						{itensNaoRepetidos.length} item(ns) não entraram:
+					</p>
+					<ul className="mt-0.5 list-disc pl-5">
+						{itensNaoRepetidos.map((item) => (
+							<li key={`${item.representadaId}:${item.produtoId}`}>
+								{item.sku ? `${item.sku} · ` : ""}
+								{item.descricao ?? "Produto não encontrado"} —{" "}
+								{ROTULOS_MOTIVO_NAO_REPETIDO[item.motivo]}
+							</li>
+						))}
+					</ul>
+				</>
+			)}
+		</Alert>
 	);
 }

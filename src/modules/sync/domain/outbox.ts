@@ -242,7 +242,6 @@ const ENTIDADES_CAMPO_LWW: ReadonlySet<EntidadeSincronizavel> = new Set([
 	"clientes",
 	"clientes_enderecos",
 	"clientes_contatos",
-	"clientes_tabelas_preco",
 ]);
 
 const ENTIDADES_TRANSACIONAIS_CAMPO: ReadonlySet<EntidadeSincronizavel> =
@@ -251,7 +250,7 @@ const ENTIDADES_TRANSACIONAIS_CAMPO: ReadonlySet<EntidadeSincronizavel> =
 /**
  * Retorna a política de resolução de conflitos definida no PRD 3.2:
  * - `pedidos` / `itens_pedido`: `CLIENT_WINS_IDEMPOTENCY`
- * - `transportadoras` / `clientes` / `clientes_enderecos` / `clientes_contatos` / `clientes_tabelas_preco`: `LWW_CAMPO` (por `updated_at`, registro a registro)
+ * - `transportadoras` / `clientes` / `clientes_enderecos` / `clientes_contatos`: `LWW_CAMPO` (por `updated_at`, registro a registro)
  * - Mestres da fábrica (`representadas`, `produtos`, `tabelas_preco`, `itens_preco`, `clientes_metricas`): `SERVER_WINS`
  */
 export function obterPoliticaConflito(

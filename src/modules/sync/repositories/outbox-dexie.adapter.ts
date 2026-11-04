@@ -8,7 +8,6 @@ import { ClienteEnderecoSchema } from "../../clientes/domain/cliente-endereco.sc
 import { ClienteMetricaSchema } from "../../clientes/domain/cliente-metrica.schema";
 import { ItemPedidoSchema } from "../../pedidos/domain/item-pedido.schema";
 import { PedidoSchema } from "../../pedidos/domain/pedido.schema";
-import { ClienteTabelaPrecoSchema } from "../../produtos/domain/cliente-tabela-preco.schema";
 import { ItemPrecoSchema } from "../../produtos/domain/item-preco.schema";
 import { ProdutoSchema } from "../../produtos/domain/produto.schema";
 import { TabelaPrecoSchema } from "../../produtos/domain/tabela-preco.schema";
@@ -290,13 +289,6 @@ export class OutboxDexieAdapter implements OutboxRepository {
 				return this.aplicarDeltaMetricas(
 					tenant,
 					registrosRemotos.map((r) => ClienteMetricaSchema.parse(r)),
-				);
-			case "clientes_tabelas_preco":
-				return this.aplicarDeltaComChaveId(
-					tenant,
-					entidadeValida,
-					this.db.clientes_tabelas_preco,
-					registrosRemotos.map((r) => ClienteTabelaPrecoSchema.parse(r)),
 				);
 			case "produtos":
 				return this.aplicarDeltaComChaveId(

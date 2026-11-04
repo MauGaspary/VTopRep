@@ -18,16 +18,6 @@ import {
 } from "../../../shared/components/ui";
 import { formatarCpfCnpj } from "../../../shared/domain/cpf-cnpj";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
-import type { ClienteTabelaPreco } from "../../produtos/domain/cliente-tabela-preco.schema";
-import { descreverVigencia } from "../../produtos/domain/tabela-preco";
-import type { TabelaPreco } from "../../produtos/domain/tabela-preco.schema";
-import {
-	usePrecoActions,
-	useTabelasDisponiveisPorRepresentada,
-	useTabelasPadraoDoCliente,
-} from "../../produtos/hooks/use-precos";
-import type { Representada } from "../../representadas/domain/representada.schema";
-import { useRepresentadas } from "../../representadas/hooks/use-representadas";
 import { opcoesComboboxTransportadoras } from "../../transportadoras/domain/transportadora";
 import type { Transportadora } from "../../transportadoras/domain/transportadora.schema";
 import { useTodasTransportadoras } from "../../transportadoras/hooks/use-transportadoras";
@@ -61,26 +51,16 @@ import {
 	useClienteActions,
 	useHomonimosCliente,
 } from "../hooks/use-clientes";
+import { ClienteTabs } from "./cliente-tabs";
 
 export function ClienteFormView() {
 	const { id } = useParams();
 	const { config } = useTenant();
 	const { dados, isLoading } = useCliente(config.id, id, true);
-	const { representadas, isLoading: carregandoRepresentadas } =
-		useRepresentadas(config.id);
-	const { tabelasPorRepresentada, isLoading: carregandoTabelas } =
-		useTabelasDisponiveisPorRepresentada(config.id);
-	const { tabelasPadrao, isLoading: carregandoPadroes } =
-		useTabelasPadraoDoCliente(config.id, id);
 	const { transportadoras, isLoading: carregandoTransportadoras } =
 		useTodasTransportadoras(config.id);
 
-	if (
-		(id && (isLoading || carregandoPadroes)) ||
-		carregandoRepresentadas ||
-		carregandoTabelas ||
-		carregandoTransportadoras
-	) {
+	if ((id && isLoading) || carregandoTransportadoras) {
 		return (
 			<p className="p-6 text-center text-muted-foreground">
 				Carregando cliente...
@@ -101,12 +81,9 @@ export function ClienteFormView() {
 
 	return (
 		<ClienteForm
-			key={`${dados?.cliente.id ?? "novo"}:${tabelasPadrao.size}`}
+			key={dados?.cliente.id ?? "novo"}
 			tenantId={config.id}
 			original={dados ?? undefined}
-			representadas={representadas}
-			tabelasPorRepresentada={tabelasPorRepresentada}
-			tabelasPadraoIniciais={tabelasPadrao}
 			transportadoras={transportadoras}
 		/>
 	);
@@ -115,9 +92,6 @@ export function ClienteFormView() {
 interface ClienteFormProps {
 	tenantId: string;
 	original?: ClienteCompleto;
-	representadas: readonly Representada[];
-	tabelasPorRepresentada: ReadonlyMap<string, TabelaPreco[]>;
-	tabelasPadraoIniciais: ReadonlyMap<string, ClienteTabelaPreco>;
 	transportadoras: readonly Transportadora[];
 }
 
@@ -126,28 +100,15 @@ const gerarLocalId = () => crypto.randomUUID();
 function ClienteForm({
 	tenantId,
 	original,
-	representadas,
-	tabelasPorRepresentada,
-	tabelasPadraoIniciais,
 	transportadoras,
 }: ClienteFormProps) {
 	const navigate = useNavigate();
 	const { criar, atualizar, reativar } = useClienteActions(tenantId);
-	const { sincronizarTabelasPadraoCliente } = usePrecoActions(tenantId);
 	const clienteOriginal = original?.cliente;
 
 	const [valores, setValores] = useState<ClienteFormValues>(() =>
 		valoresIniciaisClienteForm(original),
 	);
-	const [tabelasEscolhidas, setTabelasEscolhidas] = useState<
-		Record<string, string>
-	>(() => {
-		const inicial: Record<string, string> = {};
-		for (const rep of representadas) {
-			inicial[rep.id] = tabelasPadraoIniciais.get(rep.id)?.tabela_id ?? "";
-		}
-		return inicial;
-	});
 	const [erros, setErros] = useState<ClienteFormErros>({});
 	const [erroGeral, setErroGeral] = useState<string | null>(null);
 	const [inativoConflitante, setInativoConflitante] = useState<Cliente | null>(
@@ -280,14 +241,10 @@ function ClienteForm({
 
 		setSalvando(true);
 		try {
-			const salvo = clienteOriginal
-				? await atualizar(clienteOriginal.id, resultado.data)
-				: await criar(resultado.data);
-			if (Object.keys(tabelasEscolhidas).length > 0) {
-				await sincronizarTabelasPadraoCliente(
-					salvo.cliente.id,
-					tabelasEscolhidas,
-				);
+			if (clienteOriginal) {
+				await atualizar(clienteOriginal.id, resultado.data);
+			} else {
+				await criar(resultado.data);
 			}
 			navigate("/clientes");
 		} catch (err) {
@@ -309,9 +266,16 @@ function ClienteForm({
 	return (
 		<Page width="form">
 			<PageHeader
-				title={editando ? "Editar cliente" : "Novo cliente"}
+				title={
+					editando && clienteOriginal
+						? clienteOriginal.razao_social
+						: "Novo cliente"
+				}
+				description={editando ? "Editar cadastro do cliente" : undefined}
 				back={{ to: "/clientes", label: "Clientes" }}
 			/>
+
+			{clienteOriginal && <ClienteTabs clienteId={clienteOriginal.id} />}
 
 			<form
 				noValidate
@@ -652,60 +616,6 @@ function ClienteForm({
 							</div>
 						);
 					})}
-				</div>
-
-				{/* Tabelas de preço padrão por representada */}
-				<div className="flex flex-col gap-3">
-					<div className="border-b border-border pb-2">
-						<h2 className="text-sm font-semibold text-foreground">
-							Tabelas de preço padrão
-						</h2>
-						<p className="text-xs text-muted-foreground">
-							Ao iniciar um orçamento para este cliente, a tabela escolhida
-							abaixo será sugerida automaticamente quando estiver vigente.
-						</p>
-					</div>
-
-					{representadas.length === 0 ? (
-						<p className="text-xs text-muted-foreground italic">
-							Nenhuma representada ativa cadastrada no momento.
-						</p>
-					) : (
-						<div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-							{representadas.map((rep) => {
-								const tabelasDisponiveis =
-									tabelasPorRepresentada.get(rep.id) ?? [];
-								const valorAtual = tabelasEscolhidas[rep.id] ?? "";
-								return (
-									<FormField
-										key={rep.id}
-										id={`tabela-padrao-${rep.id}`}
-										label={rep.nome_fantasia}
-									>
-										<Select
-											id={`tabela-padrao-${rep.id}`}
-											value={valorAtual}
-											onChange={(e) =>
-												setTabelasEscolhidas((atual) => ({
-													...atual,
-													[rep.id]: e.target.value,
-												}))
-											}
-										>
-											<option value="">
-												Automática (vigência mais recente)
-											</option>
-											{tabelasDisponiveis.map((tab) => (
-												<option key={tab.id} value={tab.id}>
-													{tab.nome_tabela} ({descreverVigencia(tab)})
-												</option>
-											))}
-										</Select>
-									</FormField>
-								);
-							})}
-						</div>
-					)}
 				</div>
 
 				{/* Alerta de inativo conflitante */}

@@ -5,7 +5,6 @@ import type { ClienteEndereco } from "../modules/clientes/domain/cliente-enderec
 import type { ClienteMetrica } from "../modules/clientes/domain/cliente-metrica.schema";
 import type { ItemPedido } from "../modules/pedidos/domain/item-pedido.schema";
 import type { Pedido } from "../modules/pedidos/domain/pedido.schema";
-import type { ClienteTabelaPreco } from "../modules/produtos/domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../modules/produtos/domain/item-preco.schema";
 import type { Produto } from "../modules/produtos/domain/produto.schema";
 import type { TabelaPreco } from "../modules/produtos/domain/tabela-preco.schema";
@@ -15,6 +14,7 @@ import type { Transportadora } from "../modules/transportadoras/domain/transport
 import { migrarParaV4 } from "./migrations/v4";
 import { migrarParaV5 } from "./migrations/v5";
 import { migrarParaV7 } from "./migrations/v7";
+import { migrarParaV10 } from "./migrations/v10";
 
 export const NOME_BANCO_PADRAO = "VTop_Rep_DB";
 
@@ -23,7 +23,6 @@ export class AppDatabase extends Dexie {
 	clientes_enderecos!: Table<ClienteEndereco, string>;
 	clientes_contatos!: Table<ClienteContato, string>;
 	clientes_metricas!: Table<ClienteMetrica, string>;
-	clientes_tabelas_preco!: Table<ClienteTabelaPreco, string>;
 	produtos!: Table<Produto, string>;
 	tabelas_preco!: Table<TabelaPreco, string>;
 	itens_preco!: Table<ItemPreco, string>;
@@ -108,6 +107,12 @@ export class AppDatabase extends Dexie {
 			pedidos:
 				"id, tenant_id, [tenant_id+status], [tenant_id+cliente_id], [tenant_id+deleted_at], [tenant_id+cotacao_grupo_id]",
 		});
+
+		// v10: a tabela de preço é exclusiva da representada (TODO 2.7). Remove a
+		// tabela padrão por cliente e as mutações pendentes dela na Outbox.
+		this.version(10)
+			.stores({ clientes_tabelas_preco: null })
+			.upgrade(migrarParaV10);
 	}
 }
 

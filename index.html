@@ -5,6 +5,28 @@
     <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>VTop Rep</title>
+    <script>
+      // Aplica o tema salvo antes de o React montar (evita piscar branco).
+      // Mesma chave e regras de src/shared/domain/tema.ts; claro é o padrão.
+      (() => {
+        var preferencia = "claro";
+        var salvo = null;
+        try {
+          salvo = localStorage.getItem("vtop:tema");
+          if (salvo === "claro" || salvo === "escuro" || salvo === "sistema") {
+            preferencia = salvo;
+          }
+        } catch (_e) {}
+        var escuro =
+          preferencia === "escuro" ||
+          (preferencia === "sistema" &&
+            window.matchMedia &&
+            window.matchMedia("(prefers-color-scheme: dark)").matches);
+        var raiz = document.documentElement;
+        raiz.setAttribute("data-tema", escuro ? "escuro" : "claro");
+        raiz.style.colorScheme = escuro ? "dark" : "light";
+      })();
+    </script>
   </head>
   <body>
     <div id="root"></div>

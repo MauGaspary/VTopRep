@@ -446,6 +446,56 @@ describe("PedidoDexieAdapter", () => {
 		expect(pedidoFabrica.pedido.comissao_projetada_centavos).toBe(400);
 	});
 
+	describe("listarPorCliente", () => {
+		it("lista só os pedidos vivos do cliente e do tenant, mais recentes primeiro", async () => {
+			const OUTRO_CLIENTE = "34343434-3434-4434-a434-343434343434";
+			await db.clientes.add({
+				...clienteBase,
+				id: OUTRO_CLIENTE,
+				cnpj_cpf: "52998224725",
+			});
+			const input = (clienteId: string) => ({
+				cliente_id: clienteId,
+				representada_id: REPRESENTADA,
+				tabela_id: TABELA,
+				condicao_pagamento: "30 dias",
+				tipo_frete: "CIF" as const,
+				itens: [
+					{
+						produto_id: PRODUTO_A,
+						quantidade: 1,
+						preco_unitario_tabela_centavos: 1000,
+					},
+				],
+			});
+
+			const relogio = ["2026-10-01T10:00:00.000Z", "2026-10-02T10:00:00.000Z"];
+			const comRelogio = new PedidoDexieAdapter({
+				agora: () => relogio.shift() ?? AGORA,
+			});
+			const antigo = await comRelogio.emitir(TENANT, input(CLIENTE));
+			const recente = await comRelogio.salvarRascunho(TENANT, input(CLIENTE));
+			const excluido = await adapter.salvarRascunho(TENANT, input(CLIENTE));
+			await adapter.excluirRascunho(TENANT, excluido.pedido.id);
+			await adapter.emitir(TENANT, input(OUTRO_CLIENTE));
+			await db.pedidos.add({
+				...antigo.pedido,
+				id: crypto.randomUUID(),
+				idempotency_key: crypto.randomUUID(),
+				tenant_id: OUTRO_TENANT,
+			});
+
+			const historico = await adapter.listarPorCliente(TENANT, CLIENTE);
+			expect(historico.map((p) => p.id)).toEqual([
+				recente.pedido.id,
+				antigo.pedido.id,
+			]);
+			await expect(
+				adapter.listarPorCliente(TENANT, "invalido"),
+			).rejects.toThrow();
+		});
+	});
+
 	describe("cotação multi-representada", () => {
 		const TABELA_2 = "6b6b6b6b-6b6b-4b6b-ab6b-6b6b6b6b6b6b";
 		const PRODUTO_C = "7c7c7c7c-7c7c-4c7c-ac7c-7c7c7c7c7c7c";

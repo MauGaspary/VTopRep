@@ -1,15 +1,11 @@
 import { describe, expect, it } from "vitest";
 import { TenantDivergenteError } from "../../../shared/domain/tenant";
-import type { ClienteTabelaPreco } from "./cliente-tabela-preco.schema";
 import type { ItemPreco } from "./item-preco.schema";
 import {
-	definirTabelaPadrao,
 	escolherTabelaSugerida,
 	indexarItensPreco,
 	indexarItensPrecoDoProduto,
-	indexarTabelasPadraoDoCliente,
 	listarTabelasVigentes,
-	removerTabelaPadrao,
 	resolverPreco,
 	resolverPrecosDaTabela,
 	sincronizarPrecosProduto,
@@ -21,7 +17,6 @@ import type { TabelaPreco } from "./tabela-preco.schema";
 const TENANT = "11111111-1111-4111-a111-111111111111";
 const OUTRO_TENANT = "22222222-2222-4222-a222-222222222222";
 const REPRESENTADA = "33333333-3333-4333-a333-333333333333";
-const CLIENTE = "44444444-4444-4444-a444-444444444444";
 const PRODUTO_A = "55555555-5555-4555-a555-555555555555";
 const PRODUTO_B = "66666666-6666-4666-a666-666666666666";
 const CRIADO_EM = "2026-01-01T00:00:00.000Z";
@@ -126,21 +121,21 @@ describe("listarTabelasVigentes", () => {
 });
 
 describe("escolherTabelaSugerida", () => {
-	const recente = tabela({ vigencia_inicio: "2026-06-01" });
-	const antiga = tabela({ vigencia_inicio: "2025-01-01" });
-	const vigentes = [recente, antiga];
-
-	it("prefere a tabela padrão do cliente quando está vigente", () => {
-		expect(escolherTabelaSugerida(vigentes, antiga.id)).toBe(antiga);
+	it("sugere a vigente de início mais recente, em qualquer ordem de entrada", () => {
+		const recente = tabela({ vigencia_inicio: "2026-06-01" });
+		const antiga = tabela({ vigencia_inicio: "2025-01-01" });
+		expect(escolherTabelaSugerida([antiga, recente])).toBe(recente);
+		expect(escolherTabelaSugerida([recente, antiga])).toBe(recente);
 	});
 
-	it("cai na mais recente quando não há padrão ou ela não está vigente", () => {
-		expect(escolherTabelaSugerida(vigentes, null)).toBe(recente);
-		expect(escolherTabelaSugerida(vigentes, crypto.randomUUID())).toBe(recente);
+	it("desempata pela ordem alfabética do nome", () => {
+		const varejo = tabela({ nome_tabela: "Varejo" });
+		const atacado = tabela({ nome_tabela: "atacado" });
+		expect(escolherTabelaSugerida([varejo, atacado])).toBe(atacado);
 	});
 
-	it("retorna null quando não há tabela vigente", () => {
-		expect(escolherTabelaSugerida([], antiga.id)).toBeNull();
+	it("retorna null quando não há tabela vigente (escolha manual)", () => {
+		expect(escolherTabelaSugerida([])).toBeNull();
 	});
 });
 
@@ -270,122 +265,6 @@ describe("resolverPrecosDaTabela", () => {
 				data: "2026-10-28",
 			}),
 		).toEqual({ ok: false, motivo: "fora_de_vigencia" });
-	});
-});
-
-describe("definirTabelaPadrao", () => {
-	const t = tabela();
-	const ID = "77777777-7777-4777-a777-777777777777";
-	const definir = (
-		overrides: Partial<Parameters<typeof definirTabelaPadrao>[0]> = {},
-	) =>
-		definirTabelaPadrao({
-			existente: null,
-			tenantId: TENANT,
-			clienteId: CLIENTE,
-			tabela: t,
-			id: ID,
-			agora: AGORA,
-			...overrides,
-		});
-
-	it("cria a associação com a representada da tabela", () => {
-		expect(definir()).toEqual({
-			id: ID,
-			tenant_id: TENANT,
-			cliente_id: CLIENTE,
-			representada_id: REPRESENTADA,
-			tabela_id: t.id,
-			created_at: AGORA,
-			updated_at: AGORA,
-			deleted_at: null,
-		});
-	});
-
-	it("troca a tabela preservando id e created_at", () => {
-		const existente: ClienteTabelaPreco = {
-			...definir({ agora: CRIADO_EM }),
-			tabela_id: crypto.randomUUID(),
-		};
-
-		const trocada = definir({ existente, id: crypto.randomUUID() });
-
-		expect(trocada).toMatchObject({
-			id: ID,
-			tabela_id: t.id,
-			created_at: CRIADO_EM,
-			updated_at: AGORA,
-		});
-	});
-
-	it("é idempotente quando a tabela já é a padrão", () => {
-		const existente = definir({ agora: CRIADO_EM });
-		expect(definir({ existente })).toBe(existente);
-	});
-
-	it("recusa tabela inativa ou excluída", () => {
-		expect(() => definir({ tabela: { ...t, ativo: false } })).toThrow(
-			TabelaPrecoNaoEncontradaError,
-		);
-		expect(() => definir({ tabela: { ...t, deleted_at: AGORA } })).toThrow(
-			TabelaPrecoNaoEncontradaError,
-		);
-	});
-
-	it("recusa tabela ou associação de outro tenant", () => {
-		expect(() => definir({ tenantId: OUTRO_TENANT })).toThrow(
-			TenantDivergenteError,
-		);
-		const deOutroTenant = { ...definir(), tenant_id: OUTRO_TENANT };
-		expect(() => definir({ existente: deOutroTenant })).toThrow(
-			TenantDivergenteError,
-		);
-	});
-
-	it("recusa associação de outro cliente ou representada", () => {
-		const existente = definir();
-		expect(() =>
-			definir({ existente: { ...existente, cliente_id: crypto.randomUUID() } }),
-		).toThrow();
-		expect(() =>
-			definir({
-				existente: { ...existente, representada_id: crypto.randomUUID() },
-			}),
-		).toThrow();
-	});
-});
-
-describe("removerTabelaPadrao", () => {
-	const associacao: ClienteTabelaPreco = {
-		id: crypto.randomUUID(),
-		tenant_id: TENANT,
-		cliente_id: CLIENTE,
-		representada_id: REPRESENTADA,
-		tabela_id: crypto.randomUUID(),
-		created_at: CRIADO_EM,
-		updated_at: CRIADO_EM,
-		deleted_at: null,
-	};
-
-	it("marca o tombstone", () => {
-		expect(removerTabelaPadrao(associacao, TENANT, AGORA)).toEqual({
-			...associacao,
-			updated_at: AGORA,
-			deleted_at: AGORA,
-		});
-	});
-
-	it("é idempotente", () => {
-		const removida = removerTabelaPadrao(associacao, TENANT, AGORA);
-		expect(
-			removerTabelaPadrao(removida, TENANT, "2027-01-01T00:00:00.000Z"),
-		).toBe(removida);
-	});
-
-	it("recusa outro tenant", () => {
-		expect(() => removerTabelaPadrao(associacao, OUTRO_TENANT, AGORA)).toThrow(
-			TenantDivergenteError,
-		);
 	});
 });
 
@@ -527,64 +406,5 @@ describe("indexarItensPrecoDoProduto e sincronizarPrecosProduto", () => {
 				inputs: [{ tabela_id: crypto.randomUUID(), preco_base_centavos: 1000 }],
 			}),
 		).toThrow(TabelaPrecoNaoEncontradaError);
-	});
-});
-
-describe("indexarTabelasPadraoDoCliente", () => {
-	it("indexa associações vivas do cliente por representada_id vencendo a mais recente", () => {
-		const outraRep = "99999999-9999-4999-a999-999999999999";
-		const tabAntiga = tabela();
-		const tabRecente = tabela();
-		const tabOutraRep = tabela({ representada_id: outraRep });
-
-		const assocAntiga: ClienteTabelaPreco = {
-			id: crypto.randomUUID(),
-			tenant_id: TENANT,
-			cliente_id: CLIENTE,
-			representada_id: REPRESENTADA,
-			tabela_id: tabAntiga.id,
-			created_at: CRIADO_EM,
-			updated_at: "2026-01-01T00:00:00.000Z",
-			deleted_at: null,
-		};
-		const assocRecente: ClienteTabelaPreco = {
-			...assocAntiga,
-			id: crypto.randomUUID(),
-			tabela_id: tabRecente.id,
-			updated_at: "2026-05-01T00:00:00.000Z",
-		};
-		const assocOutraRep: ClienteTabelaPreco = {
-			...assocAntiga,
-			id: crypto.randomUUID(),
-			representada_id: outraRep,
-			tabela_id: tabOutraRep.id,
-		};
-		const assocExcluida: ClienteTabelaPreco = {
-			...assocAntiga,
-			id: crypto.randomUUID(),
-			updated_at: "2026-09-01T00:00:00.000Z",
-			deleted_at: "2026-09-01T00:00:00.000Z",
-		};
-		const assocOutroTenant: ClienteTabelaPreco = {
-			...assocRecente,
-			id: crypto.randomUUID(),
-			tenant_id: OUTRO_TENANT,
-		};
-
-		const mapa = indexarTabelasPadraoDoCliente(
-			[
-				assocAntiga,
-				assocRecente,
-				assocOutraRep,
-				assocExcluida,
-				assocOutroTenant,
-			],
-			TENANT,
-			CLIENTE,
-		);
-
-		expect(mapa.size).toBe(2);
-		expect(mapa.get(REPRESENTADA)?.tabela_id).toBe(tabRecente.id);
-		expect(mapa.get(outraRep)?.tabela_id).toBe(tabOutraRep.id);
 	});
 });

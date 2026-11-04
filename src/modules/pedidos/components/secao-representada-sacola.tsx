@@ -52,7 +52,6 @@ export interface SecaoRepresentadaSacolaProps {
 	hoje: string;
 	grupo: GrupoOrcamentoFormValues;
 	representada: Representada | undefined;
-	tabelaPadraoDoClienteId: string | null;
 	somenteLeitura: boolean;
 	/** Representada cujo catálogo está aberto no painel ao lado. */
 	ativa: boolean;
@@ -79,7 +78,6 @@ export function SecaoRepresentadaSacola({
 	hoje,
 	grupo,
 	representada,
-	tabelaPadraoDoClienteId,
 	somenteLeitura,
 	ativa,
 	percentualComissao,
@@ -103,8 +101,8 @@ export function SecaoRepresentadaSacola({
 	const { tabelas: tabelasVigentes, isLoading: carregandoTabelas } =
 		useTabelasVigentes(tenantId, repId, hoje);
 	const tabelaSugerida = useMemo(
-		() => escolherTabelaSugerida(tabelasVigentes, tabelaPadraoDoClienteId),
-		[tabelasVigentes, tabelaPadraoDoClienteId],
+		() => escolherTabelaSugerida(tabelasVigentes),
+		[tabelasVigentes],
 	);
 	const tabelaEfetivaId = resolverTabelaEfetivaGrupo(
 		grupo,
@@ -113,7 +111,7 @@ export function SecaoRepresentadaSacola({
 		somenteLeitura,
 	);
 
-	// Mantém a tabela da seção alinhada à sugestão (padrão do cliente / vigente).
+	// Mantém a tabela da seção alinhada à sugestão (vigente mais recente da fábrica).
 	useEffect(() => {
 		if (somenteLeitura || carregandoTabelas) return;
 		if (tabelaEfetivaId !== grupo.tabela_id) {
@@ -162,14 +160,11 @@ export function SecaoRepresentadaSacola({
 		() =>
 			tabelasVigentes.map((t) => ({
 				id: t.id,
-				label:
-					t.id === tabelaPadraoDoClienteId
-						? `${t.nome_tabela} ★ Padrão do cliente`
-						: t.nome_tabela,
+				label: t.nome_tabela,
 				sublabel: `Vigência: ${descreverVigencia(t)}`,
 				keywords: [t.nome_tabela],
 			})),
-		[tabelasVigentes, tabelaPadraoDoClienteId],
+		[tabelasVigentes],
 	);
 
 	const cor = representada ? obterCorRepresentada(representada) : "indigo";
@@ -178,9 +173,6 @@ export function SecaoRepresentadaSacola({
 	const atingiuPedidoMinimo =
 		pedidoMinimoCentavos === 0 ||
 		previa.valor_total_centavos >= pedidoMinimoCentavos;
-	const usandoTabelaPadrao =
-		tabelaPadraoDoClienteId !== null &&
-		grupo.tabela_id === tabelaPadraoDoClienteId;
 
 	const erroTabela = erros[chaveErroGrupoCotacao(repId, "tabela_id")];
 	const erroCondicao =
@@ -267,7 +259,7 @@ export function SecaoRepresentadaSacola({
 				<legend className="sr-only">Condições do pedido de {nome}</legend>
 				<FormField
 					id={`${idBase}-tabela`}
-					label={usandoTabelaPadrao ? "Tabela ★ (Padrão cliente)" : "Tabela"}
+					label="Tabela"
 					error={erroTabela}
 					required
 				>
@@ -494,7 +486,7 @@ export function SecaoRepresentadaSacola({
 															)
 														}
 														hasError={Boolean(erroQtd)}
-														className="w-16 text-center font-mono tabular-nums"
+														className="w-14 max-w-14 min-w-14 shrink-0 px-1.5 text-center font-mono tabular-nums"
 													/>
 													{!somenteLeitura && (
 														<Button
@@ -554,7 +546,7 @@ export function SecaoRepresentadaSacola({
 														)
 													}
 													hasError={Boolean(erroDesc)}
-													className="w-20 text-right font-mono tabular-nums"
+													className="w-18 max-w-18 min-w-18 shrink-0 px-2 text-right font-mono tabular-nums"
 												/>
 												{erroDesc ? (
 													<span

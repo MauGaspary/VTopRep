@@ -1,23 +1,16 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
 import { DataSchema } from "../../../shared/domain/datas";
-import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
-import type { ClienteTabelaPreco } from "../domain/cliente-tabela-preco.schema";
 import type { ItemPreco } from "../domain/item-preco.schema";
 import {
-	ClienteNaoVinculadoError,
-	definirTabelaPadrao,
 	escolherTabelaSugerida,
 	indexarItensPreco,
 	indexarItensPrecoDoProduto,
-	indexarTabelasPadraoDoCliente,
 	listarTabelasVigentes,
 	type ResolucaoPreco,
 	type ResolucaoPrecosTabela,
-	removerTabelaPadrao,
 	resolverPreco,
 	resolverPrecosDaTabela,
-	TabelaPrecoNaoEncontradaError,
 	tabelaDisponivel,
 } from "../domain/preco";
 import {
@@ -32,24 +25,13 @@ const IdSchema = z.string().uuid("id inválido");
 
 interface PrecoDexieAdapterOptions {
 	database?: AppDatabase;
-	gerarId?: () => string;
-	agora?: () => string;
-}
-
-/** Mais recente primeiro (LWW por `updated_at`). */
-function porAtualizacaoDesc(a: ClienteTabelaPreco, b: ClienteTabelaPreco) {
-	return b.updated_at.localeCompare(a.updated_at);
 }
 
 export class PrecoDexieAdapter implements PrecoRepository {
 	private readonly db: AppDatabase;
-	private readonly gerarId: () => string;
-	private readonly agora: () => string;
 
 	constructor(options: PrecoDexieAdapterOptions = {}) {
 		this.db = options.database ?? defaultDb;
-		this.gerarId = options.gerarId ?? (() => crypto.randomUUID());
-		this.agora = options.agora ?? (() => new Date().toISOString());
 	}
 
 	async listarTabelasDaRepresentada(
@@ -147,28 +129,12 @@ export class PrecoDexieAdapter implements PrecoRepository {
 
 	async obterTabelaSugerida(
 		tenantId: string,
-		clienteId: string,
 		representadaId: string,
 		data: string,
 	): Promise<TabelaPreco | null> {
-		const [vigentes, padrao] = await Promise.all([
-			this.listarTabelasVigentes(tenantId, representadaId, data),
-			this.obterTabelaPadraoCliente(tenantId, clienteId, representadaId),
-		]);
-		return escolherTabelaSugerida(vigentes, padrao?.tabela_id ?? null);
-	}
-
-	async obterTabelaPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		representadaId: string,
-	): Promise<ClienteTabelaPreco | null> {
-		const vivas = await this.associacoesVivas(
-			TenantIdSchema.parse(tenantId),
-			IdSchema.parse(clienteId),
-			IdSchema.parse(representadaId),
+		return escolherTabelaSugerida(
+			await this.listarTabelasVigentes(tenantId, representadaId, data),
 		);
-		return vivas[0] ?? null;
 	}
 
 	async resolverPreco(
@@ -222,136 +188,6 @@ export class PrecoDexieAdapter implements PrecoRepository {
 		});
 	}
 
-	async definirTabelaPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		tabelaId: string,
-	): Promise<ClienteTabelaPreco> {
-		const tenant = TenantIdSchema.parse(tenantId);
-		const cliId = IdSchema.parse(clienteId);
-		const tabId = IdSchema.parse(tabelaId);
-
-		return this.db.transaction(
-			"rw",
-			[
-				this.db.clientes_tabelas_preco,
-				this.db.tabelas_preco,
-				this.db.clientes,
-				this.db.outbox,
-			],
-			async () => {
-				const cliente = await this.db.clientes.get(cliId);
-				if (
-					!cliente ||
-					cliente.tenant_id !== tenant ||
-					cliente.deleted_at !== null
-				) {
-					throw new ClienteNaoVinculadoError(cliId);
-				}
-
-				const tabela = await this.obterTabela(tenant, tabId);
-				if (!tabela) {
-					throw new TabelaPrecoNaoEncontradaError(tabId);
-				}
-
-				const agora = this.agora();
-				const [existente = null, ...duplicadas] = await this.associacoesVivas(
-					tenant,
-					cliId,
-					tabela.representada_id,
-				);
-				const associacao = definirTabelaPadrao({
-					existente,
-					tenantId: tenant,
-					clienteId: cliId,
-					tabela,
-					id: this.gerarId(),
-					agora,
-				});
-
-				// Duas associações vivas só surgem de criações offline em aparelhos
-				// diferentes; a definição explícita resolve o empate.
-				const alteradas = duplicadas.map((d) =>
-					removerTabelaPadrao(d, tenant, agora),
-				);
-				if (associacao !== existente) alteradas.push(associacao);
-				if (alteradas.length > 0) {
-					const mutacoesOutbox = alteradas.map((item) =>
-						criarMutacaoParaRegistro({
-							tenantId: tenant,
-							entity: "clientes_tabelas_preco",
-							registro: item,
-							existiaAntes:
-								(existente !== null && item.id === existente.id) ||
-								duplicadas.some((d) => d.id === item.id),
-							agora,
-							gerarId: this.gerarId,
-						}),
-					);
-					await Promise.all([
-						this.db.clientes_tabelas_preco.bulkPut(alteradas),
-						this.db.outbox.bulkAdd(mutacoesOutbox),
-					]);
-				}
-				return associacao;
-			},
-		);
-	}
-
-	async removerTabelaPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		representadaId: string,
-	): Promise<ClienteTabelaPreco | null> {
-		const tenant = TenantIdSchema.parse(tenantId);
-		const cliId = IdSchema.parse(clienteId);
-		const repId = IdSchema.parse(representadaId);
-
-		return this.db.transaction(
-			"rw",
-			[this.db.clientes_tabelas_preco, this.db.outbox],
-			async () => {
-				const vivas = await this.associacoesVivas(tenant, cliId, repId);
-				if (vivas.length === 0) return null;
-
-				const agora = this.agora();
-				const removidas = vivas.map((a) =>
-					removerTabelaPadrao(a, tenant, agora),
-				);
-				const mutacoesOutbox = removidas.map((item) =>
-					criarMutacaoParaRegistro({
-						tenantId: tenant,
-						entity: "clientes_tabelas_preco",
-						registro: item,
-						existiaAntes: true,
-						agora,
-						gerarId: this.gerarId,
-					}),
-				);
-				await Promise.all([
-					this.db.clientes_tabelas_preco.bulkPut(removidas),
-					this.db.outbox.bulkAdd(mutacoesOutbox),
-				]);
-				return removidas[0] ?? null;
-			},
-		);
-	}
-
-	async obterTabelasPadraoDoCliente(
-		tenantId: string,
-		clienteId: string,
-	): Promise<Map<string, ClienteTabelaPreco>> {
-		const tenant = TenantIdSchema.parse(tenantId);
-		const cliId = IdSchema.parse(clienteId);
-
-		const associacoes = await this.db.clientes_tabelas_preco
-			.where("tenant_id")
-			.equals(tenant)
-			.filter((a) => a.cliente_id === cliId && a.deleted_at === null)
-			.toArray();
-		return indexarTabelasPadraoDoCliente(associacoes, tenant, cliId);
-	}
-
 	async listarTabelasDisponiveisPorRepresentada(
 		tenantId: string,
 	): Promise<Map<string, TabelaPreco[]>> {
@@ -371,27 +207,6 @@ export class PrecoDexieAdapter implements PrecoRepository {
 		return porRepresentada;
 	}
 
-	async sincronizarTabelasPadraoCliente(
-		tenantId: string,
-		clienteId: string,
-		escolhasPorRepresentada: Readonly<Record<string, string>>,
-	): Promise<void> {
-		const tenant = TenantIdSchema.parse(tenantId);
-		const cliId = IdSchema.parse(clienteId);
-
-		for (const [representadaId, tabelaId] of Object.entries(
-			escolhasPorRepresentada,
-		)) {
-			const repId = IdSchema.parse(representadaId);
-			const escolha = tabelaId.trim();
-			if (escolha === "") {
-				await this.removerTabelaPadraoCliente(tenant, cliId, repId);
-			} else {
-				await this.definirTabelaPadraoCliente(tenant, cliId, escolha);
-			}
-		}
-	}
-
 	/** Tabela do tenant e não excluída (pode estar inativa ou fora de vigência). */
 	private async obterTabela(
 		tenantId: string,
@@ -406,20 +221,6 @@ export class PrecoDexieAdapter implements PrecoRepository {
 			return null;
 		}
 		return tabela;
-	}
-
-	/** Associações vivas, da mais recente para a mais antiga. */
-	private async associacoesVivas(
-		tenantId: string,
-		clienteId: string,
-		representadaId: string,
-	): Promise<ClienteTabelaPreco[]> {
-		const associacoes = await this.db.clientes_tabelas_preco
-			.where("[tenant_id+cliente_id+representada_id]")
-			.equals([tenantId, clienteId, representadaId])
-			.filter((a) => a.deleted_at === null)
-			.toArray();
-		return associacoes.sort(porAtualizacaoDesc);
 	}
 }
 
