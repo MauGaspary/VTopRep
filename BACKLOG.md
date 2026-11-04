@@ -36,6 +36,21 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
   - Cálculo e exibição de impostos por item e no total (em centavos, *half-even*), com as alíquotas parametrizadas por representada e UF.
   - Destaque dos impostos no espelho PDF.
 
+### 1.6. Evoluções da Importação CSV (Depende do Formato das Fábricas)
+- **Contexto:** A importação da 2.9 foi feita sem exemplos reais de planilhas das fábricas. Antes de evoluir, vale pedir a 2 ou 3 representadas um arquivo real e verificar:
+  - Se há **várias colunas de preço** no mesmo arquivo (por estado, à vista/a prazo, revenda/fábrica). Hoje cada importação usa uma coluna; para várias, importa-se uma vez por coluna e tabela.
+  - Se vêm campos extras úteis: **IPI, NCM, EAN/código de barras, peso, preço sugerido de revenda e desconto máximo**. Hoje são ignorados; o desconto máximo dos itens novos entra como 0.
+  - Se o código do produto da fábrica é estável entre arquivos (a importação casa pelo SKU) e se há zeros à esquerda que o Excel remove ao salvar.
+  - Se o arquivo vem com subtotais, linhas de grupo ou células mescladas, que hoje viram erro na prévia.
+- **Implementação Futura:**
+  - Importar várias colunas de preço de uma vez (uma tabela por coluna).
+  - Mapear IPI e desconto máximo, quando houver dado.
+  - Sincronizar o mapeamento de colunas (hoje fica só no aparelho, Dexie `mapeamentos_importacao`) se o representante usar vários aparelhos.
+
+### 1.7. Escala do Catálogo
+- **Definição Atual:** Com 5.000 SKUs por fábrica, o catálogo abre em menos de 0,5 s navegando no app e busca em cerca de 0,1 s (renderização incremental de 100 em 100).
+- **Implementação Futura:** Se algum tenant passar de cerca de 20.000 SKUs, considerar virtualização da lista e índice de busca por prefixo no Dexie, medindo antes no navegador real.
+
 ---
 
 ## 2. Canal B2B de Autoatendimento do Cliente (Futuro / Pós-Supabase)
@@ -49,7 +64,7 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 ## 3. Itens Promovidos para o `TODO.md`
 
 Os itens abaixo saíram do backlog e entraram na fila de implementação do **`TODO.md`**:
-- **Importação de Tabelas por CSV e Reajuste em Lote (`TODO.md` 2.9):** Mapeamento de colunas por fábrica, prévia das mudanças antes de gravar e clonagem de tabela com reajuste percentual.
+- **Importação de Tabelas por CSV e Reajuste em Lote (`TODO.md` 2.9, concluído):** Mapeamento de colunas por fábrica, prévia das mudanças antes de gravar e clonagem de tabela com reajuste percentual.
 - **Cotação Multi-Representada pelo Representante (`TODO.md` 2.5.4):** Montar uma única cotação para o cliente contendo produtos de várias representadas, agrupando por fábrica na sacola e gerando automaticamente os pedidos individuais de cada representada vinculados por `cotacao_grupo_id` (com PDF unificado para o cliente e PDF individual por fábrica).
 - **Cadastro de Transportadoras e Vínculo no Pedido (`TODO.md` 2.5.3):** Cadastro enxuto de transportadoras, vínculo habitual no cliente e seleção digitável no pedido + exibição no PDF.
 - **Cadastro Rápido de Cliente Direto no Orçamento (`TODO.md` 2.5.2):** Criar cliente sem sair da tela de orçamento a partir da própria busca (*Combobox*).

@@ -221,6 +221,7 @@ Pré-requisito da Fase 3: a imutabilidade dos pedidos emitidos é garantida no s
 - [ ] **Login:** Autenticação Supabase com sessão que continua válida offline. O tenant passa a vir do usuário autenticado, substituindo o tenant fixo de desenvolvimento.
 
 ### 2.11.3. Envio da Outbox (Push)
+- [ ] **Outbox nos Cadastros Mestres:** Hoje o cadastro manual de produtos, preços (`itens_preco`), tabelas e representadas grava só no Dexie, sem registrar mutação na Outbox. Só a importação CSV e o reajuste em lote (2.9) registram. Registrar `criarMutacaoParaRegistro` na mesma transação nesses adaptadores antes de ligar o envio.
 - [ ] **Worker de Envio:** Enviar as mutações em ordem, com `idempotency_key`, novas tentativas com espera crescente e registro de `last_error`. Disparar ao abrir o app e ao voltar a conexão.
 
 ### 2.11.4. Recebimento e Conflitos (Pull)

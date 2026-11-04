@@ -1,6 +1,14 @@
 # Notas Rápidas de Produto e UX (`notes.md`)
 
-1. Não é para ter seleção de tabela de preço nos clientes. Isso é exclusivo de representadas, pensando que os preços dela podem mudar e assim alterar os preços dos produtos.
-2. Tabela de preço precisaria ser um .csv com os produtos? Precisamos pensar uma forma de fazer com que os produtos e preços sejam atualizados de acordo com uma base de dados da representada.
-3. Poder alternar entre modo claro e escuro.
-4. Histórico de pedidos de um cliente com opções de ordenação. O padrão de ordenamento seria do mais recente pro mais antigo.
+Espaço para anotar ideias e dúvidas soltas. Quando uma nota vira tarefa, ela sai daqui e entra no `TODO.md` ou no `BACKLOG.md`.
+
+## Novas notas
+
+-
+
+## Resolvidas
+
+1. ~~Não ter seleção de tabela de preço nos clientes.~~ A tabela passou a ser exclusiva da representada (`TODO.md` 2.7).
+2. ~~Atualizar produtos e preços a partir de um arquivo da representada.~~ Importação por CSV e reajuste em lote (`TODO.md` 2.9). PDF e XLSX estão no `BACKLOG.md` 1.4; perguntas para as fábricas estão no `BACKLOG.md` 1.6.
+3. ~~Alternar entre modo claro e escuro.~~ Seletor Claro / Escuro / Sistema (`TODO.md` 2.6).
+4. ~~Histórico de pedidos do cliente com ordenação (padrão: mais recente primeiro).~~ Aba "Pedidos" no cliente, com repetir pedido (`TODO.md` 2.8).

@@ -22,3 +22,26 @@ Ao implementar uma nova funcionalidade, o agente deve seguir estritamente o pipe
    `pnpm validate`
    Se o comando retornar código de saída diferente de 0 (erros de lint, tipagem do TypeScript ou testes quebrados), analise os logs do terminal, corrija o código autonomamente e repita a execução até que todos os checks passem com sucesso.
    Não declare a tarefa finalizada nem entregue a resposta final até que o comando retorne sucesso pleno.
+
+### 3. Armadilhas Conhecidas (Lições do Projeto)
+Problemas já encontrados neste repositório. Leia antes de mexer em persistência, listas grandes ou arquivos.
+
+**Dexie e IndexedDB**
+- **Prefira `toArray()` + filtro em JS a `.filter()` do Dexie.** O `.filter()` percorre um cursor registro a registro: no `fake-indexeddb` fica quadrático (5.000 produtos travaram um teste por mais de 60 s) e no navegador é bem mais lento que o `getAll`. Exemplos: `ProdutoDexieAdapter.consultar` e `ImportacaoDexieAdapter`.
+- **O `fake-indexeddb` é quadrático ao sobrescrever registros existentes** (`put`/`bulkPut` sobre chaves que já existem). Testes de atualização em massa devem ficar em cerca de 1.000 registros; inserções de 5.000 rodam em cerca de 1,5 s. A medição de desempenho real é feita no navegador (TODO 2.9.5).
+- **Outbox na mesma transação:** toda gravação sincronizável deve registrar a mutação com `criarMutacaoParaRegistro` dentro da mesma `db.transaction`, como fazem transportadoras, clientes, pedidos, importação CSV e reajuste. Os cadastros manuais de produtos, preços e representadas **ainda não** registram Outbox (pendência no TODO 2.11).
+- **Dado só do aparelho** (preferências como o tema ou o mapeamento de colunas do CSV) não entra em `ENTIDADES_SINCRONIZAVEIS`.
+
+**Listas grandes e desempenho**
+- Listas que podem ter milhares de itens usam `useListaIncremental` (`src/shared/hooks/`) com o componente `ShowMore` (100 por vez) e `useDeferredValue` no termo de busca. Renderizar 5.000 linhas levava cerca de 4 s para abrir o catálogo.
+- Em ordenações grandes, use um `Intl.Collator` criado uma vez, e não `localeCompare(..., "pt-BR", opções)` dentro do `sort`, que cria um collator a cada comparação.
+
+**Arquivos e formatação (Windows)**
+- O repositório usa LF (`.gitattributes`). Scripts auxiliares que escrevem arquivos devem preservar LF; por exemplo, em Python use `open(caminho, "w", encoding="utf-8", newline="")`, porque o modo texto do Windows grava CRLF e o `biome check` falha.
+- O formatador do Biome troca escapes como `"﻿"` pelo caractere invisível literal. Para caracteres invisíveis, use `String.fromCharCode(0xfeff)` (ver `BOM` em `src/shared/domain/csv.ts`).
+
+**Números vindos de texto**
+- Valores de planilha ou digitados viram centavos por análise de texto (`parseDecimalBrParaInteiro`, `parsePrecoCsv`), nunca por `Number(...)` / `parseFloat`. Mais de 2 casas decimais são arredondadas *half-even* e sinalizadas ao usuário.
+
+**Decisões de produto**
+- Decisões grandes ou difíceis de desfazer (modelo de dados, sincronização, regras comerciais) são perguntadas ao usuário antes de implementar, com as consequências reais de cada opção. Detalhes de implementação são decididos pelo agente e relatados no fim.
