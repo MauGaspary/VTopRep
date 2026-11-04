@@ -45,7 +45,7 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ### 1.8. Revisão da Fase 1
-- [x] **Melhorias:** Unicidade, isolamento de tenant, modelo de dados, formulários e módulo de dinheiro (detalhes em `MELHORIAS.md`).
+- [x] **Melhorias:** Unicidade, isolamento de tenant, modelo de dados, formulários e módulo de dinheiro (decisões registradas no PRD).
 - [x] **Validação:** Rodar `pnpm validate`.
 
 ---
@@ -109,11 +109,135 @@ Este documento mapeia o desenvolvimento do sistema focado no **representante com
 
 ---
 
+## Fase 2.6: Alternância de Tema (Claro / Escuro)
+
+O representante escolhe o tema no próprio aparelho. O **claro continua sendo o padrão** (uso em campo, sob luz do dia). Hoje o tema escuro existe nos tokens de `src/index.css`, mas só é ativado pelo `prefers-color-scheme` do sistema operacional.
+
+### 2.6.1. Preferência e Aplicação do Tema
+- [ ] **Contrato & Lógica Pura:** `PreferenciaTemaSchema = z.enum(["claro", "escuro", "sistema"])` em `src/shared/domain/tema.ts`, padrão `claro`, e `resolverTema(preferencia, sistemaEscuro): "claro" | "escuro"`, com testes.
+- [ ] **Persistência por Aparelho:** Guardar a preferência no `localStorage` por meio de um repositório em `src/shared/repositories/`. Não sincroniza (não é dado de negócio). Valor ausente ou inválido volta para `claro`.
+- [ ] **CSS e Tailwind:** Trocar o `@media (prefers-color-scheme: dark)` por um atributo no `<html>` (`data-tema="escuro"`) e declarar `@custom-variant dark` no Tailwind v4, para que as classes `dark:` sigam a escolha do usuário.
+- [ ] **Sem Flash:** Script inline no `index.html` aplica o tema antes de o React montar. No modo `sistema`, acompanhar `matchMedia` ao vivo.
+
+### 2.6.2. Interface
+- [ ] **Controle:** Seletor segmentado *Claro / Escuro / Sistema* no rodapé da `Sidebar` e no `MobileNav`, reaproveitando os componentes de `src/shared/components/ui/`.
+- [ ] **Revisão de Contraste:** Percorrer todas as telas no tema escuro (listas, formulários, orçamento, `Combobox`, `Badge`, `Alert`, cores das representadas e cor primária do tenant) e garantir contraste AA nos dois temas.
+- [ ] **PDF:** O espelho PDF continua sempre claro (documento para impressão e envio).
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+---
+
+## Fase 2.7: Tabela de Preço Exclusiva da Representada
+
+**Decisão:** a tabela de preço pertence à fábrica; o cliente não tem tabela própria. No orçamento, a sugestão é a **tabela vigente de início mais recente** da representada, e o representante pode trocar a tabela em cada pedido. Variações por estado (ICMS, ST e outros impostos) ficam no `BACKLOG.md` 1.5.
+
+### 2.7.1. Regra de Sugestão
+- [ ] **Lógica Pura:** Simplificar `escolherTabelaSugerida` (`src/modules/produtos/domain/preco.ts`) para receber só as tabelas vigentes, sem `tabelaPadraoId`. Testes: várias vigentes → início mais recente; empate → ordem alfabética; nenhuma vigente → `null` (o orçamento pede a escolha manual).
+- [ ] **Rascunhos:** Ao reabrir um rascunho, manter a tabela gravada enquanto ela estiver vigente (comportamento atual de `resolverTabelaEfetivaGrupo`).
+
+### 2.7.2. Remoção do Vínculo Cliente → Tabela
+- [ ] **Código:** Remover a seção de tabelas padrão do formulário do cliente, os hooks de `use-precos.ts`, os métodos do `PrecoRepository`/adaptador, as funções de definição de tabela padrão e os testes correspondentes.
+- [ ] **Dexie v10:** Remover a store `clientes_tabelas_preco`, tirá-la de `ENTIDADES_SINCRONIZAVEIS` e do seed, e descartar na migração as entradas pendentes da Outbox dessa entidade.
+- [ ] **PRD:** Remover `clientes_tabelas_preco` do dicionário de dados e do ERD e registrar a regra de sugestão em `tabelas_preco`.
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+---
+
+## Fase 2.8: Histórico de Pedidos do Cliente
+
+Base para a Fase 4 (recompra, Raio-X e Curva ABC).
+
+### 2.8.1. Consulta, Ordenação e Resumo
+- [ ] **Repositório:** `listarPorCliente(tenantId, clienteId)` usando o índice `[tenant_id+cliente_id]` que já existe em `pedidos`, com testes no `fake-indexeddb` (inclusive isolamento de tenant).
+- [ ] **Lógica Pura:** Ordenação por data (**padrão: mais recente → mais antigo**), valor, status ou representada; filtros por representada, status (com opção de esconder orçamentos em rascunho) e período.
+- [ ] **Resumo em Centavos:** Quantidade de pedidos, valor total, ticket médio e data da última compra, contando apenas pedidos `emitido` ou superior.
+
+### 2.8.2. Interface
+- [ ] **Aba "Pedidos" no Cliente:** Lista densa com data, número, representada (com a cor identificadora), status, valor e etiqueta de cotação. O clique abre o pedido.
+- [ ] **Atalho:** Botão "Novo orçamento" já com o cliente selecionado.
+
+### 2.8.3. Repetir Pedido
+- [ ] **Lógica Pura:** Montar os valores iniciais de um novo orçamento a partir de um pedido existente, mantendo produtos, quantidades e descontos e **buscando o preço na tabela vigente** (nunca copiar o preço antigo). Itens inativos ou sem preço viram aviso e não entram.
+- [ ] **UI:** Botão "Repetir pedido" no histórico e na tela do pedido. Em cotações, repete todas as fábricas.
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+---
+
+## Fase 2.9: Importação de Produtos e Preços por CSV
+
+**Escopo:** arquivos CSV (exportados do Excel com "Salvar como CSV"). Importação de PDF fica no `BACKLOG.md` 1.4; até lá, o representante pede à fábrica a planilha em CSV ou Excel.
+
+### 2.9.1. Leitura e Mapeamento de Colunas
+- [ ] **Parser Puro:** Ler CSV com separador `;` ou `,` detectado, campos entre aspas, BOM e encoding UTF-8 ou Windows-1252, com testes.
+- [ ] **Mapeamento:** Ligar as colunas do arquivo aos campos SKU (obrigatório), descrição, unidade, múltiplo de embalagem e preço. Salvar o mapeamento por representada para as próximas importações.
+- [ ] **Preço sem Ponto Flutuante:** Converter `"1.234,56"`, `"1234.56"` e `"R$ 1.234,56"` para centavos por parsing de texto, com testes de borda.
+- [ ] **Validação por Linha (Zod):** Erros apontando a linha (SKU vazio, preço inválido, SKU repetido no arquivo).
+
+### 2.9.2. Prévia das Mudanças
+- [ ] **Lógica Pura:** Comparar o arquivo com o cadastro: produtos novos, alterados (descrição, unidade, múltiplo), preços que subiram ou caíram (com %), inalterados, ausentes no arquivo e inativos que reaparecem (reativar).
+- [ ] **UI de Prévia:** Contadores e filtros por tipo de mudança. Para os ausentes, o representante escolhe entre **manter** (padrão) ou **inativar**.
+
+### 2.9.3. Gravação
+- [ ] **Destino:** Atualizar uma tabela existente ou criar uma **nova tabela** com nome e data de início (pode ser futura). Pedidos já gravados não mudam, porque guardam o preço no item.
+- [ ] **Transação:** Gravar produtos, tabela, `itens_preco` e Outbox numa transação, em lotes, com `tenant_id` validado e SKU normalizado. Teste com cerca de 5.000 linhas.
+
+### 2.9.4. Reajuste em Lote
+- [ ] **Clonar Tabela com Reajuste:** Nova tabela a partir de uma existente, com +/- X% (centésimos de %, *half-even*) e nova vigência, com prévia antes de gravar.
+
+### 2.9.5. Desempenho do Catálogo
+- [ ] **Medição no Navegador:** Medir a busca do catálogo com alguns milhares de SKUs no navegador real (o `fake-indexeddb` não é representativo) e, se necessário, adotar índice de prefixo ou busca incremental.
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+---
+
+## Fase 2.10: App Instalável Offline (PWA) e Backup Local
+
+Hoje os dados ficam no aparelho, mas o app não abre sem internet, e enquanto não há sincronização tudo vive só no navegador.
+
+### 2.10.1. PWA
+- [ ] **Service Worker e Manifesto:** `vite-plugin-pwa` com precache do app, manifesto com nome, ícones e cor do tenant. Depois do primeiro acesso, o app abre sem internet.
+- [ ] **Atualização:** Aviso "Nova versão disponível" com botão para atualizar, sem perder um orçamento em edição.
+- [ ] **Teste Manual:** Instalar no Android e no desktop e, em modo avião, abrir o app, criar um orçamento e gerar o PDF.
+
+### 2.10.2. Proteção dos Dados Locais
+- [ ] **Armazenamento Persistente:** Pedir `navigator.storage.persist()` e mostrar o espaço usado (`navigator.storage.estimate()`).
+- [ ] **Exportar Backup:** Arquivo JSON versionado com todas as tabelas do tenant, inclusive a Outbox pendente, descrito por schema Zod com a versão do banco.
+- [ ] **Restaurar Backup:** Validar o arquivo inteiro com Zod antes de gravar, recusar backup de outro tenant ou de versão incompatível, pedir confirmação clara (substitui os dados locais) e gravar em transação.
+- [ ] **Lembrete:** Aviso periódico de backup enquanto a sincronização com o servidor não existir.
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+---
+
+## Fase 2.11: Backend Supabase e Sincronização
+
+Pré-requisito da Fase 3: a imutabilidade dos pedidos emitidos é garantida no servidor.
+
+### 2.11.1. Banco Remoto
+- [ ] **Migrações SQL:** Tabelas de negócio espelhando os schemas Zod (dinheiro em inteiros de centavos, `tenant_id`, `created_at`, `updated_at`, `deleted_at`) e índices `tenant_id + updated_at` para a sincronização.
+- [ ] **RLS por Tenant:** Políticas de segurança por linha (PRD 6.1).
+- [ ] **Imutabilidade Remota:** Trigger no PostgreSQL bloqueando a edição de campos comerciais de pedidos `emitido+`.
+
+### 2.11.2. Autenticação e Tenant
+- [ ] **Login:** Autenticação Supabase com sessão que continua válida offline. O tenant passa a vir do usuário autenticado, substituindo o tenant fixo de desenvolvimento.
+
+### 2.11.3. Envio da Outbox (Push)
+- [ ] **Worker de Envio:** Enviar as mutações em ordem, com `idempotency_key`, novas tentativas com espera crescente e registro de `last_error`. Disparar ao abrir o app e ao voltar a conexão.
+
+### 2.11.4. Recebimento e Conflitos (Pull)
+- [ ] **Pull Incremental:** Buscar por `updated_at` com checkpoint por tabela, aplicando tombstones, LWW por registro nos cadastros de campo e *server-wins* nos mestres da fábrica (PRD 3.2).
+- [ ] **Testes de Conflito:** Edições offline do mesmo registro em dois aparelhos.
+
+### 2.11.5. Interface de Sincronização
+- [ ] **Status:** `ConnectionStatus` mostra pendências, horário da última sincronização, erros e botão "Sincronizar agora".
+- [ ] **Validação:** Rodar `pnpm validate`.
+
+---
+
 ## Fase 3: Funil de Faturamento e Conciliação Financeira
 
 ### 3.1. Máquina de Estados Logísticos do Pedido
 - [ ] **Atualização de Status Logístico:** Transições do pedido: `emitido` -> `parcialmente_faturado` -> `faturado_total` (e `cancelado`). A liquidação financeira não é status do pedido, mas sim controlada em `extratos_comissao.status_comissao = 'paga'` e exibida como badge financeiro ao lado do pedido.
-- [ ] **Imutabilidade Remota:** Trigger no PostgreSQL bloqueando a edição de campos comerciais de pedidos `emitido+` (`MELHORIAS.md` 6.2).
+- [ ] **Imutabilidade Remota:** Garantida pelo trigger da Fase 2.11.1; aqui, apenas cobrir as novas transições de status.
 - [ ] **UI de Acompanhamento:** Visão de pipeline do representante para acompanhamento logístico e financeiro dos pedidos.
 - [ ] **Validação:** Rodar `pnpm validate`.
 

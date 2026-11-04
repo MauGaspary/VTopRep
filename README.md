@@ -36,6 +36,8 @@ O desenvolvimento segue o protocolo de **Fatias Verticais (Vertical Slice TDD)**
 pnpm install
 ```
 
+> **Windows / outra máquina:** o repositório usa quebras de linha LF (`.gitattributes` e `biome.json`). Se o `pnpm lint` acusar erros de formatação logo após o clone ou o pull, confira com `git ls-files --eol` e renormalize com `git add --renormalize .`.
+
 ### 2. Rodando o servidor de desenvolvimento
 
 Para iniciar a aplicação localmente com o HMR do Vite:

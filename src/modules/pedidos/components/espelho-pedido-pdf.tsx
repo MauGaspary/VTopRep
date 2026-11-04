@@ -1,5 +1,6 @@
 import {
 	Document,
+	Font,
 	Page,
 	pdf,
 	StyleSheet,
@@ -28,10 +29,22 @@ import {
 	gerarUrlWhatsappEspelho,
 } from "../domain/espelho-pedido";
 
+/**
+ * O hifenizador padrão do react-pdf é para inglês e quebra palavras em
+ * português em pontos errados ("Es-portivos"). Só quebramos tokens muito
+ * longos sem espaço (SKU, e-mail), para que não vazem da coluna.
+ */
+const LIMITE_PALAVRA_SEM_QUEBRA = 16;
+Font.registerHyphenationCallback((palavra) =>
+	palavra.length > LIMITE_PALAVRA_SEM_QUEBRA
+		? (palavra.match(/.{1,8}/g) ?? [palavra])
+		: [palavra],
+);
+
 const styles = StyleSheet.create({
 	page: {
 		paddingTop: 28,
-		paddingBottom: 36,
+		paddingBottom: 46,
 		paddingHorizontal: 32,
 		fontFamily: "Helvetica",
 		fontSize: 9,
@@ -91,8 +104,12 @@ const styles = StyleSheet.create({
 		gap: 10,
 		marginBottom: 12,
 	},
+	gridCol: {
+		flexGrow: 1,
+		flexShrink: 1,
+		flexBasis: 0,
+	},
 	panel: {
-		flex: 1,
 		borderWidth: 1,
 		borderColor: "#E2E8F0",
 		borderRadius: 4,
@@ -110,7 +127,6 @@ const styles = StyleSheet.create({
 		paddingBottom: 3,
 	},
 	logisticsPanel: {
-		flex: 0,
 		marginBottom: 12,
 	},
 	sectionBlock: {
@@ -126,6 +142,8 @@ const styles = StyleSheet.create({
 		marginBottom: 3,
 	},
 	sectionTitle: {
+		flexShrink: 1,
+		paddingRight: 8,
 		fontFamily: "Helvetica-Bold",
 		fontSize: 10.5,
 		color: "#0F172A",
@@ -143,12 +161,18 @@ const styles = StyleSheet.create({
 	sectionSubtotal: {
 		flexDirection: "row",
 		justifyContent: "space-between",
-		marginTop: -8,
-		marginBottom: 10,
+		alignItems: "flex-start",
+		gap: 12,
+		marginBottom: 12,
 		fontSize: 8,
 		color: "#475569",
 	},
+	sectionSubtotalInfo: {
+		flexShrink: 1,
+	},
 	sectionSubtotalValue: {
+		flexShrink: 1,
+		textAlign: "right",
 		fontFamily: "Helvetica-Bold",
 		fontSize: 9,
 		color: "#0F172A",
@@ -178,46 +202,48 @@ const styles = StyleSheet.create({
 		borderWidth: 1,
 		borderColor: "#CBD5E1",
 		borderRadius: 4,
-		marginBottom: 14,
+		marginBottom: 6,
+		fontSize: 8,
 	},
 	tableHeader: {
 		flexDirection: "row",
 		backgroundColor: "#0F172A",
 		color: "#FFFFFF",
 		fontFamily: "Helvetica-Bold",
-		fontSize: 8,
-		paddingVertical: 6,
-		paddingHorizontal: 6,
+		fontSize: 7.5,
+		paddingVertical: 5,
+		paddingHorizontal: 4,
 	},
 	tableRow: {
 		flexDirection: "row",
 		borderTopWidth: 0.5,
 		borderTopColor: "#E2E8F0",
-		paddingVertical: 5,
-		paddingHorizontal: 6,
+		paddingVertical: 4,
+		paddingHorizontal: 4,
 		alignItems: "center",
 	},
 	tableRowAlt: {
 		backgroundColor: "#F8FAFC",
 	},
 	colNum: {
-		width: "5%",
+		width: "4%",
 	},
 	colSku: {
-		width: "14%",
+		width: "13%",
+		paddingRight: 3,
 		fontFamily: "Courier",
-		fontSize: 8,
+		fontSize: 7.5,
 	},
 	colDesc: {
-		width: "31%",
+		width: "24%",
 		paddingRight: 4,
 	},
 	colUnid: {
-		width: "8%",
+		width: "9%",
 		textAlign: "center",
 	},
 	colQtd: {
-		width: "7%",
+		width: "6%",
 		textAlign: "right",
 	},
 	colPrecoTab: {
@@ -225,15 +251,15 @@ const styles = StyleSheet.create({
 		textAlign: "right",
 	},
 	colDescPct: {
-		width: "9%",
+		width: "7%",
 		textAlign: "right",
 	},
 	colLiquido: {
-		width: "14%",
+		width: "12%",
 		textAlign: "right",
 	},
 	colSubtotal: {
-		width: "14%",
+		width: "13%",
 		textAlign: "right",
 		fontFamily: "Helvetica-Bold",
 	},
@@ -260,8 +286,18 @@ const styles = StyleSheet.create({
 	totalLine: {
 		flexDirection: "row",
 		justifyContent: "space-between",
+		gap: 8,
 		marginBottom: 4,
 		fontSize: 8.5,
+	},
+	totalLabel: {
+		flexGrow: 1,
+		flexShrink: 1,
+		flexBasis: 0,
+	},
+	totalValue: {
+		flexShrink: 0,
+		textAlign: "right",
 	},
 	grandTotalLine: {
 		flexDirection: "row",
@@ -332,7 +368,7 @@ function PainelClientePdf({
 	cliente: EspelhoPedidoDados["cliente"];
 }) {
 	return (
-		<View style={styles.panel}>
+		<View style={[styles.panel, styles.gridCol]}>
 			<Text style={styles.panelTitle}>Dados do Cliente (Comprador)</Text>
 			<CampoPdf rotulo="Razão Social:" valor={cliente.razaoSocial} />
 			{cliente.nomeFantasia && (
@@ -463,7 +499,7 @@ export function EspelhoPedidoPdfDocument({
 
 				{/* 2. Representada & Condições Comerciais + Cliente */}
 				<View style={styles.gridTwoCols}>
-					<View style={styles.panel}>
+					<View style={[styles.panel, styles.gridCol]}>
 						<Text style={styles.panelTitle}>
 							Representada (Fábrica) & Condições
 						</Text>
@@ -512,16 +548,22 @@ export function EspelhoPedidoPdfDocument({
 					<View style={styles.totalsPanel}>
 						<Text style={styles.panelTitle}>Resumo Financeiro</Text>
 						<View style={styles.totalLine}>
-							<Text>Volumes totais:</Text>
-							<Text>{dados.totais.quantidadeVolumes} un.</Text>
+							<Text style={styles.totalLabel}>Volumes totais:</Text>
+							<Text style={styles.totalValue}>
+								{dados.totais.quantidadeVolumes} un.
+							</Text>
 						</View>
 						<View style={styles.totalLine}>
-							<Text>Total de tabela:</Text>
-							<Text>{dados.totais.valorTabelaTotalFormatado}</Text>
+							<Text style={styles.totalLabel}>Total de tabela:</Text>
+							<Text style={styles.totalValue}>
+								{dados.totais.valorTabelaTotalFormatado}
+							</Text>
 						</View>
 						<View style={styles.totalLine}>
-							<Text>Desconto total:</Text>
-							<Text>- {dados.totais.descontoTotalFormatado}</Text>
+							<Text style={styles.totalLabel}>Desconto total:</Text>
+							<Text style={styles.totalValue}>
+								- {dados.totais.descontoTotalFormatado}
+							</Text>
 						</View>
 						<View style={styles.grandTotalLine}>
 							<Text>TOTAL LÍQUIDO:</Text>
@@ -569,7 +611,7 @@ export function EspelhoCotacaoPdfDocument({
 
 				<View style={styles.gridTwoCols}>
 					<PainelClientePdf cliente={dados.cliente} />
-					<View style={styles.panel}>
+					<View style={[styles.panel, styles.gridCol]}>
 						<Text style={styles.panelTitle}>Logística e Transporte</Text>
 						<CamposTransportadoraPdf
 							transportadora={dados.logistica.transportadora}
@@ -579,7 +621,11 @@ export function EspelhoCotacaoPdfDocument({
 
 				{dados.secoes.map((secao, idx) => (
 					<View key={secao.pedidoId} style={styles.sectionBlock}>
-						<View style={styles.sectionHeader} wrap={false}>
+						<View
+							style={styles.sectionHeader}
+							wrap={false}
+							minPresenceAhead={80}
+						>
 							<Text style={styles.sectionTitle}>
 								{idx + 1}. {secao.representada.nomeFantasia}
 							</Text>
@@ -596,7 +642,7 @@ export function EspelhoCotacaoPdfDocument({
 						</Text>
 						<TabelaItensPdf itens={secao.itens} />
 						<View style={styles.sectionSubtotal} wrap={false}>
-							<Text>
+							<Text style={styles.sectionSubtotalInfo}>
 								{secao.totais.quantidadeItens} SKU ·{" "}
 								{secao.totais.quantidadeVolumes} volumes · Desconto -{" "}
 								{secao.totais.descontoTotalFormatado}
@@ -616,13 +662,19 @@ export function EspelhoCotacaoPdfDocument({
 						<Text style={styles.panelTitle}>Resumo por Fábrica</Text>
 						{dados.secoes.map((secao) => (
 							<View key={secao.pedidoId} style={styles.totalLine}>
-								<Text>{secao.representada.nomeFantasia}:</Text>
-								<Text>{secao.totais.valorTotalFormatado}</Text>
+								<Text style={styles.totalLabel}>
+									{secao.representada.nomeFantasia}:
+								</Text>
+								<Text style={styles.totalValue}>
+									{secao.totais.valorTotalFormatado}
+								</Text>
 							</View>
 						))}
 						<View style={styles.totalLine}>
-							<Text>Desconto total:</Text>
-							<Text>- {dados.totais.descontoTotalFormatado}</Text>
+							<Text style={styles.totalLabel}>Desconto total:</Text>
+							<Text style={styles.totalValue}>
+								- {dados.totais.descontoTotalFormatado}
+							</Text>
 						</View>
 						<View style={styles.grandTotalLine}>
 							<Text>TOTAL GERAL:</Text>

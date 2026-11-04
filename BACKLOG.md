@@ -21,11 +21,20 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 - **Definição Atual:** O input de quantidade representa o número de volumes/unidades vendidas diretamente, respeitando o múltiplo de embalagem.
 - **Implementação Futura:** Exibição opcional do totalizador de peças avulsas (`quantidade * multiplo_embalagem`) no espelho/PDF apenas para conferência logística.
 
-### 1.4. Reajuste em Massa e Importação de Tabelas de Preço (CSV / Planilha)
-- **Contexto:** Atualização percentual em lote ou importação de planilha da fábrica para popular centenas de SKUs de uma vez.
+### 1.4. Importação de Tabelas de Preço em PDF e XLSX
+- **Contexto:** A importação por CSV e o reajuste em lote entraram no `TODO.md` 2.9. Algumas fábricas podem enviar a tabela só em PDF ou direto em Excel (`.xlsx`).
+- **Motivo da Postergação:** Ainda não se sabe em que formato as fábricas enviam. Extrair tabelas de PDF é frágil (cada fábrica tem um layout) e exige conferência manual. Por ora, o representante pede a planilha à fábrica e exporta para CSV.
 - **Implementação Futura:**
-  - Ferramenta de clonagem de tabela com reajuste percentual em lote.
-  - Importação de preços via arquivo CSV/XLSX enviado pela representada.
+  - Leitura direta de `.xlsx`, reaproveitando o mapeamento de colunas e a prévia da 2.9.
+  - Extração de tabelas de PDF com conferência obrigatória na prévia antes de gravar.
+
+### 1.5. Preço por Estado e Impostos (ICMS, ST, IPI)
+- **Contexto:** O preço final pode mudar conforme o estado de destino e o regime do cliente (alíquota interestadual de ICMS, substituição tributária, IPI). Algumas fábricas publicam tabelas por estado ou região.
+- **Definição Atual (MVP):** A tabela pertence à representada e o orçamento sugere a tabela vigente de início mais recente (`TODO.md` 2.7). O representante troca a tabela manualmente quando a fábrica tiver tabelas regionais.
+- **Implementação Futura:**
+  - Regras de sugestão de tabela por UF de entrega e por `tipo_cliente`.
+  - Cálculo e exibição de impostos por item e no total (em centavos, *half-even*), com as alíquotas parametrizadas por representada e UF.
+  - Destaque dos impostos no espelho PDF.
 
 ---
 
@@ -37,9 +46,10 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 
 ---
 
-## 3. Itens Promovidos para a Fase 2.5 (`TODO.md`)
+## 3. Itens Promovidos para o `TODO.md`
 
-Os itens abaixo saíram do backlog e entraram na fila imediata de implementação na **Fase 2.5 do `TODO.md`**:
+Os itens abaixo saíram do backlog e entraram na fila de implementação do **`TODO.md`**:
+- **Importação de Tabelas por CSV e Reajuste em Lote (`TODO.md` 2.9):** Mapeamento de colunas por fábrica, prévia das mudanças antes de gravar e clonagem de tabela com reajuste percentual.
 - **Cotação Multi-Representada pelo Representante (`TODO.md` 2.5.4):** Montar uma única cotação para o cliente contendo produtos de várias representadas, agrupando por fábrica na sacola e gerando automaticamente os pedidos individuais de cada representada vinculados por `cotacao_grupo_id` (com PDF unificado para o cliente e PDF individual por fábrica).
 - **Cadastro de Transportadoras e Vínculo no Pedido (`TODO.md` 2.5.3):** Cadastro enxuto de transportadoras, vínculo habitual no cliente e seleção digitável no pedido + exibição no PDF.
 - **Cadastro Rápido de Cliente Direto no Orçamento (`TODO.md` 2.5.2):** Criar cliente sem sair da tela de orçamento a partir da própria busca (*Combobox*).
