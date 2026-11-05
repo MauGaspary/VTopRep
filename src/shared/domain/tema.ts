@@ -80,6 +80,17 @@ function hslParaRgb({ h, s, l }: CorHsl): [number, number, number] {
 	return [f(0), f(8), f(4)];
 }
 
+/** Cor em `#rrggbb` (ex.: `theme_color` do manifesto do PWA). */
+export function corHslParaHex(cor: CorHsl): string {
+	return `#${hslParaRgb(cor)
+		.map((c) =>
+			Math.round(c * 255)
+				.toString(16)
+				.padStart(2, "0"),
+		)
+		.join("")}`;
+}
+
 /** Luminância relativa (WCAG 2.x). */
 export function luminanciaRelativa(cor: CorHsl): number {
 	const [r, g, b] = hslParaRgb(cor).map((c) =>

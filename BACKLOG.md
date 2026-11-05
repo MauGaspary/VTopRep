@@ -51,17 +51,51 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 - **Definição Atual:** Com 5.000 SKUs por fábrica, o catálogo abre em menos de 0,5 s navegando no app e busca em cerca de 0,1 s (renderização incremental de 100 em 100).
 - **Implementação Futura:** Se algum tenant passar de cerca de 20.000 SKUs, considerar virtualização da lista e índice de busca por prefixo no Dexie, medindo antes no navegador real.
 
+### 1.8. Manifesto e Backup por Tenant (Depois do Login)
+- **Definição Atual:** O nome, a cor e os ícones do PWA saem do tenant fixo (`tenant-padrao.ts`) na hora do build. O backup só restaura na mesma versão do banco local.
+- **Implementação Futura:**
+  - Manifesto servido por tenant (nome, cor e logo) quando o tenant vier do login (2.11.2), ou um build por cliente.
+  - Migração de backups de versões anteriores do banco, reaproveitando as migrações do Dexie.
+
 ---
 
-## 2. Canal B2B de Autoatendimento do Cliente (Futuro / Pós-Supabase)
+## 2. Hospedagem e Publicação do App
 
-### 2.1. Catálogo Compartilhável sem Preços (Solicitação de Orçamento pelo Cliente)
+Hoje o app só roda na máquina de desenvolvimento (`pnpm dev` ou `pnpm preview`). Para o representante instalar no celular, o build precisa estar publicado num endereço **HTTPS**: sem HTTPS, o navegador não registra o service worker, não instala o app e não funciona offline (TODO 2.10.1).
+
+### 2.1. Decisões a Tomar Antes de Publicar
+- **Serviço de hospedagem:** o app é estático (pasta `dist`), então serve qualquer hospedagem de site estático com HTTPS (Vercel, Netlify, Cloudflare Pages, todos com plano gratuito). Quando o Supabase entrar (TODO 2.11), ele continua separado; a hospedagem só serve os arquivos.
+- **Endereço definitivo (domínio):** os dados locais ficam presos ao endereço em que o app foi aberto. Trocar de domínio depois faz o app abrir vazio no endereço novo, e cada representante teria de exportar e restaurar o backup. Escolher o domínio final **antes** de distribuir o app.
+- **Um endereço para todos ou um por cliente:** hoje o nome, a cor e os ícones vêm do tenant fixo do build (`BACKLOG.md` 1.8). Com um endereço por empresa (ex.: `vinitop.dominio.com.br`), basta um build por tenant; com um endereço único, o manifesto precisa ser servido por tenant depois do login.
+
+### 2.2. Configuração da Hospedagem
+- **Rotas do SPA:** regra que devolve o `index.html` para qualquer rota (`/clientes`, `/pedidos/123`), para que links abertos direto funcionem no primeiro acesso. Depois da instalação o service worker já cuida disso. Na Vercel: `vercel.json` com `rewrites`; na Netlify e no Cloudflare Pages: arquivo `public/_redirects` com `/* /index.html 200`.
+- **Cabeçalhos de cache:**
+  - `sw.js`, `index.html` e `manifest.webmanifest` sem cache (`Cache-Control: no-cache`). Se ficarem em cache, o aviso "Nova versão disponível" demora ou não aparece.
+  - `/assets/*` com cache longo e imutável (`max-age=31536000, immutable`): os nomes já mudam a cada build.
+- **Cabeçalhos de segurança:** `X-Content-Type-Options: nosniff`, `Referrer-Policy` e, quando o Supabase entrar, uma `Content-Security-Policy` liberando só o domínio do projeto.
+
+### 2.3. Publicação Automática
+- **Deploy a cada push na `main`**, só depois de `pnpm validate` passar (GitHub Actions ou integração do próprio serviço).
+- **Prévias da `dev`:** cada branch ganha um endereço de prévia para testar antes de publicar. Atenção: endereço diferente = dados diferentes; usar a prévia só para teste.
+- **Variáveis do Supabase** (URL e chave pública) configuradas no serviço quando a 2.11 entrar, nunca versionadas (`.env` já está no `.gitignore`).
+
+### 2.4. Depois de Publicar
+- Fazer o **Teste Manual da 2.10.1** no endereço publicado: instalar no Android e no desktop e, em modo avião, abrir o app, criar um orçamento e gerar o PDF.
+- Conferir no Chrome (DevTools → Application → Manifest) se o app aparece como instalável, sem avisos.
+- Confirmar que uma nova publicação mostra "Nova versão disponível" num aparelho que já tem o app instalado.
+
+---
+
+## 3. Canal B2B de Autoatendimento do Cliente (Futuro / Pós-Supabase)
+
+### 3.1. Catálogo Compartilhável sem Preços (Solicitação de Orçamento pelo Cliente)
 - **Contexto:** Permitir que o próprio cliente final acesse um link de catálogo, monte um carrinho com produtos de uma ou mais representadas **sem visualizar preços** e envie uma solicitação de orçamento para o representante precificar e aprovar.
 - **Motivo da Postergação:** Depende de link público autenticado/tokenizado e sincronização ativa com o backend Supabase.
 
 ---
 
-## 3. Itens Promovidos para o `TODO.md`
+## 4. Itens Promovidos para o `TODO.md`
 
 Os itens abaixo saíram do backlog e entraram na fila de implementação do **`TODO.md`**:
 - **Importação de Tabelas por CSV e Reajuste em Lote (`TODO.md` 2.9, concluído):** Mapeamento de colunas por fábrica, prévia das mudanças antes de gravar e clonagem de tabela com reajuste percentual.

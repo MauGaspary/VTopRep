@@ -1,6 +1,7 @@
+import { DatabaseBackup } from "lucide-react";
 import { NavLink } from "react-router";
 import { ConnectionStatus } from "./ConnectionStatus";
-import { NAV_ITEMS } from "./navigation";
+import { NAV_ITEMS_MOBILE } from "./navigation";
 import { TenantBrand } from "./TenantBrand";
 import { ThemeToggle } from "./ThemeToggle";
 
@@ -10,6 +11,20 @@ export function MobileTopBar() {
 		<header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-border bg-background/85 px-4 backdrop-blur md:hidden">
 			<TenantBrand />
 			<div className="flex shrink-0 items-center gap-3">
+				<NavLink
+					to="/dados"
+					aria-label="Dados e backup"
+					title="Dados e backup"
+					className={({ isActive }) =>
+						`flex size-9 items-center justify-center rounded-md transition-colors focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none ${
+							isActive
+								? "bg-foreground/7 text-primary"
+								: "text-muted-foreground hover:text-foreground"
+						}`
+					}
+				>
+					<DatabaseBackup aria-hidden="true" className="size-4" />
+				</NavLink>
 				<ThemeToggle compact />
 				<ConnectionStatus compact />
 			</div>
@@ -26,9 +41,11 @@ export function MobileBottomNav() {
 		>
 			<ul
 				className="grid"
-				style={{ gridTemplateColumns: `repeat(${NAV_ITEMS.length}, 1fr)` }}
+				style={{
+					gridTemplateColumns: `repeat(${NAV_ITEMS_MOBILE.length}, 1fr)`,
+				}}
 			>
-				{NAV_ITEMS.map(({ to, label, shortLabel, icon: Icon }) => (
+				{NAV_ITEMS_MOBILE.map(({ to, label, shortLabel, icon: Icon }) => (
 					<li key={to}>
 						<NavLink
 							to={to}

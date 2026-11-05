@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <title>Vinitop RS</title>
+  <rect width="512" height="512" rx="112" fill="#23378b"/>
+  <g fill="none" stroke="#ffffff" stroke-width="44" stroke-linecap="round" stroke-linejoin="round">
+    <path d="M131 176 191 336 251 176"/>
+    <path d="M291 336V176h50a48 48 0 0 1 0 96h-50M333 272l48 64"/>
+  </g>
+</svg>

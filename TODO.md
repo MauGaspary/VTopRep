@@ -195,16 +195,16 @@ Base para a Fase 4 (recompra, Raio-X e Curva ABC).
 Hoje os dados ficam no aparelho, mas o app não abre sem internet, e enquanto não há sincronização tudo vive só no navegador.
 
 ### 2.10.1. PWA
-- [ ] **Service Worker e Manifesto:** `vite-plugin-pwa` com precache do app, manifesto com nome, ícones e cor do tenant. Depois do primeiro acesso, o app abre sem internet.
-- [ ] **Atualização:** Aviso "Nova versão disponível" com botão para atualizar, sem perder um orçamento em edição.
-- [ ] **Teste Manual:** Instalar no Android e no desktop e, em modo avião, abrir o app, criar um orçamento e gerar o PDF.
+- [x] **Service Worker e Manifesto:** `vite-plugin-pwa` (`generateSW`) com precache do app inteiro (~2,2 MB), `navigateFallback` para as rotas do SPA e manifesto com nome e cor do tenant (`src/config/tenant/tenant-padrao.ts`, lido também pelo `vite.config.ts`). Ícones gerados de `public/favicon.svg` com `pnpm icones`. Depois do primeiro acesso, o app abre sem internet.
+- [x] **Atualização:** `registerType: "prompt"` e aviso "Nova versão disponível" (`AvisoNovaVersao`) com "Atualizar" / "Depois"; verificação a cada hora com internet. Enquanto um orçamento tem alterações não salvas (`useRegistrarEdicaoEmAndamento`), o botão fica bloqueado e o aviso pede para salvar antes.
+- [x] **Teste Manual:** Instalar no Android e no desktop e, em modo avião, abrir o app, criar um orçamento e gerar o PDF. *Verificado por automação no Chromium (desktop): build de produção offline abre rotas não visitadas, cadastra, exporta e restaura backup; a versão nova aparece e fica bloqueada com orçamento em edição. Falta instalar de fato no Android e no desktop e gerar o PDF offline, o que depende de publicar o app em HTTPS (`BACKLOG.md` 2).*
 
 ### 2.10.2. Proteção dos Dados Locais
-- [ ] **Armazenamento Persistente:** Pedir `navigator.storage.persist()` e mostrar o espaço usado (`navigator.storage.estimate()`).
-- [ ] **Exportar Backup:** Arquivo JSON versionado com todas as tabelas do tenant, inclusive a Outbox pendente, descrito por schema Zod com a versão do banco.
-- [ ] **Restaurar Backup:** Validar o arquivo inteiro com Zod antes de gravar, recusar backup de outro tenant ou de versão incompatível, pedir confirmação clara (substitui os dados locais) e gravar em transação.
-- [ ] **Lembrete:** Aviso periódico de backup enquanto a sincronização com o servidor não existir.
-- [ ] **Validação:** Rodar `pnpm validate`.
+- [x] **Armazenamento Persistente:** `navigator.storage.persist()` pedido ao abrir o app e de novo pelo botão da tela **Dados e backup** (`/dados`), que mostra a proteção e o espaço usado (`navigator.storage.estimate()`).
+- [x] **Exportar Backup:** JSON versionado (`formato`, `versao_formato`, `versao_banco` = `db.verno`, `tenant_id`) com as 13 tabelas do tenant, inclusive a Outbox e o mapeamento de colunas do CSV, descrito por `BackupLocalSchema` (`src/modules/backup/`). A exportação valida tudo com Zod e falha se algum registro local não passar.
+- [x] **Restaurar Backup:** Valida o arquivo inteiro (Zod + tenant de cada registro + chaves repetidas) antes de gravar; recusa outro tenant e versão de banco diferente; mostra a comparação "neste aparelho × no backup", exige confirmação explícita e grava numa transação única (tudo ou nada). Mutações "em envio" voltam para `pending`.
+- [x] **Lembrete:** Faixa no topo quando nunca houve backup ou o último tem 7 dias ou mais (dias de calendário), com "Lembrar amanhã". Data do último backup por aparelho no `localStorage`. Desliga com `SINCRONIZACAO_REMOTA_ATIVA` (2.11).
+- [x] **Validação:** Rodar `pnpm validate`.
 
 ---
 

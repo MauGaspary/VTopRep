@@ -43,6 +43,7 @@ import { dataLocal, formatarDataBr } from "../../../shared/domain/datas";
 import { formatarCentavos } from "../../../shared/domain/decimal-br";
 import { somarCentavos } from "../../../shared/domain/dinheiro";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
+import { useRegistrarEdicaoEmAndamento } from "../../../shared/hooks/use-edicao-em-andamento";
 import {
 	PASSO_LISTA_INCREMENTAL,
 	useListaIncremental,
@@ -237,6 +238,9 @@ function OrcamentoForm({
 				representada: representadaInicial,
 			}),
 	);
+	// Valores ao abrir a tela: todo `setValores` gera um objeto novo, o que
+	// basta para saber se há alterações não salvas.
+	const [valoresAoAbrir] = useState(valores);
 	const [representadaAtivaId, setRepresentadaAtivaId] = useState<string>(
 		() =>
 			original?.pedidos[0]?.pedido.representada_id ??
@@ -275,6 +279,9 @@ function OrcamentoForm({
 	const somenteLeitura =
 		original !== undefined &&
 		!cotacaoEditavel(original.pedidos.map((p) => p.pedido));
+
+	// Segura a atualização do app enquanto houver alterações não salvas.
+	useRegistrarEdicaoEmAndamento(!somenteLeitura && valores !== valoresAoAbrir);
 
 	// Dados reativos do cliente selecionado (endereços e contatos)
 	const { dados: clienteCompleto } = useCliente(

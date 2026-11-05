@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
 	ajustarCorPrimariaParaTema,
 	CONTRASTE_MINIMO_AA,
+	corHslParaHex,
 	formatarCorHsl,
 	lerCorHsl,
 	lerPreferenciaTema,
@@ -114,5 +115,14 @@ describe("ajustarCorPrimariaParaTema", () => {
 
 	it("cor inválida → null (fica o token padrão do CSS)", () => {
 		expect(ajustarCorPrimariaParaTema("azul", "escuro")).toBeNull();
+	});
+});
+
+describe("corHslParaHex", () => {
+	it("converte HSL para #rrggbb", () => {
+		expect(corHslParaHex({ h: 0, s: 0, l: 100 })).toBe("#ffffff");
+		expect(corHslParaHex({ h: 0, s: 0, l: 0 })).toBe("#000000");
+		expect(corHslParaHex({ h: 0, s: 100, l: 50 })).toBe("#ff0000");
+		expect(corHslParaHex({ h: 228, s: 60, l: 34 })).toBe("#23378b");
 	});
 });

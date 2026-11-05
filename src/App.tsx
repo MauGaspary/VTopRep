@@ -2,6 +2,7 @@ import { BrowserRouter, Navigate, Route, Routes } from "react-router";
 import { TemaProvider } from "./config/tema/TemaContext";
 import { TenantProvider } from "./config/tenant/TenantContext";
 import { useTenant } from "./config/tenant/useTenant";
+import { DadosAparelhoView } from "./modules/backup/components/dados-aparelho-view";
 import { ClienteFormView } from "./modules/clientes/components/cliente-form-view";
 import { ClientesListView } from "./modules/clientes/components/clientes-list-view";
 import { ImportarCsvView } from "./modules/importacao/components/importar-csv-view";
@@ -64,6 +65,7 @@ function AppRoutes() {
 					path="/clientes/:id/pedidos"
 					element={<HistoricoClienteView />}
 				/>
+				<Route path="/dados" element={<DadosAparelhoView />} />
 				<Route path="*" element={<Navigate to="/catalogo" replace />} />
 			</Routes>
 			<DevSeedButton tenantId={config.id} />
