@@ -72,3 +72,11 @@ Motivo: numa tela de 360–412 px não cabem 5 ou 6 colunas. A tabela com rolage
 4. **Detalhes:** aviso de pedido emitido como informação (item 9), barra superior (item 10), rótulos da barra inferior (item 11), `touch-action`, `theme-color`.
 5. Conferir a regra do múltiplo de embalagem.
 6. Teste automatizado com Playwright em 360 e 412 px verificando que nenhuma tela alarga a página.
+
+## Andamento (2026-11-05)
+
+- [x] **Barra lateral só a partir de 1024 px:** celular deitado e tablet usam a barra inferior e a largura inteira.
+- [x] **Formato pelo espaço disponível (Orçamentos e Clientes):** a lista mede a largura que tem (`@container`). Abaixo de 672 px vira cards (Orçamentos) ou lista em 2 linhas (Clientes); acima disso, tabela. Colunas secundárias aparecem só quando cabem. Conferido com Playwright de 360 a 1440 px: nenhuma tabela rola para o lado.
+- [ ] **Decidir entre cards e lista em 2 linhas** e aplicar nas outras listas (catálogo, histórico do cliente, fábricas, transportadoras).
+- [ ] **Componente compartilhado** para as listas (item 4 da conversa): aguardando decisão.
+

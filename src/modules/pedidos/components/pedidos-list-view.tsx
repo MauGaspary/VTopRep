@@ -305,269 +305,279 @@ export function PedidosListView() {
 			)}
 
 			{!isLoading && pedidosFiltrados.length > 0 && (
-				<ul
-					aria-label="Lista de orçamentos e pedidos"
-					className="flex flex-col gap-2 sm:hidden"
-				>
-					{pedidosFiltrados.map((pedido) => {
-						const nomeCliente =
-							clientesPorId.get(pedido.cliente_id) ?? "Cliente não encontrado";
-						const rep = representadasPorId.get(pedido.representada_id);
-						const codigoCurto = `#${pedido.id.slice(0, 8).toUpperCase()}`;
-						const rascunho = pedido.status === "rascunho";
-						const fabricasNaCotacao = pedido.cotacao_grupo_id
-							? (pedidosPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
-							: 0;
+				<div className="@container">
+					{/* Pouco espaço (celular em pé): cards, sem rolagem lateral. */}
+					<ul
+						aria-label="Lista de orçamentos e pedidos"
+						className="flex flex-col gap-2 @2xl:hidden"
+					>
+						{pedidosFiltrados.map((pedido) => {
+							const nomeCliente =
+								clientesPorId.get(pedido.cliente_id) ??
+								"Cliente não encontrado";
+							const rep = representadasPorId.get(pedido.representada_id);
+							const codigoCurto = `#${pedido.id.slice(0, 8).toUpperCase()}`;
+							const rascunho = pedido.status === "rascunho";
+							const fabricasNaCotacao = pedido.cotacao_grupo_id
+								? (pedidosPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
+								: 0;
 
-						return (
-							<li
-								key={pedido.id}
-								className={cardClassName({
-									className: "flex flex-col gap-2.5 p-3",
-								})}
-							>
-								<div className="flex items-start justify-between gap-3">
-									<Link
-										to={`/pedidos/${pedido.id}`}
-										className="min-w-0 truncate font-medium text-foreground hover:text-primary"
-									>
-										{nomeCliente}
-									</Link>
-									<span className="shrink-0 font-mono text-sm font-semibold text-foreground tabular-nums">
-										{formatarCentavos(pedido.valor_total_centavos)}
-									</span>
-								</div>
-
-								<div className="flex items-center justify-between gap-3">
-									<div className="min-w-0">
-										<RepresentadaBadge
-											nome={rep?.nome_fantasia ?? "Representada não encontrada"}
-											cor={rep ? obterCorRepresentada(rep) : "indigo"}
-										/>
-									</div>
-									<Badge variant={varianteBadgeStatus(pedido.status)}>
-										{ROTULOS_STATUS_PEDIDO[pedido.status]}
-									</Badge>
-								</div>
-
-								<div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
-									<span>{codigoCurto}</span>
-									<span aria-hidden="true">·</span>
-									<span>
-										{formatarDataBr(pedido.data_emissao.slice(0, 10))}
-									</span>
-									<span aria-hidden="true">·</span>
-									<span className="font-sans">
-										{pedido.condicao_pagamento} · {pedido.tipo_frete}
-									</span>
-									{fabricasNaCotacao > 1 && (
-										<span className="inline-flex items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 font-sans text-[10px]">
-											<Layers aria-hidden="true" className="size-3" />
-											Cotação · {fabricasNaCotacao} fáb.
-										</span>
-									)}
-									<span className="ml-auto">
-										Com. {formatarCentavos(pedido.comissao_projetada_centavos)}
-									</span>
-								</div>
-
-								<div className="flex items-center gap-2 border-t border-border pt-2.5">
-									<Link
-										to={`/pedidos/${pedido.id}`}
-										className={buttonClassName({
-											variant: rascunho ? "primary" : "secondary",
-											size: "sm",
-											className: "flex-1",
-										})}
-									>
-										{rascunho ? "Continuar" : "Abrir"}
-									</Link>
-									<Button
-										variant="secondary"
-										size="sm"
-										disabled={gerandoPdfId === pedido.id}
-										onClick={() => void handleBaixarPdf(pedido.id)}
-										aria-label={`Baixar PDF do pedido ${codigoCurto}`}
-									>
-										<Download aria-hidden="true" />
-										{gerandoPdfId === pedido.id ? "Gerando…" : "PDF"}
-									</Button>
-									{rascunho && (
-										<Button
-											variant="ghost"
-											size="sm"
-											onClick={() => handleExcluirRascunho(pedido)}
-											aria-label={`Excluir rascunho ${codigoCurto}`}
-											className="text-subtle-foreground hover:text-destructive"
+							return (
+								<li
+									key={pedido.id}
+									className={cardClassName({
+										className: "flex flex-col gap-2.5 p-3",
+									})}
+								>
+									<div className="flex items-start justify-between gap-3">
+										<Link
+											to={`/pedidos/${pedido.id}`}
+											className="min-w-0 truncate font-medium text-foreground hover:text-primary"
 										>
-											<Trash2 aria-hidden="true" />
+											{nomeCliente}
+										</Link>
+										<span className="shrink-0 font-mono text-sm font-semibold text-foreground tabular-nums">
+											{formatarCentavos(pedido.valor_total_centavos)}
+										</span>
+									</div>
+
+									<div className="flex items-center justify-between gap-3">
+										<div className="min-w-0">
+											<RepresentadaBadge
+												nome={
+													rep?.nome_fantasia ?? "Representada não encontrada"
+												}
+												cor={rep ? obterCorRepresentada(rep) : "indigo"}
+											/>
+										</div>
+										<Badge variant={varianteBadgeStatus(pedido.status)}>
+											{ROTULOS_STATUS_PEDIDO[pedido.status]}
+										</Badge>
+									</div>
+
+									<div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
+										<span>{codigoCurto}</span>
+										<span aria-hidden="true">·</span>
+										<span>
+											{formatarDataBr(pedido.data_emissao.slice(0, 10))}
+										</span>
+										<span aria-hidden="true">·</span>
+										<span className="font-sans">
+											{pedido.condicao_pagamento} · {pedido.tipo_frete}
+										</span>
+										{fabricasNaCotacao > 1 && (
+											<span className="inline-flex items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 font-sans text-[10px]">
+												<Layers aria-hidden="true" className="size-3" />
+												Cotação · {fabricasNaCotacao} fáb.
+											</span>
+										)}
+										<span className="ml-auto">
+											Com.{" "}
+											{formatarCentavos(pedido.comissao_projetada_centavos)}
+										</span>
+									</div>
+
+									<div className="flex items-center gap-2 border-t border-border pt-2.5">
+										<Link
+											to={`/pedidos/${pedido.id}`}
+											className={buttonClassName({
+												variant: rascunho ? "primary" : "secondary",
+												size: "sm",
+												className: "flex-1",
+											})}
+										>
+											{rascunho ? "Continuar" : "Abrir"}
+										</Link>
+										<Button
+											variant="secondary"
+											size="sm"
+											disabled={gerandoPdfId === pedido.id}
+											onClick={() => void handleBaixarPdf(pedido.id)}
+											aria-label={`Baixar PDF do pedido ${codigoCurto}`}
+										>
+											<Download aria-hidden="true" />
+											{gerandoPdfId === pedido.id ? "Gerando…" : "PDF"}
 										</Button>
-									)}
-								</div>
-							</li>
-						);
-					})}
-				</ul>
-			)}
+										{rascunho && (
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => handleExcluirRascunho(pedido)}
+												aria-label={`Excluir rascunho ${codigoCurto}`}
+												className="text-subtle-foreground hover:text-destructive"
+											>
+												<Trash2 aria-hidden="true" />
+											</Button>
+										)}
+									</div>
+								</li>
+							);
+						})}
+					</ul>
 
-			{!isLoading && pedidosFiltrados.length > 0 && (
-				<section
-					aria-label="Tabela de orçamentos e pedidos"
-					className="dense-table-region hidden rounded-xl border border-border bg-card sm:block"
-				>
-					<table className="text-left text-sm">
-						<thead>
-							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-								<th className="w-28 px-3.5 py-2.5">Código / Data</th>
-								<th className="px-3 py-2.5">Cliente</th>
-								<th className="hidden px-3 py-2.5 md:table-cell">
-									Representada
-								</th>
-								<th className="hidden px-3 py-2.5 lg:table-cell">Condição</th>
-								<th className="px-3 py-2.5">Status</th>
-								<th className="px-3 py-2.5 text-right">Valor Total</th>
-								<th className="px-3.5 py-2.5 text-right">Ações</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-border">
-							{pedidosFiltrados.map((pedido) => {
-								const nomeCliente =
-									clientesPorId.get(pedido.cliente_id) ??
-									"Cliente não encontrado";
-								const rep = representadasPorId.get(pedido.representada_id);
-								const nomeRep =
-									rep?.nome_fantasia ?? "Representada não encontrada";
-								const corRep = rep
-									? obterCorRepresentada(rep)
-									: ("indigo" as const);
-								const dataCurta = pedido.data_emissao.slice(0, 10);
-								const codigoCurto = `#${pedido.id.slice(0, 8).toUpperCase()}`;
-								const rascunho = pedido.status === "rascunho";
-								const fabricasNaCotacao = pedido.cotacao_grupo_id
-									? (pedidosPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
-									: 0;
+					{/* Espaço suficiente (tablet, celular deitado, computador): tabela. */}
+					<section
+						aria-label="Tabela de orçamentos e pedidos"
+						className="dense-table-region hidden rounded-xl border border-border bg-card @2xl:block"
+					>
+						<table className="text-left text-sm">
+							<thead>
+								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+									<th className="w-28 px-3.5 py-2.5">Código / Data</th>
+									<th className="px-3 py-2.5">Cliente</th>
+									<th className="hidden px-3 py-2.5 @4xl:table-cell">
+										Representada
+									</th>
+									<th className="hidden px-3 py-2.5 @5xl:table-cell">
+										Condição
+									</th>
+									<th className="px-3 py-2.5">Status</th>
+									<th className="px-3 py-2.5 text-right">Valor Total</th>
+									<th className="px-3.5 py-2.5 text-right">Ações</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-border">
+								{pedidosFiltrados.map((pedido) => {
+									const nomeCliente =
+										clientesPorId.get(pedido.cliente_id) ??
+										"Cliente não encontrado";
+									const rep = representadasPorId.get(pedido.representada_id);
+									const nomeRep =
+										rep?.nome_fantasia ?? "Representada não encontrada";
+									const corRep = rep
+										? obterCorRepresentada(rep)
+										: ("indigo" as const);
+									const dataCurta = pedido.data_emissao.slice(0, 10);
+									const codigoCurto = `#${pedido.id.slice(0, 8).toUpperCase()}`;
+									const rascunho = pedido.status === "rascunho";
+									const fabricasNaCotacao = pedido.cotacao_grupo_id
+										? (pedidosPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
+										: 0;
 
-								return (
-									<tr
-										key={pedido.id}
-										className="group transition-colors hover:bg-muted/50"
-									>
-										<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
-											<div className="flex flex-col">
-												<Link
-													to={`/pedidos/${pedido.id}`}
-													className="font-mono text-xs font-medium text-foreground hover:text-primary"
-												>
-													{codigoCurto}
-												</Link>
-												<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-													{formatarDataBr(dataCurta)}
-												</span>
-												{fabricasNaCotacao > 1 && (
-													<span
-														title={`Cotação #${pedido.cotacao_grupo_id?.slice(0, 8).toUpperCase()} com ${fabricasNaCotacao} fábricas`}
-														className="mt-0.5 inline-flex w-fit items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] text-muted-foreground"
+									return (
+										<tr
+											key={pedido.id}
+											className="group transition-colors hover:bg-muted/50"
+										>
+											<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
+												<div className="flex flex-col">
+													<Link
+														to={`/pedidos/${pedido.id}`}
+														className="font-mono text-xs font-medium text-foreground hover:text-primary"
 													>
-														<Layers aria-hidden="true" className="size-3" />
-														Cotação · {fabricasNaCotacao} fáb.
+														{codigoCurto}
+													</Link>
+													<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+														{formatarDataBr(dataCurta)}
 													</span>
-												)}
-											</div>
-										</td>
-
-										<td className="px-3 py-2.5 align-middle">
-											<div className="flex flex-col gap-0.5">
-												<Link
-													to={`/pedidos/${pedido.id}`}
-													className="font-medium text-foreground hover:text-primary"
-												>
-													{nomeCliente}
-												</Link>
-												<div className="md:hidden">
-													<RepresentadaBadge nome={nomeRep} cor={corRep} />
+													{fabricasNaCotacao > 1 && (
+														<span
+															title={`Cotação #${pedido.cotacao_grupo_id?.slice(0, 8).toUpperCase()} com ${fabricasNaCotacao} fábricas`}
+															className="mt-0.5 inline-flex w-fit items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] text-muted-foreground"
+														>
+															<Layers aria-hidden="true" className="size-3" />
+															Cotação · {fabricasNaCotacao} fáb.
+														</span>
+													)}
 												</div>
-											</div>
-										</td>
+											</td>
 
-										<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap md:table-cell">
-											<RepresentadaBadge nome={nomeRep} cor={corRep} />
-										</td>
+											<td className="px-3 py-2.5 align-middle">
+												<div className="flex flex-col gap-0.5">
+													<Link
+														to={`/pedidos/${pedido.id}`}
+														className="font-medium text-foreground hover:text-primary"
+													>
+														{nomeCliente}
+													</Link>
+													<div className="@4xl:hidden">
+														<RepresentadaBadge nome={nomeRep} cor={corRep} />
+													</div>
+												</div>
+											</td>
 
-										<td className="hidden px-3 py-2.5 align-middle text-xs text-muted-foreground whitespace-nowrap lg:table-cell">
-											<div className="flex items-center gap-1.5">
-												<span className="truncate">
-													{pedido.condicao_pagamento}
-												</span>
-												<span
-													title={ROTULOS_FRETE[pedido.tipo_frete]}
-													className="rounded border border-border bg-muted/60 px-1 py-0.5 font-mono text-[10px]"
-												>
-													{pedido.tipo_frete}
-												</span>
-											</div>
-										</td>
+											<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap @4xl:table-cell">
+												<RepresentadaBadge nome={nomeRep} cor={corRep} />
+											</td>
 
-										<td className="px-3 py-2.5 align-middle whitespace-nowrap">
-											<Badge variant={varianteBadgeStatus(pedido.status)}>
-												{ROTULOS_STATUS_PEDIDO[pedido.status]}
-											</Badge>
-										</td>
-
-										<td className="px-3 py-2.5 text-right align-middle whitespace-nowrap">
-											<div className="flex flex-col items-end">
-												<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
-													{formatarCentavos(pedido.valor_total_centavos)}
-												</span>
-												<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
-													Com.{" "}
-													{formatarCentavos(pedido.comissao_projetada_centavos)}
-												</span>
-											</div>
-										</td>
-
-										<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
-											<div className="inline-flex items-center justify-end gap-1">
-												<Button
-													variant="ghost"
-													size="sm"
-													disabled={gerandoPdfId === pedido.id}
-													onClick={() => void handleBaixarPdf(pedido.id)}
-													title="Baixar espelho do pedido em PDF"
-												>
-													<Download aria-hidden="true" className="size-3.5" />
-													<span className="hidden sm:inline">
-														{gerandoPdfId === pedido.id ? "..." : "PDF"}
+											<td className="hidden px-3 py-2.5 align-middle text-xs text-muted-foreground whitespace-nowrap @5xl:table-cell">
+												<div className="flex items-center gap-1.5">
+													<span className="truncate">
+														{pedido.condicao_pagamento}
 													</span>
-												</Button>
-												<Link
-													to={`/pedidos/${pedido.id}`}
-													className={buttonClassName({
-														variant: rascunho ? "primary" : "secondary",
-														size: "sm",
-													})}
-												>
-													{rascunho ? "Continuar" : "Abrir"}
-												</Link>
-												{rascunho && (
+													<span
+														title={ROTULOS_FRETE[pedido.tipo_frete]}
+														className="rounded border border-border bg-muted/60 px-1 py-0.5 font-mono text-[10px]"
+													>
+														{pedido.tipo_frete}
+													</span>
+												</div>
+											</td>
+
+											<td className="px-3 py-2.5 align-middle whitespace-nowrap">
+												<Badge variant={varianteBadgeStatus(pedido.status)}>
+													{ROTULOS_STATUS_PEDIDO[pedido.status]}
+												</Badge>
+											</td>
+
+											<td className="px-3 py-2.5 text-right align-middle whitespace-nowrap">
+												<div className="flex flex-col items-end">
+													<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+														{formatarCentavos(pedido.valor_total_centavos)}
+													</span>
+													<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+														Com.{" "}
+														{formatarCentavos(
+															pedido.comissao_projetada_centavos,
+														)}
+													</span>
+												</div>
+											</td>
+
+											<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
+												<div className="inline-flex items-center justify-end gap-1">
 													<Button
 														variant="ghost"
 														size="sm"
-														onClick={() => handleExcluirRascunho(pedido)}
-														title="Excluir rascunho"
-														aria-label={`Excluir rascunho ${codigoCurto}`}
-														className="px-2 text-subtle-foreground hover:text-destructive"
+														disabled={gerandoPdfId === pedido.id}
+														onClick={() => void handleBaixarPdf(pedido.id)}
+														title="Baixar espelho do pedido em PDF"
 													>
-														<Trash2 aria-hidden="true" className="size-3.5" />
+														<Download aria-hidden="true" className="size-3.5" />
+														<span className="hidden sm:inline">
+															{gerandoPdfId === pedido.id ? "..." : "PDF"}
+														</span>
 													</Button>
-												)}
-											</div>
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				</section>
+													<Link
+														to={`/pedidos/${pedido.id}`}
+														className={buttonClassName({
+															variant: rascunho ? "primary" : "secondary",
+															size: "sm",
+														})}
+													>
+														{rascunho ? "Continuar" : "Abrir"}
+													</Link>
+													{rascunho && (
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => handleExcluirRascunho(pedido)}
+															title="Excluir rascunho"
+															aria-label={`Excluir rascunho ${codigoCurto}`}
+															className="px-2 text-subtle-foreground hover:text-destructive"
+														>
+															<Trash2 aria-hidden="true" className="size-3.5" />
+														</Button>
+													)}
+												</div>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</section>
+				</div>
 			)}
 		</Page>
 	);
