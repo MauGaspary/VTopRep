@@ -24,7 +24,7 @@ No servidor, nenhuma opção é ao mesmo tempo grátis, sem manutenção e sem l
 Os dados do aparelho (IndexedDB) ficam presos ao endereço em que o app foi aberto. Trocar de endereço depois faz o app abrir vazio no endereço novo (seção 3).
 
 | Opção | Custo | Consequência |
-|---|---|---|
+| --- | --- | --- |
 | Subdomínio de um domínio que a Vinitop já tem (ex.: `app.vinitop.com.br`) | R$ 0 a mais | Basta um registro CNAME no DNS atual |
 | Domínio novo `.com.br` | R$ 40/ano | Da Vinitop, ou do produto com um subdomínio por empresa, se o app for vendido a outros representantes |
 | Endereço grátis da Cloudflare (`nome.pages.dev`) | R$ 0 | Muda se trocarmos de serviço, até dentro da Cloudflare (Pages → Workers) |
@@ -40,7 +40,7 @@ Os dados do aparelho (IndexedDB) ficam presos ao endereço em que o app foi aber
 ### Decisão 2: Servidor da sincronização
 
 | Opção | Custo | Consequência |
-|---|---|---|
+| --- | --- | --- |
 | Supabase Free com proteções, depois Pro | R$ 0 no início | Pausa após 7 dias de pouco uso se o ping falhar; o backup fica por nossa conta (seção 2.5) |
 | Supabase Pro desde o início | ~R$ 135/mês | Sem pausa; backup diário feito pelo Supabase |
 | Dexie Cloud | R$ 0 até 3 usuários; ~R$ 20/mês até 25 | Menos código, mas "pedido emitido não muda" passa a valer só dentro do app, não no servidor; fornecedor pequeno |
@@ -55,7 +55,7 @@ Os dados do aparelho (IndexedDB) ficam presos ao endereço em que o app foi aber
 A pergunta é se o app vai para a internet agora, antes de existir a sincronização, ou só quando a sincronização estiver pronta. Publicar agora significa que os representantes já podem instalar e usar, mas os dados ficam só no aparelho de cada um até o 2.11.
 
 | Opção | Consequência |
-|---|---|
+| --- | --- |
 | Publicar antes | Os representantes instalam já e o teste da 2.10.1 é destravado. O 2.11 vai precisar de uma carga inicial, e até lá o ideal é cadastrar fábricas, produtos e clientes num aparelho só (seção 5) |
 | Esperar o 2.11 | Ninguém instala o app até o 2.11 ficar pronto, e o teste no Android continua pendente |
 
@@ -71,7 +71,7 @@ O app é estático: a pasta `dist` tem 2,3 MB em 21 arquivos (o maior, o JavaScr
 ### 1.1. Comparação
 
 | Serviço | Custo | Contra | A favor |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Cloudflare Pages** (recomendado) | R$ 0 | 500 builds/mês (o limite é de publicações, não de visitas) | Tráfego dos arquivos ilimitado; uso comercial permitido; `_headers` para o cache do `sw.js`; rota de SPA automática; prévia por branch; HTTPS no domínio próprio |
 | Netlify Free | R$ 0 | 300 créditos/mês com corte rígido: cada publicação na `main` gasta 15 (20 publicações esgotam o mês) e cada GB de tráfego gasta 20. Se esgotar, **todos os sites saem do ar** ("Site not available") até o mês seguinte, sem opção de comprar créditos | Simples; prévias de branch não gastam crédito. Personal: US$ 9 (~R$ 48)/mês |
 | Vercel Hobby | R$ 0 | **Proíbe uso comercial**, inclusive quando alguém é pago para escrever o código | Pro: US$ 20 (~R$ 108)/mês por desenvolvedor |
@@ -96,7 +96,7 @@ O app é estático: a pasta `dist` tem 2,3 MB em 21 arquivos (o maior, o JavaScr
 Estimativa minha, não medição; confirmar com dados reais. Considerei de 300 a 400 bytes por linha no PostgreSQL, contando os índices.
 
 | Cenário | Crescimento do banco |
-|---|---|
+| --- | --- |
 | Pequeno: 1 a 2 representantes, catálogos pequenos | ~20 MB/ano |
 | Grande: 5 representantes, 10 fábricas com 5 mil itens cada, 4 reajustes por ano e ~10 pedidos de 20 itens por representante por dia útil | ~160 MB/ano |
 
@@ -106,7 +106,7 @@ Estimativa minha, não medição; confirmar com dados reais. Considerei de 300 a
 ### 2.2. Comparação
 
 | Opção | Custo/mês | A favor | Contra |
-|---|---|---|---|
+| --- | --- | --- | --- |
 | **Supabase Free**, região São Paulo (recomendado para começar) | R$ 0 | Segue o plano atual do 2.11; 500 MB duram anos para uma empresa; 5 GB de tráfego por mês | **Pausa após 7 dias de pouco uso** (avisa por e-mail antes; reativa pelo painel). **Sem backup automático.** O e-mail embutido só envia para a equipe do projeto, 2 por hora. Logs de 1 dia; suporte só pela comunidade |
 | **Supabase Pro** | US$ 25 (~R$ 135) | Sem pausa; backup diário guardado por 7 dias; 8 GB; 250 GB de tráfego; teto de gasto ligado por padrão; suporte por e-mail. Sobe a partir do Free no mesmo projeto, sem migrar | Preço |
 | Neon Free (PostgreSQL) | R$ 0 | Não precisa ser reativado à mão (desliga após 5 min parado e religa sozinho na próxima consulta); 1 GB; login e API HTTP inclusos; o SQL do 2.11 seria o mesmo | Login (Better Auth) e API HTTP mais novos e com pouca documentação; só 6 h de histórico para restaurar; troca o cliente e o login do app |
@@ -177,7 +177,7 @@ Para o plano grátis ser seguro, configurar uma vez:
 ## 4. Custo Total
 
 | Cenário | Custo |
-|---|---|
+| --- | --- |
 | Recomendado para começar: Cloudflare Pages + domínio + Supabase Free + Resend Free | **R$ 40/ano** |
 | Sem limites práticos: o mesmo com Supabase Pro | ~R$ 135/mês + R$ 40/ano (~R$ 1.660/ano) |
 
@@ -197,7 +197,8 @@ Recomendado: o BACKLOG 2 é pouco trabalho, não depende do servidor e destrava 
 
 ## 6. Números Conferidos em 2026-11-04
 
-**Supabase**
+### Supabase
+
 - Free: US$ 0; 500 MB de banco; 5 GB de tráfego + 5 GB em cache; 1 GB de arquivos; 50 mil usuários ativos/mês; 2 projetos ativos; CPU compartilhada com 500 MB de RAM; logs de 1 dia; suporte da comunidade.
 - Pausa do Free: após 7 dias de pouca atividade no banco ("algumas requisições por dia" bastam para evitar). Dois e-mails: um aviso antes e uma confirmação. Os dados ficam guardados e a reativação é pelo painel (a documentação fala em até 1 ano, mas uma versão da página diz 90 dias).
 - Backup no Free: não há automático; a documentação recomenda `supabase db dump` ou `pg_dump` guardados fora do Supabase.
@@ -205,26 +206,31 @@ Recomendado: o BACKLOG 2 é pouco trabalho, não depende do servidor e destrava 
 - Team: a partir de US$ 599/mês.
 - E-mail embutido: só para endereços da equipe da organização, 2 mensagens por hora; a documentação recomenda SMTP próprio em produção (cita Resend, AWS SES, Postmark, SendGrid, ZeptoMail e Brevo).
 
-**Cloudflare**
+### Cloudflare
+
 - Pages Free: 500 builds/mês; 1 build por vez; 20 min por build; 20 mil arquivos; 25 MiB por arquivo; 100 domínios por projeto; 100 regras em `_headers`; 2.100 redirecionamentos.
 - Arquivos estáticos (Pages e Workers): requisições grátis e ilimitadas.
 - Workers Free: 100 mil requisições/dia; 10 ms de CPU por requisição. Workers Paid: mínimo de US$ 5/mês, com 10 milhões de requisições inclusas.
 - D1 Free: 5 milhões de linhas lidas/dia; 100 mil gravadas/dia; 5 GB. Gravar numa coluna indexada conta uma linha a mais. Passado o limite, as consultas falham até 00:00 UTC. D1 Paid: 25 bilhões de linhas lidas e 50 milhões gravadas por mês inclusas.
 - Migração Pages → Workers: `_headers` e `_redirects` funcionam nos dois; no Workers, a regra de SPA é configurada à mão. A Cloudflare não declara o Pages como descontinuado.
 
-**Netlify**
+### Netlify
+
 - Free: 300 créditos/mês, limite rígido, sem compra de créditos. Publicação em produção: 15 créditos; tráfego: 20 créditos/GB; requisições: 2 créditos a cada 10 mil; computação: 10 créditos/GB-hora. Prévias de deploy e de branch não gastam. Ao esgotar, todos os projetos ficam pausados até o próximo ciclo.
 - Personal: US$ 9/mês (1.000 créditos). Pro: US$ 20/mês (3.000 créditos).
 
-**Vercel**
+### Vercel
+
 - Hobby: só uso pessoal e não comercial, inclusive quando há "a paid employee or consultant writing the code"; 100 GB de tráfego; não permite comprar uso adicional.
 - Pro: US$ 20/mês por desenvolvedor.
 
-**Neon**
+### Neon
+
 - Free: US$ 0; 1 GB por projeto (20 GB na conta); 100 CU-hora por projeto; desliga após 5 min parado; 6 h de histórico; 5 GB de tráfego por projeto; login (Better Auth) até 60 mil usuários/mês; Data API inclusa.
 - Launch: cobrança por uso (US$ 0,106 por CU-hora e US$ 0,35 por GB-mês; a Neon estima ~US$ 15/mês para um banco pequeno).
 
-**Dexie Cloud**
+### Dexie Cloud
+
 - Free: €0; 3 usuários de produção; 100 MB; 10 conexões simultâneas. A página tem números conflitantes para quantidade de bancos e limite de requisições.
 - Pro: €0,12 por usuário/mês (pacote de 25 por €3/mês); 1 GB de armazenamento de objetos para 25 usuários.
 - Business (servidor próprio): €3.495, pagamento único, com 5 anos de atualizações.

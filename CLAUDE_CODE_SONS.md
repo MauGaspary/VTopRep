@@ -9,7 +9,7 @@ Este arquivo é só um guia, não altera nada no app. Ele também não ativa os 
 O Claude Code tem **hooks**: comandos que ele roda sozinho quando acontece um evento. Aqui são usados dois eventos:
 
 | Evento | Quando acontece | Som |
-|---|---|---|
+| --- | --- | --- |
 | `Stop` | O Claude terminou de responder e está esperando você | `Windows Unlock.wav` |
 | `Notification` com `matcher: "permission_prompt"` | O Claude precisa que você aprove uma ação (pedido de permissão) | `Windows Exclamation.wav` |
 
@@ -19,7 +19,7 @@ O comando de cada hook abre o PowerShell e toca um arquivo `.wav` que já vem no
 
 No arquivo de configurações do usuário, que vale para todos os projetos:
 
-```
+```text
 %USERPROFILE%\.claude\settings.json
 ```
 
@@ -61,7 +61,7 @@ Exemplo: `C:\Users\mauga\.claude\settings.json`. Se quiser os sons só num proje
 }
 ```
 
-4. Feche e abra o Claude Code de novo. Para conferir se os hooks foram carregados, digite `/hooks` dentro dele.
+1. Feche e abra o Claude Code de novo. Para conferir se os hooks foram carregados, digite `/hooks` dentro dele.
 
 Atalho: no PC novo, também dá para pedir ao próprio Claude Code "configure um som quando terminar e quando pedir permissão", colando este arquivo na conversa.
 

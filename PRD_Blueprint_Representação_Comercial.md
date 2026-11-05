@@ -1,4 +1,5 @@
 # Product Requirement Document (PRD) & Blueprint de Engenharia
+
 ## Sistema de Gestão para Representante Comercial Multirrepresentada
 
 ---
@@ -8,6 +9,7 @@
 O sistema é a ferramenta central de trabalho em campo para representantes comerciais autônomos B2B que operam com múltiplas fábricas (multirrepresentadas). O software é projetado sob a filosofia **Offline-First**, operando com máxima fluidez independentemente da conectividade com a internet.
 
 ### Gargalos Operacionais Resolvidos
+
 1. **Agilidade em Campo (Offline-First):** Emissão de pedidos em segundos sem dependência de sinal de internet, com cache local de catálogos e sincronização em segundo plano.
 2. **Conformidade Automática de Políticas Comerciais:** Validação de regras parametrizadas por representada (múltiplos de embalagem, valor/volume mínimo de faturamento, tetos de desconto escalonados e regras de frete CIF/FOB).
 3. **Auditoria e Conciliação de Comissões:** Rastreamento do ciclo de vida completo do pedido (*Rascunho* -> *Emitido* -> *Faturado Parcial/Total* -> *Comissão Liquidada*), alertando sobre glosas, devoluções e divergências entre o pedido emitido e a nota fiscal faturada.
@@ -18,6 +20,7 @@ O sistema é a ferramenta central de trabalho em campo para representantes comer
 ## 2. Invariantes de Domínio e Modelo de Dados
 
 ### 2.1. Invariantes Inegociáveis
+
 * **Precisão Monetária Absoluta:** O uso de tipos de ponto flutuante (`float`, `double`, `number` decimal nativo) para valores monetários é estritamente proibido. Todos os valores de moeda e descontos no banco de dados e na memória da aplicação devem ser armazenados e manipulados como **inteiros representando centavos** (ex.: R$ 150,50 = `15050`). O frontend utiliza funções puras de formatação apenas na camada de apresentação.
 * **Isolamento Multi-Tenant:** Toda entidade persistida contém obrigatoriamente a coluna `tenant_id: UUID`. Nenhuma consulta é realizada sem esse filtro.
 * **Soft Delete Universal:** Nenhuma exclusão em tabelas de negócio é física. Toda tabela sincronizável possui a coluna `deleted_at: timestamptz (nullable)`. O cliente local filtra registros ativos com `deleted_at is null` e processa remoções remotas recebendo registros marcados (*tombstones*).
@@ -36,7 +39,7 @@ O sistema é a ferramenta central de trabalho em campo para representantes comer
 
 ### 2.2. Diagrama de Relacionamento (ERD)
 
-```
+```text
 Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
      |                                                                   |
      | (1)                                                               | (1)
@@ -57,6 +60,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 ### 2.3. Dicionário de Dados
 
 #### `representadas`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `razao_social: text`
@@ -74,6 +78,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `deleted_at: timestamptz (nullable)`
 
 #### `clientes`
+
 * `id: UUID` (PK gerada pelo cliente no Dexie via UUIDv4)
 * `tenant_id: UUID` (FK)
 * `cnpj_cpf: text`
@@ -87,6 +92,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `deleted_at: timestamptz (nullable)`
 
 #### `transportadoras` (Fase 2.5)
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `nome_fantasia: text`
@@ -100,6 +106,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `deleted_at: timestamptz (nullable)`
 
 #### `clientes_enderecos`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK; igual ao do cliente pai)
 * `cliente_id: UUID` (FK)
@@ -112,6 +119,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 * `deleted_at: timestamptz (nullable)`
 
 #### `clientes_contatos`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK; igual ao do cliente pai)
 * `cliente_id: UUID` (FK)
@@ -126,6 +134,7 @@ Representada (1) ----< (N) TabelaPreco (1) ----< (N) ItemPreco >---- (1) Produto
 Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada com a gravada: itens sem alteração não são regravados, alterados recebem novo `updated_at` e removidos recebem `deleted_at`. Nada é apagado fisicamente.
 
 #### `clientes_metricas`
+
 * `cliente_id: UUID` (PK/FK)
 * `tenant_id: UUID`
 * `data_ultima_compra: date (nullable)`
@@ -134,6 +143,7 @@ Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada
 * `ticket_medio_centavos: integer`
 
 #### `produtos`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `representada_id: UUID` (FK)
@@ -147,9 +157,11 @@ Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada
 * `deleted_at: timestamptz (nullable)`
 
 #### `tabelas_preco`
+
 A tabela de preço pertence à representada; o cliente não tem tabela própria. No orçamento, cada fábrica sugere a tabela **ativa e vigente de início mais recente** (empate: ordem alfabética do nome), e o representante pode trocar a tabela em cada pedido. Sem tabela vigente, o orçamento pede a escolha manual. Variações por estado (ICMS, ST) estão no `BACKLOG.md` 1.5.
 
 **Substituição de tabela:** ao criar uma tabela que substitui outra (importação de CSV com "Substitui a tabela" ou reajuste em lote), a substituída passa a terminar na **véspera do início da nova** (só se ainda terminava depois disso), e a nova precisa começar depois do início da substituída. Assim as duas nunca ficam vigentes ao mesmo tempo. Pedidos já gravados não mudam, porque o item do pedido guarda o próprio preço.
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `representada_id: UUID` (FK)
@@ -162,6 +174,7 @@ A tabela de preço pertence à representada; o cliente não tem tabela própria.
 * `deleted_at: timestamptz (nullable)`
 
 #### `itens_preco`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `tabela_id: UUID` (FK)
@@ -173,6 +186,7 @@ A tabela de preço pertence à representada; o cliente não tem tabela própria.
 * `deleted_at: timestamptz (nullable)`
 
 #### Importação de produtos e preços por CSV (TODO 2.9)
+
 * **Arquivo:** CSV com separador `;`, `,` ou tabulação (detectado), UTF-8 ou Windows-1252 (detectado), BOM e campos entre aspas. Arquivos `.xlsx` são recusados com a orientação de salvar como CSV. A linha do cabeçalho é detectada (títulos acima dela são ignorados) e pode ser trocada na tela.
 * **Preço:** convertido em centavos por análise de texto, sem ponto flutuante ("1.234,56", "1234.56", "R$ 1.234,56"). O separador decimal é decidido pela coluna inteira; sem pistas, vale a vírgula. Mais de 2 casas decimais são arredondadas *half-even* e geram aviso na linha.
 * **Validação por linha:** SKU vazio, preço ou múltiplo inválido e produto novo sem descrição viram erro e a linha fica de fora. SKU repetido com os mesmos dados vale a primeira linha (aviso); com dados diferentes, todas as ocorrências viram erro.
@@ -182,9 +196,11 @@ A tabela de preço pertence à representada; o cliente não tem tabela própria.
 * **`mapeamentos_importacao` (só no aparelho, não sincroniza):** `[tenant_id+representada_id]` (PK), `colunas` (nome do cabeçalho escolhido para SKU, descrição, unidade, múltiplo e preço; `null` = não importar) e `updated_at`. Guarda o nome, não a posição, porque a fábrica pode reordenar as colunas.
 
 #### Reajuste em lote (TODO 2.9.4)
+
 Cria uma tabela nova a partir de outra da mesma representada, com todos os itens vivos reajustados por `preço + aplicarPercentual(preço, ±X)` (centésimos de %, *half-even*; de -99,99% a +1.000%), mantendo o desconto máximo de cada item. A origem é encerrada na véspera do início da nova (regra em `tabelas_preco`). Tudo numa transação com a Outbox.
 
 #### `pedidos`
+
 * `id: UUID` (PK gerada pelo cliente no Dexie via UUIDv4)
 * `tenant_id: UUID` (FK)
 * `cotacao_grupo_id: UUID (nullable)` (Agrupador quando uma cotação multi-representada gera múltiplos pedidos individuais por fábrica — Fase 2.5)
@@ -209,6 +225,7 @@ Cria uma tabela nova a partir de outra da mesma representada, com todos os itens
 Cotação multi-representada: a sacola é gravada numa única transação como 1 pedido por representada. Cliente, endereço de entrega, contato, transportadora e observações são comuns a todos; tabela, condição de pagamento e tipo de frete são de cada fábrica. O `cotacao_grupo_id` só é criado quando há mais de uma representada e, uma vez criado, é mantido nas edições. Ao editar um rascunho, os pedidos são casados pela representada, e os das fábricas retiradas da sacola recebem `deleted_at`. A cotação só é editável enquanto todos os seus pedidos estão em `rascunho`.
 
 #### `itens_pedido`
+
 * `id: UUID` (PK gerada pelo cliente no Dexie via UUIDv4)
 * `tenant_id: UUID` (FK)
 * `pedido_id: UUID` (FK)
@@ -223,6 +240,7 @@ Cotação multi-representada: a sacola é gravada numa única transação como 1
 * `deleted_at: timestamptz (nullable)`
 
 #### `faturamentos_parciais`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `pedido_id: UUID` (FK)
@@ -234,6 +252,7 @@ Cotação multi-representada: a sacola é gravada numa única transação como 1
 * `deleted_at: timestamptz (nullable)`
 
 #### `extratos_comissao`
+
 * `id: UUID` (PK)
 * `tenant_id: UUID` (FK)
 * `faturamento_id: UUID` (FK)
@@ -251,6 +270,7 @@ Cotação multi-representada: a sacola é gravada numa única transação como 1
 ## 3. Arquitetura Offline-First e Sincronização
 
 ### 3.1. Estrutura da Fila Outbox Local (Dexie.js)
+
 Toda mutação executada pelo usuário em modo offline não toca a rede; ela persiste na store local de negócio e cria uma entrada na tabela de outbox:
 
 ```typescript
@@ -271,6 +291,7 @@ export interface OutboxMutation {
 Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `representadas`, `transportadoras`, `clientes`, `clientes_enderecos`, `clientes_contatos`, `clientes_metricas`, `produtos`, `tabelas_preco`, `itens_preco`, `pedidos` e `itens_pedido` (fonte: `ENTIDADES_SINCRONIZAVEIS` em `src/modules/sync/domain/outbox.schema.ts`).
 
 ### 3.2. Estratégia de Resolução de Conflitos
+
 * **Entidades Transacionais Geradas em Campo (Pedidos, Itens, Clientes Novos):**
   * Política: **Client-Wins com Idempotency Key**.
   * Chave primária gerada no cliente (UUIDv4). O backend trata requisições repetidas via `idempotency_key` no PostgreSQL (`ON CONFLICT (idempotency_key) DO NOTHING`). O pedido cadastrado offline nunca é sobrescrito ou rejeitado pelo servidor, exceto por falha de validação estrutural de segurança.
@@ -289,6 +310,7 @@ Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `
 ## 4. Stack Tecnológica e Engenharia de Ambiente (DX)
 
 ### 4.1. Tecnologias Principais
+
 * **Frontend:** Vite + React (TypeScript estrito) configurado como PWA via `vite-plugin-pwa`.
 * **Banco Local (Navegador):** `Dexie.js` com reatividade via `useLiveQuery`.
 * **Validação Universal:** `Zod` (todos os DTOs, schemas de formulários e tipos do Dexie derivam de schemas Zod via `z.infer`).
@@ -296,10 +318,12 @@ Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `
 * **PDF Engine:** `@react-pdf/renderer` para geração client-side determinística sem dependência de APIs externas.
 
 ### 4.2. Tooling e Ferramental de Alta Velocidade
+
 * **Gerenciador de Pacotes:** `pnpm` (eficiência de I/O em disco e resolução determinística).
 * **Linter & Formatter:** `Biome` (`@biomejs/biome`) substituindo ESLint e Prettier.
 * **Test Runner:** `Vitest` com `fake-indexeddb` configurado no `setupFiles`. Permite executar a suíte inteira de repositórios do Dexie em milissegundos no terminal.
 * **Supabase Local (CLI):** O desenvolvimento diário ocorre contra o PostgreSQL do Supabase via Docker local (`supabase start`). Migrações SQL são controladas via versionamento declarativo (`supabase migration new`), gerando tipos TypeScript automaticamente:
+
   ```bash
   pnpm supabase:types # supabase gen types typescript --local > src/types/database.types.ts
   ```
@@ -309,9 +333,10 @@ Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `
 ## 5. Padrões de Arquitetura de Software
 
 ### 5.1. Repositórios e Desacoplamento de Infraestrutura
+
 A camada de apresentação (telas e hooks do React) consome apenas contratos de domínio. Nenhum componente importa `@supabase/supabase-js` ou `dexie` diretamente:
 
-```
+```text
 [React Views / UI Components]
               |
               V
@@ -327,6 +352,7 @@ A camada de apresentação (telas e hooks do React) consome apenas contratos de 
 ```
 
 Exemplo de contrato:
+
 ```typescript
 export interface PedidoRepository {
   salvarLocal(pedido: NovoPedidoInput): Promise<Pedido>;
@@ -336,9 +362,10 @@ export interface PedidoRepository {
 ```
 
 ### 5.2. Arquitetura Vertical Slice
+
 O código-fonte em `src/` é organizado por módulos funcionais orientados a negócio, não por tipo técnico de arquivo:
 
-```
+```text
 src/
 ├── modules/
 │   ├── pedidos/
@@ -363,6 +390,7 @@ src/
 Base de código única (*Single Codebase*) para comercialização do software a diferentes representantes ou assessorias sem necessidade de novos repositórios ou branches.
 
 ### 6.1. Segurança por Linha (Supabase RLS)
+
 ```sql
 alter table public.pedidos enable row level security;
 
@@ -374,6 +402,7 @@ with check (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
 ```
 
 ### 6.2. Contrato de Configuração de Marca (`TenantConfig`)
+
 ```typescript
 export interface TenantConfig {
   id: string;
@@ -408,12 +437,13 @@ A identidade visual é aplicada em runtime via variáveis CSS no `:root` atravé
 
 ## 7. Fases de Implementação
 
-```
+```text
 [Fase 1: MVP]               [Fase 2: Regras Comerciais]   [Fase 3: Financeiro]         [Fase 4: Inteligência]
 Catálogo + Pedidos Offline  -> Motor de Descontos & Fretes -> Conciliação de Comissões -> Curva de Recompra & Rotas
 ```
 
 ### Fase 1: MVP - Emissão Rápida de Pedidos (Offline-First)
+
 * Setup do projeto: Vite, React, TypeScript, Biome, Vitest, Dexie.js e Tailwind.
 * Schemas Zod universais para Clientes, Produtos, Pedidos e Outbox.
 * Catálogo rápido no IndexedDB com busca instantânea local por SKU ou descrição.
@@ -422,6 +452,7 @@ Catálogo + Pedidos Offline  -> Motor de Descontos & Fretes -> Conciliação de 
 * Fila Outbox persistindo mutações e sincronizando via idempotency key ao detectar conexão.
 
 ### Fase 2: Motor de Políticas Comerciais Multirrepresentada
+
 * Suporte a múltiplas tabelas de preço com regras de vigência e associação por cliente.
 * Validações de pedido mínimo (valor em centavos ou volume) impedindo emissão inválida.
 * Trava estrita de múltiplos de embalagem no input de quantidade.
@@ -429,12 +460,14 @@ Catálogo + Pedidos Offline  -> Motor de Descontos & Fretes -> Conciliação de 
 * Seleção de regras de frete (CIF/FOB).
 
 ### Fase 3: Funil de Faturamento e Conciliação Financeira
+
 * Máquina de estados do pedido: `Emitido` -> `Faturado Parcial` -> `Faturado Total` -> `Liquidado`.
 * Input e conciliação de faturas: registro do número da nota fiscal e divergências de corte de itens.
 * Extrato de comissões previstas versus efetivamente depositadas.
 * Projeção de fluxo de caixa futuro de comissões (30, 60, 90 dias).
 
 ### Fase 4: CRM B2B e Inteligência de Recompra
+
 * Algoritmo de cálculo de ciclo médio de recompra por cliente, com flags de alerta preventivo.
 * Ficha Raio-X pré-visita: histórico dos últimos pedidos, produtos nunca comprados e pendências financeiras.
 * Curva ABC de clientes baseada em volume faturado acumulado.
@@ -446,19 +479,24 @@ Catálogo + Pedidos Offline  -> Motor de Descontos & Fretes -> Conciliação de 
 Este bloco atua como as instruções operacionais para agentes de codificação trabalhando neste repositório.
 
 ### 8.1. Regras Operacionais Inegociáveis
+
 1. **Tipagem e Linter:** Proibido o uso de `any` ou type-assertions cegas (`as Type` sem validação). Qualquer entrada externa deve ser validada via Zod. O código deve passar 100% pelo `pnpm biome check`.
 2. **Dinheiro e Aritmética:** Nunca utilize tipos decimais para cálculo financeiro. Valores são sempre inteiros representando centavos. Cálculos de comissão e totais devem ser testados contra casos com dízimas periódicas e arredondamentos bancários (*half-even*).
 3. **Isolamento de Infraestrutura:** Nunca importe `@supabase/supabase-js` ou `dexie` diretamente dentro da pasta `components/` ou `hooks/`. Sempre passe por interfaces em `repositories/`.
 4. **Isolamento de Tenant:** Toda mutação local e remota deve injetar e validar o `tenant_id`.
 
 ### 8.2. Protocolo de Desenvolvimento em Fatias Verticais (Vertical Slice TDD)
+
 Ao implementar uma nova funcionalidade, o agente deve seguir estritamente o pipeline:
+
 1. **Contrato & Schemas:** Criar o schema Zod e derivar os tipos em `domain/`.
 2. **Lógica Pura & Testes Unitários:** Escrever a função pura de negócio e os testes no Vitest cobrindo cenários nominais e casos de borda.
 3. **Persistência Local (Dexie):** Implementar o repositório Dexie correspondente e validar com testes automatizados utilizando `fake-indexeddb`.
 4. **Interface e Integração:** Desenvolver o componente React consumindo o hook do repositório, garantindo conformidade com o design token (variáveis HSL do tema).
 5. **Autovalidação:** Executar no terminal:
+
    ```bash
    pnpm validate
    ```
+
    Se houver falha, ler o relatório de saída e corrigir o código antes de reportar a conclusão da tarefa. A versão vigente destas diretrizes está em `AGENTS.md`.

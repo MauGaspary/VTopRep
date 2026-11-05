@@ -104,7 +104,7 @@ O comando roda `biome check`, `tsc -b` e `vitest run`, nessa ordem, e falha no p
 O navegador só oferece a instalação quando as duas condições abaixo são atendidas:
 
 | Requisito | Por quê |
-|---|---|
+| --- | --- |
 | **Build de produção** (`pnpm build`) | O service worker e o manifesto só existem no build. No `pnpm dev` não há instalação. |
 | **Endereço HTTPS ou `localhost`** | Sem conexão segura, o navegador não registra o service worker: não instala e não funciona offline. Um IP de rede (`http://192.168...`) **não** serve. |
 
@@ -113,7 +113,7 @@ O primeiro acesso precisa de internet, porque é nele que o app é baixado para 
 ### Onde abrir o app
 
 | Situação | Como fazer |
-|---|---|
+| --- | --- |
 | **No computador de desenvolvimento** | `pnpm build` e `pnpm preview`, depois abrir `http://localhost:4173`. |
 | **Celular Android ligado por cabo USB** (teste) | Rodar `pnpm preview --host 127.0.0.1`, abrir `chrome://inspect` no Chrome do computador, ativar *Port forwarding* de `4173` para `127.0.0.1:4173` e abrir `localhost:4173` no Chrome do celular. Sem o `--host`, o servidor pode ouvir só em IPv6 (`::1`) e o celular recebe "conexão recusada". |
 | **Qualquer aparelho, teste rápido** | Criar um túnel HTTPS para o `pnpm preview`, por exemplo `cloudflared tunnel --url http://localhost:4173`, e abrir o endereço gerado. |
@@ -122,7 +122,7 @@ O primeiro acesso precisa de internet, porque é nele que o app é baixado para 
 ### Como instalar em cada navegador
 
 | Aparelho | Navegador | Passos |
-|---|---|---|
+| --- | --- | --- |
 | Computador (Windows, macOS, Linux) | Chrome ou Edge | Clicar no ícone de instalar na barra de endereço (monitor com seta) ou no menu **⋮ → Instalar Vinitop RS**. O app abre numa janela própria e ganha atalho no menu Iniciar. |
 | Android | Chrome | Menu **⋮ → Instalar app** (ou **Adicionar à tela inicial**). |
 | iPhone / iPad | Safari | Botão **Compartilhar → Adicionar à Tela de Início**. Só funciona pelo Safari, e não aparece convite automático para instalar. |
