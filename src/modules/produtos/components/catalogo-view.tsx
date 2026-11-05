@@ -17,8 +17,14 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
+	CartaoLista,
+	CartaoListaAcoes,
+	CartaoListaTopo,
 	EmptyState,
 	ESTILOS_COR_REPRESENTADA,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	RepresentadaDot,
 	SearchInput,
@@ -160,6 +166,24 @@ export function CatalogoView({
 		} catch (e) {
 			setErro(mensagemDeErro(e, "Erro ao reativar produto"));
 		}
+	};
+
+	/** Preço mostrado no catálogo: da tabela escolhida ou da vigente (automático). */
+	const precoParaExibir = (produto: Produto) => {
+		if (tabelaEspecificaValida) {
+			const preco = precosTabelaEspecifica.get(produto.id);
+			return {
+				precoExibido: preco?.preco_base_centavos,
+				descontoMaxExibido: preco?.desconto_maximo_permitido,
+				nomeTabelaSubtitulo: undefined,
+			};
+		}
+		const preco = precosAutomaticos.get(produto.id);
+		return {
+			precoExibido: preco?.preco_base_centavos,
+			descontoMaxExibido: preco?.desconto_maximo_permitido,
+			nomeTabelaSubtitulo: preco?.nome_tabela,
+		};
 	};
 
 	return (
@@ -451,166 +475,257 @@ export function CatalogoView({
 								}
 							/>
 						) : (
-							<section
-								aria-label={`Produtos de ${representadaAtiva.nome_fantasia}`}
-								className="dense-table-region rounded-xl border border-border bg-card"
-							>
-								<table className="text-left text-sm">
-									<thead>
-										<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-											<th className="w-28 px-3.5 py-2.5">SKU</th>
-											<th className="px-3 py-2.5">Produto</th>
-											<th className="hidden px-3 py-2.5 sm:table-cell">
-												Embalagem
-											</th>
-											<th className="hidden px-3 py-2.5 text-right lg:table-cell">
-												Desc. Máx.
-											</th>
-											<th className="px-3 py-2.5 text-right">Preço Base</th>
-											<th className="w-28 px-3.5 py-2.5 text-right">Ações</th>
-										</tr>
-									</thead>
-									<tbody className="divide-y divide-border">
-										{lista.visiveis.map((produto) => {
-											const isInativo = !produto.ativo;
-											const precoEspecifico = tabelaEspecificaValida
-												? precosTabelaEspecifica.get(produto.id)
-												: undefined;
-											const precoAuto = precosAutomaticos.get(produto.id);
-
-											const precoExibido = tabelaEspecificaValida
-												? precoEspecifico?.preco_base_centavos
-												: precoAuto?.preco_base_centavos;
-											const descontoMaxExibido = tabelaEspecificaValida
-												? precoEspecifico?.desconto_maximo_permitido
-												: precoAuto?.desconto_maximo_permitido;
-											const nomeTabelaSubtitulo = tabelaEspecificaValida
-												? undefined
-												: precoAuto?.nome_tabela;
-
-											return (
-												<tr
-													key={produto.id}
-													className={`group transition-colors hover:bg-muted/50 ${
-														isInativo ? "bg-muted/25 opacity-65" : ""
-													}`}
-												>
-													<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
-														<span className="inline-flex items-center rounded border border-border bg-muted/70 px-1.5 py-0.5 font-mono text-xs font-medium text-foreground">
-															{produto.sku}
-														</span>
-													</td>
-
-													<td className="px-3 py-2.5 align-middle">
-														<div className="flex flex-wrap items-center gap-2">
+							<ListaResponsiva>
+								<ListaCards
+									rotulo={`Produtos de ${representadaAtiva.nome_fantasia}`}
+								>
+									{lista.visiveis.map((produto) => {
+										const isInativo = !produto.ativo;
+										const {
+											precoExibido,
+											descontoMaxExibido,
+											nomeTabelaSubtitulo,
+										} = precoParaExibir(produto);
+										const linkEditar = `/produtos/${produto.id}/editar?representada=${representadaAtiva.id}`;
+										return (
+											<CartaoLista key={produto.id} inativo={isInativo}>
+												<CartaoListaTopo
+													titulo={
+														<>
 															<Link
-																to={`/produtos/${produto.id}/editar?representada=${representadaAtiva.id}`}
+																to={linkEditar}
 																className="font-medium text-foreground hover:text-primary"
 															>
 																{produto.descricao}
 															</Link>
-															{isInativo && (
-																<Badge variant="secondary">Inativo</Badge>
-															)}
-														</div>
-														<div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground sm:hidden">
-															<span>{produto.unidade_medida}</span>
-															{produto.multiplo_embalagem > 1 && (
-																<span>
-																	· Múlt. {produto.multiplo_embalagem}
+															<div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+																<span className="inline-flex items-center rounded border border-border bg-muted/70 px-1.5 py-0.5 font-mono font-medium text-foreground">
+																	{produto.sku}
 																</span>
-															)}
-														</div>
-													</td>
-
-													<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap sm:table-cell">
-														<span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 font-mono text-xs text-muted-foreground tabular-nums">
-															<strong className="font-medium text-foreground">
-																{produto.unidade_medida}
-															</strong>
-															{produto.multiplo_embalagem > 1 && (
-																<span>× {produto.multiplo_embalagem}</span>
-															)}
-														</span>
-													</td>
-
-													<td className="hidden px-3 py-2.5 text-right align-middle font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap lg:table-cell">
-														{descontoMaxExibido !== undefined &&
-														descontoMaxExibido > 0
-															? `até ${formatarCentesimosPercentual(descontoMaxExibido)}`
-															: "—"}
-													</td>
-
-													<td className="px-3 py-2.5 text-right align-middle whitespace-nowrap">
-														{precoExibido !== undefined ? (
+																<span className="font-mono tabular-nums">
+																	{produto.unidade_medida}
+																	{produto.multiplo_embalagem > 1 &&
+																		` × ${produto.multiplo_embalagem}`}
+																</span>
+																{isInativo && (
+																	<Badge variant="secondary">Inativo</Badge>
+																)}
+															</div>
+														</>
+													}
+													destaque={
+														precoExibido !== undefined ? (
 															<div className="flex flex-col items-end">
 																<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
 																	{formatarCentavos(precoExibido)}
 																</span>
-																{nomeTabelaSubtitulo && (
-																	<span className="max-w-36 truncate text-[11px] text-subtle-foreground">
-																		{nomeTabelaSubtitulo}
-																	</span>
-																)}
+																{descontoMaxExibido !== undefined &&
+																	descontoMaxExibido > 0 && (
+																		<span className="font-mono text-[11px] text-muted-foreground tabular-nums">
+																			Desc. até{" "}
+																			{formatarCentesimosPercentual(
+																				descontoMaxExibido,
+																			)}
+																		</span>
+																	)}
 															</div>
 														) : (
 															<Badge variant="secondary">Sem preço</Badge>
-														)}
-													</td>
+														)
+													}
+												/>
+												{nomeTabelaSubtitulo && (
+													<p className="truncate text-[11px] text-subtle-foreground">
+														{nomeTabelaSubtitulo}
+													</p>
+												)}
+												<CartaoListaAcoes>
+													<Link
+														to={linkEditar}
+														className={buttonClassName({
+															variant: "secondary",
+															size: "sm",
+															className: "flex-1",
+														})}
+													>
+														Editar
+													</Link>
+													{isInativo ? (
+														<Button
+															variant="secondary"
+															size="sm"
+															onClick={() => handleReativar(produto)}
+														>
+															<RotateCcw aria-hidden="true" />
+															Reativar
+														</Button>
+													) : (
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => handleInativar(produto)}
+															aria-label={`Inativar ${produto.sku}`}
+															className="text-subtle-foreground hover:text-destructive"
+														>
+															<Archive aria-hidden="true" />
+														</Button>
+													)}
+												</CartaoListaAcoes>
+											</CartaoLista>
+										);
+									})}
+								</ListaCards>
+								<ListaTabela
+									rotulo={`Produtos de ${representadaAtiva.nome_fantasia}`}
+								>
+									<table className="text-left text-sm">
+										<thead>
+											<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+												<th className="w-28 px-3.5 py-2.5">SKU</th>
+												<th className="px-3 py-2.5">Produto</th>
+												<th className="hidden px-3 py-2.5 @4xl:table-cell">
+													Embalagem
+												</th>
+												<th className="hidden px-3 py-2.5 text-right @5xl:table-cell">
+													Desc. Máx.
+												</th>
+												<th className="px-3 py-2.5 text-right">Preço Base</th>
+												<th className="w-28 px-3.5 py-2.5 text-right">Ações</th>
+											</tr>
+										</thead>
+										<tbody className="divide-y divide-border">
+											{lista.visiveis.map((produto) => {
+												const isInativo = !produto.ativo;
+												const {
+													precoExibido,
+													descontoMaxExibido,
+													nomeTabelaSubtitulo,
+												} = precoParaExibir(produto);
 
-													<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
-														<div className="inline-flex items-center justify-end gap-1">
-															<Link
-																to={`/produtos/${produto.id}/editar?representada=${representadaAtiva.id}`}
-																className={buttonClassName({
-																	variant: "secondary",
-																	size: "sm",
-																})}
-															>
-																Editar
-															</Link>
-															{isInativo ? (
-																<Button
-																	variant="secondary"
-																	size="sm"
-																	onClick={() => handleReativar(produto)}
-																	title="Reativar produto"
+												return (
+													<tr
+														key={produto.id}
+														className={`group transition-colors hover:bg-muted/50 ${
+															isInativo ? "bg-muted/25 opacity-65" : ""
+														}`}
+													>
+														<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
+															<span className="inline-flex items-center rounded border border-border bg-muted/70 px-1.5 py-0.5 font-mono text-xs font-medium text-foreground">
+																{produto.sku}
+															</span>
+														</td>
+
+														<td className="px-3 py-2.5 align-middle">
+															<div className="flex flex-wrap items-center gap-2">
+																<Link
+																	to={`/produtos/${produto.id}/editar?representada=${representadaAtiva.id}`}
+																	className="font-medium text-foreground hover:text-primary"
 																>
-																	<RotateCcw
-																		aria-hidden="true"
-																		className="size-3.5"
-																	/>
-																	Reativar
-																</Button>
+																	{produto.descricao}
+																</Link>
+																{isInativo && (
+																	<Badge variant="secondary">Inativo</Badge>
+																)}
+															</div>
+															<div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground @4xl:hidden">
+																<span>{produto.unidade_medida}</span>
+																{produto.multiplo_embalagem > 1 && (
+																	<span>
+																		· Múlt. {produto.multiplo_embalagem}
+																	</span>
+																)}
+															</div>
+														</td>
+
+														<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap @4xl:table-cell">
+															<span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 font-mono text-xs text-muted-foreground tabular-nums">
+																<strong className="font-medium text-foreground">
+																	{produto.unidade_medida}
+																</strong>
+																{produto.multiplo_embalagem > 1 && (
+																	<span>× {produto.multiplo_embalagem}</span>
+																)}
+															</span>
+														</td>
+
+														<td className="hidden px-3 py-2.5 text-right align-middle font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap @5xl:table-cell">
+															{descontoMaxExibido !== undefined &&
+															descontoMaxExibido > 0
+																? `até ${formatarCentesimosPercentual(descontoMaxExibido)}`
+																: "—"}
+														</td>
+
+														<td className="px-3 py-2.5 text-right align-middle whitespace-nowrap">
+															{precoExibido !== undefined ? (
+																<div className="flex flex-col items-end">
+																	<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+																		{formatarCentavos(precoExibido)}
+																	</span>
+																	{nomeTabelaSubtitulo && (
+																		<span className="max-w-36 truncate text-[11px] text-subtle-foreground">
+																			{nomeTabelaSubtitulo}
+																		</span>
+																	)}
+																</div>
 															) : (
-																<Button
-																	variant="ghost"
-																	size="sm"
-																	onClick={() => handleInativar(produto)}
-																	title="Inativar produto"
-																	aria-label={`Inativar ${produto.sku}`}
-																	className="px-2 text-subtle-foreground hover:text-destructive"
-																>
-																	<Archive
-																		aria-hidden="true"
-																		className="size-3.5"
-																	/>
-																</Button>
+																<Badge variant="secondary">Sem preço</Badge>
 															)}
-														</div>
-													</td>
-												</tr>
-											);
-										})}
-									</tbody>
-								</table>
+														</td>
+
+														<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
+															<div className="inline-flex items-center justify-end gap-1">
+																<Link
+																	to={`/produtos/${produto.id}/editar?representada=${representadaAtiva.id}`}
+																	className={buttonClassName({
+																		variant: "secondary",
+																		size: "sm",
+																	})}
+																>
+																	Editar
+																</Link>
+																{isInativo ? (
+																	<Button
+																		variant="secondary"
+																		size="sm"
+																		onClick={() => handleReativar(produto)}
+																		title="Reativar produto"
+																	>
+																		<RotateCcw
+																			aria-hidden="true"
+																			className="size-3.5"
+																		/>
+																		Reativar
+																	</Button>
+																) : (
+																	<Button
+																		variant="ghost"
+																		size="sm"
+																		onClick={() => handleInativar(produto)}
+																		title="Inativar produto"
+																		aria-label={`Inativar ${produto.sku}`}
+																		className="px-2 text-subtle-foreground hover:text-destructive"
+																	>
+																		<Archive
+																			aria-hidden="true"
+																			className="size-3.5"
+																		/>
+																	</Button>
+																)}
+															</div>
+														</td>
+													</tr>
+												);
+											})}
+										</tbody>
+									</table>
+								</ListaTabela>
 								<ShowMore
 									restantes={lista.restantes}
 									passo={PASSO_LISTA_INCREMENTAL}
 									onMostrarMais={lista.mostrarMais}
 									onMostrarTodos={lista.mostrarTodos}
 								/>
-							</section>
+							</ListaResponsiva>
 						)}
 					</div>
 				</div>

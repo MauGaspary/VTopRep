@@ -8,7 +8,13 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
+	CartaoLista,
+	CartaoListaAcoes,
+	CartaoListaTopo,
 	EmptyState,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
@@ -117,36 +123,24 @@ export function TransportadorasListView() {
 			)}
 
 			{!isLoading && transportadoras.length > 0 && (
-				<section
-					aria-label="Lista de transportadoras"
-					className="dense-table-region rounded-xl border border-border bg-card"
-				>
-					<table className="text-left text-sm">
-						<thead>
-							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-								<th className="px-3.5 py-2.5">Transportadora</th>
-								<th className="hidden px-3 py-2.5 md:table-cell">CNPJ</th>
-								<th className="hidden px-3 py-2.5 sm:table-cell">Cidade/UF</th>
-								<th className="hidden px-3 py-2.5 sm:table-cell">Telefone</th>
-								<th className="px-3.5 py-2.5 text-right">Ações</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-border">
-							{transportadoras.map((t) => {
-								const isInativa = !t.ativo;
-								return (
-									<tr
-										key={t.id}
-										className={`group transition-colors hover:bg-muted/50 ${
-											isInativa ? "bg-muted/25 opacity-70" : ""
-										}`}
-									>
-										<td className="px-3.5 py-2.5">
-											<div className="min-w-0">
-												<div className="flex items-center gap-2">
+				<ListaResponsiva>
+					<ListaCards rotulo="Transportadoras">
+						{transportadoras.map((t) => {
+							const isInativa = !t.ativo;
+							const detalhes = [
+								t.cidade_uf,
+								t.telefone,
+								t.cnpj ? formatarCnpj(t.cnpj) : null,
+							].filter((d): d is string => Boolean(d));
+							return (
+								<CartaoLista key={t.id} inativo={isInativa}>
+									<CartaoListaTopo
+										titulo={
+											<>
+												<div className="flex min-w-0 items-center gap-2">
 													<Link
 														to={`/transportadoras/${t.id}/editar`}
-														className="truncate font-medium text-foreground hover:text-primary"
+														className="min-w-0 truncate font-medium text-foreground hover:text-primary"
 													>
 														{t.nome_fantasia}
 													</Link>
@@ -155,69 +149,158 @@ export function TransportadorasListView() {
 													)}
 												</div>
 												{t.razao_social && (
-													<div className="truncate text-xs text-muted-foreground">
+													<span className="truncate text-xs text-muted-foreground">
 														{t.razao_social}
+													</span>
+												)}
+											</>
+										}
+									/>
+									{detalhes.length > 0 && (
+										<p className="text-xs text-muted-foreground">
+											{detalhes.join(" · ")}
+										</p>
+									)}
+									<CartaoListaAcoes>
+										<Link
+											to={`/transportadoras/${t.id}/editar`}
+											className={buttonClassName({
+												variant: "secondary",
+												size: "sm",
+												className: "flex-1",
+											})}
+										>
+											Editar
+										</Link>
+										{isInativa ? (
+											<Button
+												variant="secondary"
+												size="sm"
+												onClick={() => handleReativar(t)}
+											>
+												<RotateCcw aria-hidden="true" />
+												Reativar
+											</Button>
+										) : (
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => handleInativar(t)}
+												aria-label={`Inativar ${t.nome_fantasia}`}
+												className="text-subtle-foreground hover:text-destructive"
+											>
+												<Archive aria-hidden="true" />
+											</Button>
+										)}
+									</CartaoListaAcoes>
+								</CartaoLista>
+							);
+						})}
+					</ListaCards>
+					<ListaTabela rotulo="Transportadoras">
+						<table className="text-left text-sm">
+							<thead>
+								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+									<th className="px-3.5 py-2.5">Transportadora</th>
+									<th className="hidden px-3 py-2.5 @4xl:table-cell">CNPJ</th>
+									<th className="hidden px-3 py-2.5 sm:table-cell">
+										Cidade/UF
+									</th>
+									<th className="hidden px-3 py-2.5 sm:table-cell">Telefone</th>
+									<th className="px-3.5 py-2.5 text-right">Ações</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-border">
+								{transportadoras.map((t) => {
+									const isInativa = !t.ativo;
+									return (
+										<tr
+											key={t.id}
+											className={`group transition-colors hover:bg-muted/50 ${
+												isInativa ? "bg-muted/25 opacity-70" : ""
+											}`}
+										>
+											<td className="px-3.5 py-2.5">
+												<div className="min-w-0">
+													<div className="flex items-center gap-2">
+														<Link
+															to={`/transportadoras/${t.id}/editar`}
+															className="truncate font-medium text-foreground hover:text-primary"
+														>
+															{t.nome_fantasia}
+														</Link>
+														{isInativa && (
+															<Badge variant="secondary">Inativa</Badge>
+														)}
 													</div>
-												)}
-											</div>
-										</td>
+													{t.razao_social && (
+														<div className="truncate text-xs text-muted-foreground">
+															{t.razao_social}
+														</div>
+													)}
+												</div>
+											</td>
 
-										<td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap md:table-cell">
-											{t.cnpj ? formatarCnpj(t.cnpj) : "—"}
-										</td>
+											<td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap @4xl:table-cell">
+												{t.cnpj ? formatarCnpj(t.cnpj) : "—"}
+											</td>
 
-										<td className="hidden px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap sm:table-cell">
-											{t.cidade_uf ?? "—"}
-										</td>
+											<td className="hidden px-3 py-2.5 text-xs text-muted-foreground whitespace-nowrap sm:table-cell">
+												{t.cidade_uf ?? "—"}
+											</td>
 
-										<td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap sm:table-cell">
-											{t.telefone ?? "—"}
-										</td>
+											<td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap sm:table-cell">
+												{t.telefone ?? "—"}
+											</td>
 
-										<td className="px-3.5 py-2.5 text-right whitespace-nowrap">
-											<div className="inline-flex items-center justify-end gap-1">
-												<Link
-													to={`/transportadoras/${t.id}/editar`}
-													className={buttonClassName({
-														variant: "secondary",
-														size: "sm",
-													})}
-												>
-													Editar
-												</Link>
-												{isInativa ? (
-													<Button
-														variant="secondary"
-														size="sm"
-														onClick={() => handleReativar(t)}
-														title="Reativar transportadora"
+											<td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+												<div className="inline-flex items-center justify-end gap-1">
+													<Link
+														to={`/transportadoras/${t.id}/editar`}
+														className={buttonClassName({
+															variant: "secondary",
+															size: "sm",
+														})}
 													>
-														<RotateCcw
-															aria-hidden="true"
-															className="size-3.5"
-														/>
-														Reativar
-													</Button>
-												) : (
-													<Button
-														variant="ghost"
-														size="sm"
-														onClick={() => handleInativar(t)}
-														title="Inativar transportadora"
-														aria-label={`Inativar ${t.nome_fantasia}`}
-														className="px-2 text-subtle-foreground hover:text-destructive"
-													>
-														<Archive aria-hidden="true" className="size-3.5" />
-													</Button>
-												)}
-											</div>
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				</section>
+														Editar
+													</Link>
+													{isInativa ? (
+														<Button
+															variant="secondary"
+															size="sm"
+															onClick={() => handleReativar(t)}
+															title="Reativar transportadora"
+														>
+															<RotateCcw
+																aria-hidden="true"
+																className="size-3.5"
+															/>
+															Reativar
+														</Button>
+													) : (
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => handleInativar(t)}
+															title="Inativar transportadora"
+															aria-label={`Inativar ${t.nome_fantasia}`}
+															className="px-2 text-subtle-foreground hover:text-destructive"
+														>
+															<Archive
+																aria-hidden="true"
+																className="size-3.5"
+															/>
+														</Button>
+													)}
+												</div>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</ListaTabela>
+				</ListaResponsiva>
 			)}
 		</Page>
 	);

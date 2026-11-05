@@ -13,9 +13,15 @@ import { Page } from "../../../shared/components/layout/Page";
 import {
 	Badge,
 	buttonClassName,
+	CartaoLista,
+	CartaoListaAcoes,
+	CartaoListaTopo,
 	EmptyState,
 	FormField,
 	Input,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	RepresentadaBadge,
 	Select,
@@ -356,105 +362,175 @@ export function HistoricoClienteView() {
 					}
 				/>
 			) : (
-				<section
-					aria-label="Histórico de pedidos do cliente"
-					className="dense-table-region rounded-xl border border-border bg-card"
-				>
-					<table className="text-left text-sm">
-						<thead>
-							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-								<th className="px-3.5 py-2.5">Data / Nº</th>
-								<th className="px-3 py-2.5">Representada</th>
-								<th className="px-3 py-2.5">Status</th>
-								<th className="px-3 py-2.5 text-right">Valor</th>
-								<th className="px-3.5 py-2.5 text-right">
-									<span className="sr-only">Ações</span>
-								</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-border">
-							{visiveis.map((pedido) => {
-								const rep = representadasPorId.get(pedido.representada_id);
-								const codigo = `#${pedido.id.slice(0, 8).toUpperCase()}`;
-								const fabricas = pedido.cotacao_grupo_id
-									? (fabricasPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
-									: 0;
-								return (
-									<tr
-										key={pedido.id}
-										className="transition-colors hover:bg-muted/50"
-									>
-										<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
-											<div className="flex flex-col">
-												<span className="font-mono text-xs text-foreground tabular-nums">
-													{formatarDataBr(pedido.data_emissao.slice(0, 10))}
-												</span>
-												<Link
-													to={`/pedidos/${pedido.id}`}
-													className="font-mono text-[11px] text-muted-foreground hover:text-primary"
-												>
-													{codigo}
-												</Link>
-												{fabricas > 1 && (
-													<span
-														title={`Cotação com ${fabricas} fábricas`}
-														className="mt-0.5 inline-flex w-fit items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] text-muted-foreground"
-													>
-														<Layers aria-hidden="true" className="size-3" />
-														Cotação · {fabricas} fáb.
-													</span>
-												)}
-											</div>
-										</td>
-										<td className="px-3 py-2.5 align-middle">
+				<ListaResponsiva>
+					<ListaCards rotulo="Histórico de pedidos do cliente">
+						{visiveis.map((pedido) => {
+							const rep = representadasPorId.get(pedido.representada_id);
+							const codigo = `#${pedido.id.slice(0, 8).toUpperCase()}`;
+							const fabricas = pedido.cotacao_grupo_id
+								? (fabricasPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
+								: 0;
+							return (
+								<CartaoLista key={pedido.id}>
+									<CartaoListaTopo
+										titulo={
 											<RepresentadaBadge
 												nome={
 													rep?.nome_fantasia ?? "Representada não encontrada"
 												}
 												cor={rep ? obterCorRepresentada(rep) : "indigo"}
 											/>
-										</td>
-										<td className="px-3 py-2.5 align-middle whitespace-nowrap">
+										}
+										destaque={
+											<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+												{formatarCentavos(pedido.valor_total_centavos)}
+											</span>
+										}
+									/>
+									<div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
+										<span>
+											{formatarDataBr(pedido.data_emissao.slice(0, 10))}
+										</span>
+										<span aria-hidden="true">·</span>
+										<span>{codigo}</span>
+										{fabricas > 1 && (
+											<span className="inline-flex items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 font-sans text-[10px]">
+												<Layers aria-hidden="true" className="size-3" />
+												Cotação · {fabricas} fáb.
+											</span>
+										)}
+										<span className="ml-auto font-sans">
 											<Badge variant={varianteBadgeStatus(pedido.status)}>
 												{ROTULOS_STATUS_PEDIDO[pedido.status]}
 											</Badge>
-										</td>
-										<td className="px-3 py-2.5 text-right align-middle font-mono text-sm font-semibold text-foreground tabular-nums whitespace-nowrap">
-											{formatarCentavos(pedido.valor_total_centavos)}
-										</td>
-										<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
-											<div className="inline-flex items-center justify-end gap-1">
-												{cliente.ativo && (
+										</span>
+									</div>
+									<CartaoListaAcoes>
+										<Link
+											to={`/pedidos/${pedido.id}`}
+											className={buttonClassName({
+												variant: "secondary",
+												size: "sm",
+												className: "flex-1",
+											})}
+										>
+											Abrir
+										</Link>
+										{cliente.ativo && (
+											<Link
+												to={`/pedidos/novo?repetir=${pedido.id}`}
+												title="Novo orçamento com os mesmos itens, usando os preços da tabela vigente"
+												className={buttonClassName({
+													variant: "secondary",
+													size: "sm",
+												})}
+											>
+												<Repeat aria-hidden="true" />
+												Repetir
+											</Link>
+										)}
+									</CartaoListaAcoes>
+								</CartaoLista>
+							);
+						})}
+					</ListaCards>
+					<ListaTabela rotulo="Histórico de pedidos do cliente">
+						<table className="text-left text-sm">
+							<thead>
+								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+									<th className="px-3.5 py-2.5">Data / Nº</th>
+									<th className="px-3 py-2.5">Representada</th>
+									<th className="px-3 py-2.5">Status</th>
+									<th className="px-3 py-2.5 text-right">Valor</th>
+									<th className="px-3.5 py-2.5 text-right">
+										<span className="sr-only">Ações</span>
+									</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-border">
+								{visiveis.map((pedido) => {
+									const rep = representadasPorId.get(pedido.representada_id);
+									const codigo = `#${pedido.id.slice(0, 8).toUpperCase()}`;
+									const fabricas = pedido.cotacao_grupo_id
+										? (fabricasPorCotacao.get(pedido.cotacao_grupo_id) ?? 0)
+										: 0;
+									return (
+										<tr
+											key={pedido.id}
+											className="transition-colors hover:bg-muted/50"
+										>
+											<td className="px-3.5 py-2.5 align-middle whitespace-nowrap">
+												<div className="flex flex-col">
+													<span className="font-mono text-xs text-foreground tabular-nums">
+														{formatarDataBr(pedido.data_emissao.slice(0, 10))}
+													</span>
 													<Link
-														to={`/pedidos/novo?repetir=${pedido.id}`}
-														title="Novo orçamento com os mesmos itens, usando os preços da tabela vigente"
-														aria-label={`Repetir pedido ${codigo}`}
+														to={`/pedidos/${pedido.id}`}
+														className="font-mono text-[11px] text-muted-foreground hover:text-primary"
+													>
+														{codigo}
+													</Link>
+													{fabricas > 1 && (
+														<span
+															title={`Cotação com ${fabricas} fábricas`}
+															className="mt-0.5 inline-flex w-fit items-center gap-1 rounded border border-border bg-muted/60 px-1 py-0.5 text-[10px] text-muted-foreground"
+														>
+															<Layers aria-hidden="true" className="size-3" />
+															Cotação · {fabricas} fáb.
+														</span>
+													)}
+												</div>
+											</td>
+											<td className="px-3 py-2.5 align-middle">
+												<RepresentadaBadge
+													nome={
+														rep?.nome_fantasia ?? "Representada não encontrada"
+													}
+													cor={rep ? obterCorRepresentada(rep) : "indigo"}
+												/>
+											</td>
+											<td className="px-3 py-2.5 align-middle whitespace-nowrap">
+												<Badge variant={varianteBadgeStatus(pedido.status)}>
+													{ROTULOS_STATUS_PEDIDO[pedido.status]}
+												</Badge>
+											</td>
+											<td className="px-3 py-2.5 text-right align-middle font-mono text-sm font-semibold text-foreground tabular-nums whitespace-nowrap">
+												{formatarCentavos(pedido.valor_total_centavos)}
+											</td>
+											<td className="px-3.5 py-2.5 text-right align-middle whitespace-nowrap">
+												<div className="inline-flex items-center justify-end gap-1">
+													{cliente.ativo && (
+														<Link
+															to={`/pedidos/novo?repetir=${pedido.id}`}
+															title="Novo orçamento com os mesmos itens, usando os preços da tabela vigente"
+															aria-label={`Repetir pedido ${codigo}`}
+															className={buttonClassName({
+																variant: "ghost",
+																size: "sm",
+															})}
+														>
+															<Repeat aria-hidden="true" className="size-3.5" />
+															<span className="hidden sm:inline">Repetir</span>
+														</Link>
+													)}
+													<Link
+														to={`/pedidos/${pedido.id}`}
 														className={buttonClassName({
-															variant: "ghost",
+															variant: "secondary",
 															size: "sm",
 														})}
 													>
-														<Repeat aria-hidden="true" className="size-3.5" />
-														<span className="hidden sm:inline">Repetir</span>
+														Abrir
 													</Link>
-												)}
-												<Link
-													to={`/pedidos/${pedido.id}`}
-													className={buttonClassName({
-														variant: "secondary",
-														size: "sm",
-													})}
-												>
-													Abrir
-												</Link>
-											</div>
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				</section>
+												</div>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</ListaTabela>
+				</ListaResponsiva>
 			)}
 		</Page>
 	);

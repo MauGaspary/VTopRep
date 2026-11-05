@@ -8,6 +8,7 @@ export * from "./FormField";
 export * from "./HomonymWarning";
 export * from "./InactiveRecoveryCard";
 export * from "./Input";
+export * from "./ListaResponsiva";
 export * from "./PageHeader";
 export * from "./RepresentadaTag";
 export * from "./SearchInput";

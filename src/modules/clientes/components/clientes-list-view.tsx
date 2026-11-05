@@ -8,7 +8,13 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
+	CartaoLista,
+	CartaoListaAcoes,
+	CartaoListaTopo,
 	EmptyState,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	SearchInput,
 } from "../../../shared/components/ui";
@@ -111,65 +117,98 @@ export function ClientesListView() {
 			)}
 
 			{!isLoading && clientes.length > 0 && (
-				<div className="@container">
-					{/* Pouco espaço (celular em pé): lista em 2 linhas, sem rolagem lateral. */}
-					<ul
-						aria-label="Lista de clientes da carteira"
-						className="divide-y divide-border rounded-xl border border-border bg-card @2xl:hidden"
-					>
+				<ListaResponsiva>
+					<ListaCards rotulo="Clientes da carteira">
 						{clientes.map((c) => {
 							const isInativo = !c.ativo;
 							const tipoCliente = c.tipo_cliente ?? "REVENDA";
 							return (
-								<li
-									key={c.id}
-									className={`flex items-center gap-3 px-3 py-2.5 ${
-										isInativo ? "bg-muted/25 opacity-65" : ""
-									}`}
-								>
-									<div className="flex min-w-0 flex-1 flex-col gap-0.5">
-										<div className="flex min-w-0 items-center gap-2">
-											<Link
-												to={`/clientes/${c.id}/editar`}
-												className="min-w-0 truncate font-medium text-foreground hover:text-primary"
+								<CartaoLista key={c.id} inativo={isInativo}>
+									<CartaoListaTopo
+										titulo={
+											<>
+												<div className="flex min-w-0 items-center gap-2">
+													<Link
+														to={`/clientes/${c.id}/editar`}
+														className="min-w-0 truncate font-medium text-foreground hover:text-primary"
+													>
+														{c.razao_social}
+													</Link>
+													{isInativo && (
+														<Badge variant="secondary">Inativo</Badge>
+													)}
+												</div>
+												{c.nome_fantasia && (
+													<span className="truncate text-xs text-muted-foreground">
+														{c.nome_fantasia}
+													</span>
+												)}
+											</>
+										}
+										destaque={
+											<Badge
+												variant={
+													tipoCliente === "FABRICA" ? "outline" : "secondary"
+												}
 											>
-												{c.razao_social}
-											</Link>
-											{isInativo && <Badge variant="secondary">Inativo</Badge>}
-										</div>
-										<p className="flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
-											<span className="shrink-0 font-mono tabular-nums">
-												{formatarCpfCnpj(c.cnpj_cpf)}
-											</span>
-											<span aria-hidden="true">·</span>
-											<span className="shrink-0">
 												{ROTULOS_TIPO_CLIENTE[tipoCliente]}
-											</span>
-											{c.nome_fantasia && (
-												<span className="min-w-0 truncate">
-													· {c.nome_fantasia}
-												</span>
-											)}
-										</p>
-									</div>
-									<div className="flex shrink-0 items-center gap-1">
+											</Badge>
+										}
+									/>
+									<p className="font-mono text-xs text-muted-foreground tabular-nums">
+										{formatarCpfCnpj(c.cnpj_cpf)}
+									</p>
+									<CartaoListaAcoes>
 										{isInativo ? (
-											<Button
-												variant="secondary"
-												size="sm"
-												onClick={() => handleReativar(c)}
-											>
-												<RotateCcw aria-hidden="true" />
-												Reativar
-											</Button>
+											<>
+												<Link
+													to={`/clientes/${c.id}/editar`}
+													className={buttonClassName({
+														variant: "secondary",
+														size: "sm",
+														className: "flex-1",
+													})}
+												>
+													Editar
+												</Link>
+												<Button
+													variant="secondary"
+													size="sm"
+													onClick={() => handleReativar(c)}
+												>
+													<RotateCcw aria-hidden="true" />
+													Reativar
+												</Button>
+											</>
 										) : (
 											<>
 												<Link
 													to={`/pedidos/novo?clienteId=${c.id}`}
-													className={buttonClassName({ size: "sm" })}
+													className={buttonClassName({
+														size: "sm",
+														className: "flex-1",
+													})}
 												>
 													<FilePlus2 aria-hidden="true" />
 													Orçar
+												</Link>
+												<Link
+													to={`/clientes/${c.id}/pedidos`}
+													className={buttonClassName({
+														variant: "secondary",
+														size: "sm",
+													})}
+												>
+													Pedidos
+												</Link>
+												<Link
+													to={`/clientes/${c.id}/editar`}
+													className={buttonClassName({
+														variant: "secondary",
+														size: "sm",
+													})}
+												>
+													Editar
 												</Link>
 												<Button
 													variant="ghost"
@@ -182,17 +221,13 @@ export function ClientesListView() {
 												</Button>
 											</>
 										)}
-									</div>
-								</li>
+									</CartaoListaAcoes>
+								</CartaoLista>
 							);
 						})}
-					</ul>
+					</ListaCards>
 
-					{/* Espaço suficiente (tablet, celular deitado, computador): tabela. */}
-					<section
-						aria-label="Tabela de clientes da carteira"
-						className="dense-table-region hidden rounded-xl border border-border bg-card @2xl:block"
-					>
+					<ListaTabela rotulo="Clientes da carteira">
 						<table className="text-left text-sm">
 							<thead>
 								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
@@ -333,8 +368,8 @@ export function ClientesListView() {
 								})}
 							</tbody>
 						</table>
-					</section>
-				</div>
+					</ListaTabela>
+				</ListaResponsiva>
 			)}
 		</Page>
 	);

@@ -8,7 +8,13 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
+	CartaoLista,
+	CartaoListaAcoes,
+	CartaoListaTopo,
 	EmptyState,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	RepresentadaDot,
 	SearchInput,
@@ -120,134 +126,230 @@ export function RepresentadasListView() {
 			)}
 
 			{!isLoading && representadas.length > 0 && (
-				<section
-					aria-label="Lista de representadas"
-					className="dense-table-region rounded-xl border border-border bg-card"
-				>
-					<table className="text-left text-sm">
-						<thead>
-							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-								<th className="px-3.5 py-2.5">Fábrica</th>
-								<th className="hidden px-3 py-2.5 md:table-cell">CNPJ</th>
-								<th className="px-3 py-2.5 text-right">Comissão</th>
-								<th className="hidden px-3 py-2.5 text-right sm:table-cell">
-									Ped. Mínimo
-								</th>
-								<th className="hidden px-3 py-2.5 sm:table-cell">Frete</th>
-								<th className="px-3.5 py-2.5 text-right">Ações</th>
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-border">
-							{representadas.map((r) => {
-								const isInativa = !r.ativo;
-								const cor = obterCorRepresentada(r);
-								return (
-									<tr
-										key={r.id}
-										className={`group transition-colors hover:bg-muted/50 ${
-											isInativa ? "bg-muted/25 opacity-70" : ""
-										}`}
-									>
-										<td className="px-3.5 py-2.5">
-											<div className="flex items-center gap-2.5">
-												<RepresentadaDot cor={cor} />
-												<div className="min-w-0">
-													<div className="flex items-center gap-2">
-														<Link
-															to={`/representadas/${r.id}/editar`}
-															className="truncate font-medium text-foreground hover:text-primary"
-														>
-															{r.nome_fantasia}
-														</Link>
-														{isInativa && (
-															<Badge variant="secondary">Inativa</Badge>
-														)}
-													</div>
-													<div className="truncate text-xs text-muted-foreground">
-														{r.razao_social}
-													</div>
+				<ListaResponsiva>
+					<ListaCards rotulo="Representadas">
+						{representadas.map((r) => {
+							const isInativa = !r.ativo;
+							return (
+								<CartaoLista key={r.id} inativo={isInativa}>
+									<CartaoListaTopo
+										titulo={
+											<>
+												<div className="flex min-w-0 items-center gap-2">
+													<RepresentadaDot cor={obterCorRepresentada(r)} />
+													<Link
+														to={`/representadas/${r.id}/editar`}
+														className="min-w-0 truncate font-medium text-foreground hover:text-primary"
+													>
+														{r.nome_fantasia}
+													</Link>
+													{isInativa && (
+														<Badge variant="secondary">Inativa</Badge>
+													)}
 												</div>
-											</div>
-										</td>
-
-										<td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap md:table-cell">
-											{formatarCnpj(r.cnpj)}
-										</td>
-
-										<td className="px-3 py-2.5 text-right font-mono text-xs font-medium text-foreground tabular-nums whitespace-nowrap">
-											{formatarResumoComissaoRepresentada(r)}
-										</td>
-
-										<td className="hidden px-3 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap sm:table-cell">
-											{r.valor_pedido_minimo_centavos > 0
-												? formatarCentavos(r.valor_pedido_minimo_centavos)
-												: "—"}
-										</td>
-
-										<td className="hidden px-3 py-2.5 whitespace-nowrap sm:table-cell">
+												<span className="truncate text-xs text-muted-foreground">
+													{r.razao_social}
+												</span>
+											</>
+										}
+										destaque={
 											<span
 												title={ROTULOS_FRETE[r.regras_frete_padrao]}
 												className="inline-flex h-5 items-center rounded-md border border-border bg-muted/60 px-1.5 font-mono text-[11px] text-muted-foreground"
 											>
 												{r.regras_frete_padrao.replace("_", " ")}
 											</span>
-										</td>
+										}
+									/>
+									<div className="flex flex-wrap items-center gap-x-2 gap-y-1 font-mono text-[11px] text-muted-foreground tabular-nums">
+										<span className="font-medium text-foreground">
+											{formatarResumoComissaoRepresentada(r)}
+										</span>
+										<span aria-hidden="true">·</span>
+										<span>
+											Mín.{" "}
+											{r.valor_pedido_minimo_centavos > 0
+												? formatarCentavos(r.valor_pedido_minimo_centavos)
+												: "—"}
+										</span>
+										<span aria-hidden="true">·</span>
+										<span>{formatarCnpj(r.cnpj)}</span>
+									</div>
+									<CartaoListaAcoes>
+										<Link
+											to={`/catalogo?representada=${r.id}`}
+											className={buttonClassName({
+												variant: "secondary",
+												size: "sm",
+												className: "flex-1",
+											})}
+										>
+											<Package aria-hidden="true" />
+											Catálogo
+										</Link>
+										<Link
+											to={`/representadas/${r.id}/editar`}
+											className={buttonClassName({
+												variant: "secondary",
+												size: "sm",
+											})}
+										>
+											Editar
+										</Link>
+										{isInativa ? (
+											<Button
+												variant="secondary"
+												size="sm"
+												onClick={() => handleReativar(r)}
+											>
+												<RotateCcw aria-hidden="true" />
+												Reativar
+											</Button>
+										) : (
+											<Button
+												variant="ghost"
+												size="sm"
+												onClick={() => handleInativar(r)}
+												aria-label={`Inativar ${r.nome_fantasia}`}
+												className="text-subtle-foreground hover:text-destructive"
+											>
+												<Archive aria-hidden="true" />
+											</Button>
+										)}
+									</CartaoListaAcoes>
+								</CartaoLista>
+							);
+						})}
+					</ListaCards>
+					<ListaTabela rotulo="Representadas">
+						<table className="text-left text-sm">
+							<thead>
+								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+									<th className="px-3.5 py-2.5">Fábrica</th>
+									<th className="hidden px-3 py-2.5 @6xl:table-cell">CNPJ</th>
+									<th className="px-3 py-2.5 text-right">Comissão</th>
+									<th className="hidden px-3 py-2.5 text-right @5xl:table-cell">
+										Ped. Mínimo
+									</th>
+									<th className="hidden px-3 py-2.5 @4xl:table-cell">Frete</th>
+									<th className="px-3.5 py-2.5 text-right">Ações</th>
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-border">
+								{representadas.map((r) => {
+									const isInativa = !r.ativo;
+									const cor = obterCorRepresentada(r);
+									return (
+										<tr
+											key={r.id}
+											className={`group transition-colors hover:bg-muted/50 ${
+												isInativa ? "bg-muted/25 opacity-70" : ""
+											}`}
+										>
+											<td className="px-3.5 py-2.5">
+												<div className="flex items-center gap-2.5">
+													<RepresentadaDot cor={cor} />
+													<div className="min-w-0">
+														<div className="flex items-center gap-2">
+															<Link
+																to={`/representadas/${r.id}/editar`}
+																className="truncate font-medium text-foreground hover:text-primary"
+															>
+																{r.nome_fantasia}
+															</Link>
+															{isInativa && (
+																<Badge variant="secondary">Inativa</Badge>
+															)}
+														</div>
+														<div className="truncate text-xs text-muted-foreground">
+															{r.razao_social}
+														</div>
+													</div>
+												</div>
+											</td>
 
-										<td className="px-3.5 py-2.5 text-right whitespace-nowrap">
-											<div className="inline-flex items-center justify-end gap-1">
-												<Link
-													to={`/catalogo?representada=${r.id}`}
-													className={buttonClassName({
-														variant: "ghost",
-														size: "sm",
-													})}
-													title="Ver produtos desta representada no catálogo"
+											<td className="hidden px-3 py-2.5 font-mono text-xs text-muted-foreground whitespace-nowrap @6xl:table-cell">
+												{formatarCnpj(r.cnpj)}
+											</td>
+
+											<td className="px-3 py-2.5 text-right font-mono text-xs font-medium text-foreground tabular-nums whitespace-nowrap">
+												{formatarResumoComissaoRepresentada(r)}
+											</td>
+
+											<td className="hidden px-3 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap @5xl:table-cell">
+												{r.valor_pedido_minimo_centavos > 0
+													? formatarCentavos(r.valor_pedido_minimo_centavos)
+													: "—"}
+											</td>
+
+											<td className="hidden px-3 py-2.5 whitespace-nowrap @4xl:table-cell">
+												<span
+													title={ROTULOS_FRETE[r.regras_frete_padrao]}
+													className="inline-flex h-5 items-center rounded-md border border-border bg-muted/60 px-1.5 font-mono text-[11px] text-muted-foreground"
 												>
-													<Package aria-hidden="true" className="size-3.5" />
-													<span className="hidden lg:inline">Catálogo</span>
-												</Link>
-												<Link
-													to={`/representadas/${r.id}/editar`}
-													className={buttonClassName({
-														variant: "secondary",
-														size: "sm",
-													})}
-												>
-													Editar
-												</Link>
-												{isInativa ? (
-													<Button
-														variant="secondary"
-														size="sm"
-														onClick={() => handleReativar(r)}
-														title="Reativar representada"
+													{r.regras_frete_padrao.replace("_", " ")}
+												</span>
+											</td>
+
+											<td className="px-3.5 py-2.5 text-right whitespace-nowrap">
+												<div className="inline-flex items-center justify-end gap-1">
+													<Link
+														to={`/catalogo?representada=${r.id}`}
+														className={buttonClassName({
+															variant: "ghost",
+															size: "sm",
+														})}
+														title="Ver produtos desta representada no catálogo"
 													>
-														<RotateCcw
-															aria-hidden="true"
-															className="size-3.5"
-														/>
-														Reativar
-													</Button>
-												) : (
-													<Button
-														variant="ghost"
-														size="sm"
-														onClick={() => handleInativar(r)}
-														title="Inativar representada"
-														aria-label={`Inativar ${r.nome_fantasia}`}
-														className="px-2 text-subtle-foreground hover:text-destructive"
+														<Package aria-hidden="true" className="size-3.5" />
+														<span className="hidden @6xl:inline">Catálogo</span>
+													</Link>
+													<Link
+														to={`/representadas/${r.id}/editar`}
+														className={buttonClassName({
+															variant: "secondary",
+															size: "sm",
+														})}
 													>
-														<Archive aria-hidden="true" className="size-3.5" />
-													</Button>
-												)}
-											</div>
-										</td>
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
-				</section>
+														Editar
+													</Link>
+													{isInativa ? (
+														<Button
+															variant="secondary"
+															size="sm"
+															onClick={() => handleReativar(r)}
+															title="Reativar representada"
+														>
+															<RotateCcw
+																aria-hidden="true"
+																className="size-3.5"
+															/>
+															Reativar
+														</Button>
+													) : (
+														<Button
+															variant="ghost"
+															size="sm"
+															onClick={() => handleInativar(r)}
+															title="Inativar representada"
+															aria-label={`Inativar ${r.nome_fantasia}`}
+															className="px-2 text-subtle-foreground hover:text-destructive"
+														>
+															<Archive
+																aria-hidden="true"
+																className="size-3.5"
+															/>
+														</Button>
+													)}
+												</div>
+											</td>
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</ListaTabela>
+				</ListaResponsiva>
 			)}
 		</Page>
 	);

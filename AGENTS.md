@@ -52,6 +52,8 @@ Problemas já encontrados neste repositório. Leia antes de mexer em persistênc
 
 #### Listas grandes e desempenho
 
+- Listas de cadastro usam `ListaResponsiva` + `ListaCards` + `ListaTabela` (`src/shared/components/ui/ListaResponsiva.tsx`): cards quando a própria lista tem menos de 672 px, tabela acima disso, sem rolagem lateral. Colunas secundárias da tabela usam variantes de container (`@4xl:`, `@5xl:`), nunca `sm:`/`md:`; confira no Playwright que `scrollWidth` da tabela não passa do `clientWidth`.
+- No app, a barra lateral só aparece a partir de `lg` (1024 px); abaixo disso valem a barra superior e a inferior do celular.
 - Listas que podem ter milhares de itens usam `useListaIncremental` (`src/shared/hooks/`) com o componente `ShowMore` (100 por vez) e `useDeferredValue` no termo de busca. Renderizar 5.000 linhas levava cerca de 4 s para abrir o catálogo.
 - Em ordenações grandes, use um `Intl.Collator` criado uma vez, e não `localeCompare(..., "pt-BR", opções)` dentro do `sort`, que cria um collator a cada comparação.
 

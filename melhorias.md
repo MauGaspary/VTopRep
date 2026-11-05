@@ -77,6 +77,7 @@ Motivo: numa tela de 360–412 px não cabem 5 ou 6 colunas. A tabela com rolage
 
 - [x] **Barra lateral só a partir de 1024 px:** celular deitado e tablet usam a barra inferior e a largura inteira.
 - [x] **Formato pelo espaço disponível (Orçamentos e Clientes):** a lista mede a largura que tem (`@container`). Abaixo de 672 px vira cards (Orçamentos) ou lista em 2 linhas (Clientes); acima disso, tabela. Colunas secundárias aparecem só quando cabem. Conferido com Playwright de 360 a 1440 px: nenhuma tabela rola para o lado.
-- [ ] **Decidir entre cards e lista em 2 linhas** e aplicar nas outras listas (catálogo, histórico do cliente, fábricas, transportadoras).
-- [ ] **Componente compartilhado** para as listas (item 4 da conversa): aguardando decisão.
+- [x] **Decisão do usuário: cards** (a lista em 2 linhas cortava demais a segunda linha). Aplicado em orçamentos, clientes, catálogo, histórico do cliente, fábricas e transportadoras com o componente `ListaResponsiva` (`src/shared/components/ui/ListaResponsiva.tsx`). Conferido com Playwright de 360 a 1440 px: nenhuma tabela rola para o lado.
+- [ ] Tabelas de prévia (importação de CSV, reajuste) continuam com rolagem própria: são conferência de dados, não listas de cadastro. Avaliar depois.
+- [ ] Passo 3 do plano: sacola do orçamento.
 

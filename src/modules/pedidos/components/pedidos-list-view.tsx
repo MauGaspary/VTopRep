@@ -8,8 +8,12 @@ import {
 	Badge,
 	Button,
 	buttonClassName,
-	cardClassName,
+	CartaoLista,
+	CartaoListaAcoes,
 	EmptyState,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	RepresentadaBadge,
 	SearchInput,
@@ -305,12 +309,8 @@ export function PedidosListView() {
 			)}
 
 			{!isLoading && pedidosFiltrados.length > 0 && (
-				<div className="@container">
-					{/* Pouco espaço (celular em pé): cards, sem rolagem lateral. */}
-					<ul
-						aria-label="Lista de orçamentos e pedidos"
-						className="flex flex-col gap-2 @2xl:hidden"
-					>
+				<ListaResponsiva>
+					<ListaCards rotulo="Orçamentos e pedidos">
 						{pedidosFiltrados.map((pedido) => {
 							const nomeCliente =
 								clientesPorId.get(pedido.cliente_id) ??
@@ -323,12 +323,7 @@ export function PedidosListView() {
 								: 0;
 
 							return (
-								<li
-									key={pedido.id}
-									className={cardClassName({
-										className: "flex flex-col gap-2.5 p-3",
-									})}
-								>
+								<CartaoLista key={pedido.id}>
 									<div className="flex items-start justify-between gap-3">
 										<Link
 											to={`/pedidos/${pedido.id}`}
@@ -377,7 +372,7 @@ export function PedidosListView() {
 										</span>
 									</div>
 
-									<div className="flex items-center gap-2 border-t border-border pt-2.5">
+									<CartaoListaAcoes>
 										<Link
 											to={`/pedidos/${pedido.id}`}
 											className={buttonClassName({
@@ -409,17 +404,13 @@ export function PedidosListView() {
 												<Trash2 aria-hidden="true" />
 											</Button>
 										)}
-									</div>
-								</li>
+									</CartaoListaAcoes>
+								</CartaoLista>
 							);
 						})}
-					</ul>
+					</ListaCards>
 
-					{/* Espaço suficiente (tablet, celular deitado, computador): tabela. */}
-					<section
-						aria-label="Tabela de orçamentos e pedidos"
-						className="dense-table-region hidden rounded-xl border border-border bg-card @2xl:block"
-					>
+					<ListaTabela rotulo="Orçamentos e pedidos">
 						<table className="text-left text-sm">
 							<thead>
 								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
@@ -576,8 +567,8 @@ export function PedidosListView() {
 								})}
 							</tbody>
 						</table>
-					</section>
-				</div>
+					</ListaTabela>
+				</ListaResponsiva>
 			)}
 		</Page>
 	);
