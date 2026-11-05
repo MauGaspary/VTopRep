@@ -219,11 +219,11 @@ export function CatalogoView({
 			)}
 
 			{!isLoading && representadas.length > 0 && representadaAtiva && (
-				<div className="flex flex-col gap-4 md:grid md:grid-cols-[232px_minmax(0,1fr)] md:items-start md:gap-5">
+				<div className="flex flex-col gap-4 lg:grid lg:grid-cols-[232px_minmax(0,1fr)] lg:items-start lg:gap-5">
 					{/* Mobile: Pílulas horizontais de Representadas */}
 					<nav
 						aria-label="Representadas no catálogo (mobile)"
-						className="faixa-rolagem-horizontal flex gap-1.5 overflow-x-auto md:hidden"
+						className="faixa-rolagem-horizontal flex gap-1.5 overflow-x-auto lg:hidden"
 					>
 						{representadas.map((rep) => {
 							const ativa = rep.id === representadaAtiva.id;
@@ -254,7 +254,7 @@ export function CatalogoView({
 					{/* Desktop: Sub-painel lateral de Representadas */}
 					<aside
 						aria-label="Sub-menu de representadas"
-						className="hidden flex-col rounded-xl border border-border bg-card md:flex"
+						className="hidden flex-col rounded-xl border border-border bg-card lg:flex"
 					>
 						<div className="flex items-center justify-between border-b border-border px-3 py-2.5">
 							<span className="text-[11px] font-semibold tracking-wider text-muted-foreground uppercase">

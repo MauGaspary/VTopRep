@@ -7,7 +7,7 @@ import { ThemeToggle } from "./ThemeToggle";
 /** Barra lateral fixa (desktop/tablet, ≥ md). */
 export function Sidebar() {
 	return (
-		<aside className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col gap-6 px-3 py-4 md:flex">
+		<aside className="sticky top-0 hidden h-svh w-60 shrink-0 flex-col gap-6 px-3 py-4 lg:flex">
 			<div className="px-2">
 				<TenantBrand showCnpj />
 			</div>

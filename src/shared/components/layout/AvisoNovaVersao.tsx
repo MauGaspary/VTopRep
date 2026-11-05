@@ -30,7 +30,7 @@ export function AvisoNovaVersao() {
 	if (!novaVersao && !prontoOffline) return null;
 
 	return (
-		<div className="pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex justify-center px-3 md:inset-x-auto md:right-4 md:bottom-4">
+		<div className="pointer-events-none fixed inset-x-0 bottom-[calc(3.5rem+env(safe-area-inset-bottom)+0.5rem)] z-40 flex justify-center px-3 lg:inset-x-auto lg:right-4 lg:bottom-4">
 			<div
 				role="status"
 				className="pointer-events-auto flex w-full max-w-sm items-start gap-3 rounded-xl border border-input bg-card p-3 text-sm text-card-foreground"

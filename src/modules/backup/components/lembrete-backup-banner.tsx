@@ -19,7 +19,7 @@ export function LembreteBackupBanner() {
 	return (
 		<div
 			role="status"
-			className="flex flex-col gap-2 border-b border-border bg-muted px-4 py-2.5 text-sm sm:flex-row sm:items-center md:rounded-t-xl md:px-6"
+			className="flex flex-col gap-2 border-b border-border bg-muted px-4 py-2.5 text-sm sm:flex-row sm:items-center lg:rounded-t-xl lg:px-6"
 		>
 			<div className="flex min-w-0 flex-1 items-start gap-2.5 sm:items-center">
 				<DatabaseBackup

@@ -19,9 +19,9 @@ export function AppShell({ children }: AppShellProps) {
 	return (
 		<div className="flex min-h-svh">
 			<Sidebar />
-			<div className="flex min-w-0 flex-1 flex-col md:py-2 md:pr-2">
+			<div className="flex min-w-0 flex-1 flex-col lg:py-2 lg:pr-2">
 				<MobileTopBar />
-				<main className="min-w-0 flex-1 overflow-x-clip bg-background pb-[calc(3.5rem+env(safe-area-inset-bottom))] md:rounded-xl md:border md:border-border md:pb-0">
+				<main className="min-w-0 flex-1 overflow-x-clip bg-background pb-[calc(3.5rem+env(safe-area-inset-bottom))] lg:rounded-xl lg:border lg:border-border lg:pb-0">
 					<LembreteBackupBanner />
 					{children}
 				</main>

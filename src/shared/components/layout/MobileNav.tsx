@@ -8,7 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 /** Barra superior compacta (mobile, < md). */
 export function MobileTopBar() {
 	return (
-		<header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-border bg-background px-4 md:hidden">
+		<header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-border bg-background px-4 lg:hidden">
 			<TenantBrand />
 			<div className="flex shrink-0 items-center gap-3">
 				<NavLink
@@ -37,7 +37,7 @@ export function MobileBottomNav() {
 	return (
 		<nav
 			aria-label="Navegação principal"
-			className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden"
+			className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] lg:hidden"
 		>
 			<ul
 				className="grid"
