@@ -2,6 +2,8 @@ import { describe, expect, it } from "vitest";
 import {
 	ajustarCorPrimariaParaTema,
 	CONTRASTE_MINIMO_AA,
+	COR_BARRA_SISTEMA_ESCURO,
+	corDaBarraDoSistema,
 	corHslParaHex,
 	formatarCorHsl,
 	lerCorHsl,
@@ -124,5 +126,23 @@ describe("corHslParaHex", () => {
 		expect(corHslParaHex({ h: 0, s: 0, l: 0 })).toBe("#000000");
 		expect(corHslParaHex({ h: 0, s: 100, l: 50 })).toBe("#ff0000");
 		expect(corHslParaHex({ h: 228, s: 60, l: 34 })).toBe("#23378b");
+	});
+});
+
+describe("corDaBarraDoSistema", () => {
+	it("usa a cor da marca no tema claro", () => {
+		expect(corDaBarraDoSistema("claro", "#23378b")).toBe("#23378b");
+	});
+
+	it("usa o fundo do app no tema escuro", () => {
+		expect(corDaBarraDoSistema("escuro", "#23378b")).toBe(
+			COR_BARRA_SISTEMA_ESCURO,
+		);
+	});
+
+	it("bate com o fundo escuro do CSS (210 6% 6%)", () => {
+		expect(corHslParaHex({ h: 210, s: 6, l: 6 })).toBe(
+			COR_BARRA_SISTEMA_ESCURO,
+		);
 	});
 });

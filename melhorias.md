@@ -83,5 +83,6 @@ Motivo: numa tela de 360–412 px não cabem 5 ou 6 colunas. A tabela com rolage
 - [x] **Múltiplo de embalagem:** decisão do usuário, é só informativo (quantidade em embalagens). Exibido como "CX com 8" no catálogo, na sacola e no PDF; campo renomeado para "Peças por embalagem". Regra de múltiplo anotada no `BACKLOG.md` 1.3.
 - [x] **Pedido emitido:** aviso de somente leitura em estilo informativo (cinza), não mais de erro.
 - [x] **Barra superior no celular:** seletor de tema virou um botão só, que alterna Claro → Escuro → Sistema.
-- [ ] `touch-action` e `theme-color`: aguardando o usuário.
+- [x] **`touch-action: manipulation`** em botões, links e campos: sem atraso nem zoom por toque duplo (ex.: + / − da sacola); zoom com dois dedos continua.
+- [x] **`theme-color`:** barra do sistema com a cor da marca no tema claro e o fundo do app (`#0e0f10`) no escuro, aplicada já antes do React montar.
 

@@ -19,6 +19,21 @@ export const CHAVE_PREFERENCIA_TEMA = "vtop:tema";
 /** Atributo do `<html>` que liga os tokens escuros e a variante `dark:`. */
 export const ATRIBUTO_TEMA = "data-tema";
 
+/**
+ * Fundo da barra superior no tema escuro (`--background` escuro, 210 6% 6%).
+ * Mantenha igual ao valor usado no script do `index.html`.
+ */
+export const COR_BARRA_SISTEMA_ESCURO = "#0e0f10";
+
+/**
+ * Cor da barra do sistema (`<meta name="theme-color">`): a cor da marca no
+ * tema claro e o fundo do app no escuro, para não aparecer uma faixa de cor
+ * forte em cima de um app escuro.
+ */
+export function corDaBarraDoSistema(tema: Tema, corMarca: string): string {
+	return tema === "escuro" ? COR_BARRA_SISTEMA_ESCURO : corMarca;
+}
+
 export const ROTULOS_PREFERENCIA_TEMA: Record<PreferenciaTema, string> = {
 	claro: "Claro",
 	escuro: "Escuro",

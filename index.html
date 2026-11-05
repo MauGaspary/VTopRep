@@ -28,6 +28,13 @@
         var raiz = document.documentElement;
         raiz.setAttribute("data-tema", escuro ? "escuro" : "claro");
         raiz.style.colorScheme = escuro ? "dark" : "light";
+        // Barra do sistema: cor da marca no claro, fundo do app no escuro
+        // (COR_BARRA_SISTEMA_ESCURO em src/shared/domain/tema.ts).
+        var meta = document.querySelector('meta[name="theme-color"]');
+        if (meta) {
+          meta.setAttribute("data-cor-marca", meta.getAttribute("content"));
+          if (escuro) meta.setAttribute("content", "#0e0f10");
+        }
       })();
     </script>
   </head>

@@ -10,6 +10,7 @@ import {
 import {
 	ATRIBUTO_TEMA,
 	CHAVE_PREFERENCIA_TEMA,
+	corDaBarraDoSistema,
 	lerPreferenciaTema,
 	type PreferenciaTema,
 	resolverTema,
@@ -75,6 +76,15 @@ export function TemaProvider({
 		const raiz = document.documentElement;
 		raiz.setAttribute(ATRIBUTO_TEMA, tema);
 		raiz.style.colorScheme = tema === "escuro" ? "dark" : "light";
+
+		// Barra do sistema: guarda a cor da marca (vinda do build) na primeira vez.
+		const meta = document.querySelector<HTMLMetaElement>(
+			'meta[name="theme-color"]',
+		);
+		if (meta) {
+			meta.dataset.corMarca ??= meta.content;
+			meta.content = corDaBarraDoSistema(tema, meta.dataset.corMarca);
+		}
 	}, [tema]);
 
 	// Outra aba mudou a preferência: acompanha.

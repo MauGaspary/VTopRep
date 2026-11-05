@@ -101,6 +101,19 @@
 		border-color: var(--color-border);
 	}
 
+	/* Toque é só toque: sem atraso nem zoom por toque duplo nos controles
+	   (ex.: + / − da sacola). O zoom com dois dedos continua funcionando. */
+	a,
+	button,
+	input,
+	select,
+	textarea,
+	label,
+	summary,
+	[role="button"] {
+		touch-action: manipulation;
+	}
+
 	body {
 		margin: 0;
 		min-height: 100svh;
