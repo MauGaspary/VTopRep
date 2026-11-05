@@ -8,7 +8,7 @@ import { ThemeToggle } from "./ThemeToggle";
 /** Barra superior compacta (mobile, < md). */
 export function MobileTopBar() {
 	return (
-		<header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-border bg-background/85 px-4 backdrop-blur md:hidden">
+		<header className="sticky top-0 z-30 flex h-12 items-center justify-between gap-3 border-b border-border bg-background px-4 md:hidden">
 			<TenantBrand />
 			<div className="flex shrink-0 items-center gap-3">
 				<NavLink
@@ -37,16 +37,16 @@ export function MobileBottomNav() {
 	return (
 		<nav
 			aria-label="Navegação principal"
-			className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-sidebar/95 pb-[env(safe-area-inset-bottom)] backdrop-blur md:hidden"
+			className="fixed inset-x-0 bottom-0 z-30 border-t border-border bg-sidebar pb-[env(safe-area-inset-bottom)] md:hidden"
 		>
 			<ul
 				className="grid"
 				style={{
-					gridTemplateColumns: `repeat(${NAV_ITEMS_MOBILE.length}, 1fr)`,
+					gridTemplateColumns: `repeat(${NAV_ITEMS_MOBILE.length}, minmax(0, 1fr))`,
 				}}
 			>
 				{NAV_ITEMS_MOBILE.map(({ to, label, shortLabel, icon: Icon }) => (
-					<li key={to}>
+					<li key={to} className="min-w-0">
 						<NavLink
 							to={to}
 							className={({ isActive }) =>
@@ -63,7 +63,9 @@ export function MobileBottomNav() {
 										aria-hidden="true"
 										className={`size-5 ${isActive ? "text-primary" : ""}`}
 									/>
-									{shortLabel ?? label}
+									<span className="max-w-full truncate px-0.5">
+										{shortLabel ?? label}
+									</span>
 								</>
 							)}
 						</NavLink>

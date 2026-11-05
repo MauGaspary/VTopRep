@@ -39,7 +39,9 @@ export function PageHeader({
 					<p className="text-sm text-muted-foreground">{description}</p>
 				)}
 			</div>
-			{action && <div className="flex shrink-0 gap-2">{action}</div>}
+			{action && (
+				<div className="flex min-w-0 flex-wrap gap-2 sm:shrink-0">{action}</div>
+			)}
 		</div>
 	);
 }

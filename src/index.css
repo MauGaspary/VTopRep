@@ -233,15 +233,14 @@
 	background-color: var(--color-muted);
 }
 
-.workspace-pane {
-	content-visibility: auto;
-	contain-intrinsic-size: auto 320px auto 600px;
+/* Faixa com rolagem lateral (ex.: fábricas no catálogo mobile), sem barra visível. */
+.faixa-rolagem-horizontal {
+	scrollbar-width: none;
+	overscroll-behavior-x: contain;
 }
 
-@supports not (content-visibility: auto) {
-	.workspace-pane {
-		contain: layout style paint;
-	}
+.faixa-rolagem-horizontal::-webkit-scrollbar {
+	display: none;
 }
 
 dialog:modal {

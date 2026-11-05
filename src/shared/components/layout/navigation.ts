@@ -36,7 +36,12 @@ export const NAV_GROUPS: readonly NavGroup[] = [
 		label: "Cadastros",
 		items: [
 			{ to: "/clientes", label: "Clientes", icon: Users },
-			{ to: "/representadas", label: "Representadas", icon: Factory },
+			{
+				to: "/representadas",
+				label: "Representadas",
+				shortLabel: "Fábricas",
+				icon: Factory,
+			},
 			{
 				to: "/transportadoras",
 				label: "Transportadoras",

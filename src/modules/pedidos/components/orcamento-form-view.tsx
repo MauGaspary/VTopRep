@@ -916,8 +916,7 @@ function OrcamentoForm({
 					{!somenteLeitura && (
 						<div
 							className={cardClassName({
-								className:
-									"workspace-pane flex flex-col overflow-hidden lg:col-span-5",
+								className: "flex flex-col overflow-hidden lg:col-span-5",
 							})}
 						>
 							<div className="flex flex-col gap-2.5 border-b border-border bg-muted/30 p-3.5">
@@ -1117,7 +1116,7 @@ function OrcamentoForm({
 					{/* Coluna Direita: Sacola agrupada por fábrica + Resumo e Ações */}
 					<div
 						className={cardClassName({
-							className: `workspace-pane flex flex-col overflow-hidden ${
+							className: `flex flex-col overflow-hidden ${
 								somenteLeitura ? "" : "lg:col-span-7"
 							}`,
 						})}

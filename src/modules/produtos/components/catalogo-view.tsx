@@ -169,7 +169,7 @@ export function CatalogoView({
 				description="Navegue por representada para consultar SKUs, embalagens e tabelas de preço."
 				action={
 					representadaAtiva ? (
-						<div className="flex items-center gap-2">
+						<div className="flex flex-wrap items-center gap-2">
 							<Link
 								to={`/pedidos/novo?representada=${representadaAtiva.id}`}
 								className={buttonClassName({ variant: "secondary" })}
@@ -223,7 +223,7 @@ export function CatalogoView({
 					{/* Mobile: Pílulas horizontais de Representadas */}
 					<nav
 						aria-label="Representadas no catálogo (mobile)"
-						className="flex gap-1.5 overflow-x-auto pb-1 md:hidden"
+						className="faixa-rolagem-horizontal flex gap-1.5 overflow-x-auto md:hidden"
 					>
 						{representadas.map((rep) => {
 							const ativa = rep.id === representadaAtiva.id;
@@ -321,7 +321,7 @@ export function CatalogoView({
 					</aside>
 
 					{/* Painel Principal: Produtos da Representada Selecionada */}
-					<div className="workspace-pane flex min-w-0 flex-col gap-3">
+					<div className="flex min-w-0 flex-col gap-3">
 						{/* Faixa de Contexto da Representada */}
 						<div className="flex flex-col gap-3 rounded-xl border border-border bg-card p-3.5 sm:flex-row sm:items-center sm:justify-between">
 							<div className="flex min-w-0 items-start gap-2.5">

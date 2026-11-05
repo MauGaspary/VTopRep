@@ -66,8 +66,8 @@ Motivo: numa tela de 360–412 px não cabem 5 ou 6 colunas. A tabela com rolage
 
 ## Plano
 
-1. **Estrutura:** nenhuma tela pode alargar a página (itens 1 e 12); revisar `content-visibility` e `backdrop-blur` das barras.
-2. **Listas:** lista densa em 2 linhas no celular para catálogo, orçamentos, histórico, clientes, representadas e transportadoras, num componente compartilhado em `src/shared/components/ui/` (itens 2 a 6).
+1. [x] **Estrutura:** nenhuma tela pode alargar a página (itens 1, 11 e 12); revisar `content-visibility` e `backdrop-blur` das barras. *Feito: `main` com `min-w-0` e `overflow-x: clip`; botões do cabeçalho quebram linha (`PageHeader` e catálogo); faixa de fábricas sem barra de rolagem; `content-visibility` removido (`.workspace-pane`); barras do mobile sem desfoque e com fundo sólido; abas da barra inferior com largura fixa e rótulo truncado ("Fábricas" no lugar de "Representadas"). Conferido com Playwright em 360 e 412 px nas 15 telas: a página tem sempre a largura da tela e a barra inferior cabe inteira.*
+2. **Listas (formato aprovado):** lista densa em 2 linhas no celular para catálogo, orçamentos, histórico, clientes, representadas e transportadoras, num componente compartilhado em `src/shared/components/ui/` (itens 2 a 6).
 3. **Orçamento:** item da sacola em 2 a 3 linhas, sem rolagem interna, totais e ações num rodapé fixo acima da barra inferior (itens 7 e 8).
 4. **Detalhes:** aviso de pedido emitido como informação (item 9), barra superior (item 10), rótulos da barra inferior (item 11), `touch-action`, `theme-color`.
 5. Conferir a regra do múltiplo de embalagem.
