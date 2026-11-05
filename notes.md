@@ -4,7 +4,12 @@ Espaço para anotar ideias e dúvidas soltas. Quando uma nota vira tarefa, ela s
 
 ## Novas notas
 
--
+- Ao fazer um orçamento com produtos de duas representadas, é necessário que tenha pdfs gerados individualmente
+- Adicionalmente, seria interessante ter pdf diferentes para mandar para as fábricas e um para os clientes com a confirmação do pedido. Cada um deles teriam alguns dados diferentes, mas a mesma base. Vamos estudar isso mais pra frente.
+
+- Trocar o nome "representadas" por "fábricas"?
+
+- Adição no orçamento de campo de input pra dar desconto geral, não apenas individual por item
 
 ## Resolvidas
 
