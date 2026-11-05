@@ -239,6 +239,10 @@ Cotação multi-representada: a sacola é gravada numa única transação como 1
 * `updated_at: timestamptz`
 * `deleted_at: timestamptz (nullable)`
 
+#### Colunas só do servidor (TODO 2.11.1)
+
+Toda tabela sincronizável do Supabase tem, além das colunas acima, `sincronizado_em timestamptz`, preenchida pelo servidor a cada gravação. É o **checkpoint do pull** (`sincronizado_em > :checkpoint`, com uma pequena sobreposição, aplicando as mudanças de forma idempotente): `updated_at` vem do aparelho, e um aparelho offline pode enviar hoje uma edição com `updated_at` de ontem. `pedidos` ainda tem `criado_por uuid` (usuário que criou; o servidor preenche e não aceita troca). `clientes_metricas` ganhou `created_at`/`updated_at`/`deleted_at` no servidor. Dinheiro é `bigint` e percentuais são `integer`, com `check` espelhando o Zod (inclusive `subtotal = quantidade x preço líquido` em `itens_pedido`). A unicidade (CNPJ, CPF/CNPJ, SKU por representada, um preço por produto/tabela) vale só para registros vivos.
+
 #### `faturamentos_parciais`
 
 * `id: UUID` (PK)
@@ -302,8 +306,10 @@ Os campos seguem o mesmo snake_case das tabelas. `EntidadeSincronizavel` cobre `
   * O servidor envia registros com `deleted_at != null`. O Dexie.js atualiza o registro local marcando o soft-delete para removê-lo das telas sem perder integridade referencial com pedidos antigos já persistidos.
 * **Cadastros editados em campo (Transportadoras, Clientes, Endereços, Contatos):**
   * Edições do mesmo cliente em dois aparelhos offline seguem **Last-Write-Wins por `updated_at`**, registro a registro (sem merge por campo nesta fase).
-* **Imutabilidade remota de pedidos:**
-  * Pedidos com `status` diferente de `rascunho` são somente-leitura também no PostgreSQL: a migração que criar `pedidos`/`itens_pedido` deve incluir um *trigger* que rejeite `UPDATE` de campos comerciais (exceto as transições de status do funil de faturamento).
+* **Imutabilidade remota de pedidos (implementada em `20261105120200_imutabilidade_de_pedidos.sql`):**
+  * Pedido fora de `rascunho` só aceita mudar `status`, `updated_at` e `sincronizado_em`; qualquer outro campo (inclusive `deleted_at`) é recusado. Um UPDATE sem mudança comercial (reenvio da Outbox) é aceito.
+  * Transições aceitas (provisórias até a Fase 3): `emitido` → `parcialmente_faturado` | `faturado_total` | `cancelado`; `parcialmente_faturado` → `faturado_total`. `faturado_total` e `cancelado` são finais.
+  * Itens de um pedido não-rascunho também são somente-leitura, **exceto na transação que gravou o pedido** (novo ou vindo de rascunho). Como o aparelho envia o pedido antes dos itens, o envio de um pedido e dos seus itens deve ser **uma única transação** no servidor (TODO 2.11.3).
 
 ---
 
@@ -391,15 +397,22 @@ Base de código única (*Single Codebase*) para comercialização do software a 
 
 ### 6.1. Segurança por Linha (Supabase RLS)
 
-```sql
-alter table public.pedidos enable row level security;
+**Decisão (2026-11-05):** o acesso vem de uma tabela de membros, não de claim no JWT. Revogar um usuário vale na hora, e um usuário pode pertencer a mais de um tenant (suporte, assessoria). Dentro do tenant **tudo é compartilhado**: dois representantes da mesma empresa veem os mesmos clientes, pedidos e comissões (`pedidos.criado_por` é só informativo).
 
-create policy "Isolamento estrito por tenant"
-on public.pedidos
-for all
-using (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid)
-with check (tenant_id = (auth.jwt() ->> 'tenant_id')::uuid);
+* `tenants` (`id`, `slug`, `nome_fantasia`, `ativo`): criada e alterada só pelo painel/serviço.
+* `usuarios_tenant` (`user_id`, `tenant_id`, `papel`, `ativo`; PK `user_id + tenant_id`). Papéis: `admin` (faz tudo o que o representante faz, mais convidar e desativar membros) e `representante`. Nada é apagado: use `ativo = false`.
+* As funções `tenant_ids_do_usuario()` e `tenant_ids_admin_do_usuario()` (`security definer`, `search_path` vazio) devolvem os tenants ativos do usuário autenticado. Um tenant `ativo = false` bloqueia todos os membros.
+* As tabelas de negócio têm RLS ligado, sem política de `delete` (a exclusão é lógica) e sem acesso para `anon`:
+
+```sql
+create policy isolamento_select on public.pedidos
+  for select to authenticated
+  using (tenant_id in (select public.tenant_ids_do_usuario()));
+-- insert (with check) e update (using + with check) seguem o mesmo critério.
 ```
+
+* Chaves estrangeiras compostas `(tenant_id, id)` impedem apontar para registro de outro tenant, e um gatilho impede trocar o `tenant_id` de um registro.
+* Migrações em `supabase/migrations/`; os testes (`src/db/__tests__/supabase-migracoes.test.ts`) aplicam todas num PostgreSQL real (PGlite) e rodam no `pnpm validate`.
 
 ### 6.2. Contrato de Configuração de Marca (`TenantConfig`)
 

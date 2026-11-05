@@ -38,6 +38,13 @@ Problemas já encontrados neste repositório. Leia antes de mexer em persistênc
 - **Dado só do aparelho** (preferências como o tema ou o mapeamento de colunas do CSV) não entra em `ENTIDADES_SINCRONIZAVEIS`.
 - **Tabela nova no Dexie entra no backup** (`TabelasBackupSchema` e `BackupDexieAdapter`); o teste do adaptador falha se alguma tabela ficar de fora. Subir a versão do Dexie torna incompatíveis os backups da versão anterior (a restauração exige `versao_banco` igual); se a mudança for só de índice, avalie aceitar a versão anterior.
 
+#### Supabase (migrações)
+
+- As migrações ficam em `supabase/migrations/` e são testadas num PostgreSQL real (PGlite) por `src/db/__tests__/supabase-migracoes.test.ts`, dentro do `pnpm validate` (não precisa de Docker). Mudou schema Zod ou migração: o teste de colunas acusa a divergência.
+- Tabela sincronizável nova: criar a migração (colunas, FKs compostas `(tenant_id, id)`, RLS e `sincronizado_em`, copiando o bloco `do $$` de `20261105120100_tabelas_de_negocio.sql`) e incluí-la no teste.
+- Não edite migração já aplicada num projeto Supabase: crie uma nova.
+- O pull usa `sincronizado_em` (servidor), nunca `updated_at` (aparelho), como checkpoint.
+
 #### PWA
 
 - O service worker só existe no build (`pnpm build && pnpm preview`); no `pnpm dev` não há precache nem aviso de versão nova.

@@ -226,7 +226,7 @@ Hoje os dados ficam no aparelho, mas o app não abre sem internet, e enquanto n�
 
 - [x] **Service Worker e Manifesto:** `vite-plugin-pwa` (`generateSW`) com precache do app inteiro (~2,2 MB), `navigateFallback` para as rotas do SPA e manifesto com nome e cor do tenant (`src/config/tenant/tenant-padrao.ts`, lido também pelo `vite.config.ts`). Ícones gerados de `public/favicon.svg` com `pnpm icones`. Depois do primeiro acesso, o app abre sem internet.
 - [x] **Atualização:** `registerType: "prompt"` e aviso "Nova versão disponível" (`AvisoNovaVersao`) com "Atualizar" / "Depois"; verificação a cada hora com internet. Enquanto um orçamento tem alterações não salvas (`useRegistrarEdicaoEmAndamento`), o botão fica bloqueado e o aviso pede para salvar antes.
-- [ ] **Teste Manual:** Instalar no Android e no desktop e, em modo avião, abrir o app, criar um orçamento e gerar o PDF. *Verificado por automação no Chromium (desktop): build de produção offline abre rotas não visitadas, cadastra, exporta e restaura backup; a versão nova aparece e fica bloqueada com orçamento em edição. Falta instalar de fato no Android e no desktop e gerar o PDF offline, o que depende de publicar o app em HTTPS (`BACKLOG.md` 2).*
+- [ ] **Teste Manual (PENDENTE, não esquecer):** Instalar no Android e no desktop e, em modo avião, abrir o app, criar um orçamento e gerar o PDF. *Decisão: adiado para seguir com a Fase 2.11; fazer junto com a primeira publicação em HTTPS. Antes disso, quando estiver em casa, dar uma passada no celular pelo USB (`adb reverse`, sem `--host`) no fluxo central: orçamento, PDF e backup. Revalidar também login (2.11.2) e `ConnectionStatus` (2.11.5) no celular. Verificado por automação no Chromium (desktop): build de produção offline abre rotas não visitadas, cadastra, exporta e restaura backup; a versão nova aparece e fica bloqueada com orçamento em edição. Falta instalar de fato no Android e no desktop e gerar o PDF offline, o que depende de publicar o app em HTTPS (`BACKLOG.md` 2).*
 
 ### 2.10.2. Proteção dos Dados Locais
 
@@ -244,18 +244,23 @@ Pré-requisito da Fase 3: a imutabilidade dos pedidos emitidos é garantida no s
 
 ### 2.11.1. Banco Remoto
 
-- [ ] **Migrações SQL:** Tabelas de negócio espelhando os schemas Zod (dinheiro em inteiros de centavos, `tenant_id`, `created_at`, `updated_at`, `deleted_at`) e índices `tenant_id + updated_at` para a sincronização.
-- [ ] **RLS por Tenant:** Políticas de segurança por linha (PRD 6.1).
-- [ ] **Imutabilidade Remota:** Trigger no PostgreSQL bloqueando a edição de campos comerciais de pedidos `emitido+`.
+Decisões de 2026-11-05: colunas tipadas; acesso por tabela de membros (`usuarios_tenant`, papéis `admin` e `representante`, o admin também é representante); tudo compartilhado dentro do tenant (PRD 6.1).
+
+- [x] **Migrações SQL:** `supabase/migrations/` com as 11 tabelas sincronizáveis espelhando os schemas Zod (dinheiro em `bigint` de centavos, `tenant_id`, `created_at`, `updated_at`, `deleted_at`), FKs compostas por tenant, unicidade só entre registros vivos e `checks`. O pull usa o índice `tenant_id + sincronizado_em` (preenchido pelo servidor), e não `updated_at`, que vem do aparelho (PRD 2.3). Um teste confere as colunas contra os schemas Zod.
+- [x] **RLS por Tenant:** Políticas por `tenant_ids_do_usuario()`, sem `delete` e sem acesso `anon`; `admin` gerencia membros em `usuarios_tenant` (PRD 6.1).
+- [x] **Imutabilidade Remota:** Triggers bloqueando a edição de campos comerciais e de itens de pedidos `emitido+`, com as transições do funil (provisórias até a Fase 3).
+- [x] **Testes:** `src/db/__tests__/supabase-migracoes.test.ts` aplica as migrações num PostgreSQL real (PGlite) no `pnpm validate`: RLS, papéis, integridade e imutabilidade.
+- [ ] **Aplicar no projeto Supabase:** instalar o Supabase CLI, `supabase link` e `supabase db push`; criar o primeiro tenant e o admin (sem tela de convite: SQL ou painel). Ainda não feito (depende de criar o projeto na região São Paulo, `HOSPEDAGEM_E_SINCRONIZACAO.md`).
 
 ### 2.11.2. Autenticação e Tenant
 
-- [ ] **Login:** Autenticação Supabase com sessão que continua válida offline. O tenant passa a vir do usuário autenticado, substituindo o tenant fixo de desenvolvimento.
+- [ ] **Login:** Autenticação Supabase com sessão que continua válida offline. O tenant passa a vir de `usuarios_tenant` do usuário autenticado (se tiver mais de um, o app pergunta), substituindo o tenant fixo de desenvolvimento.
+- [ ] **Gestão de Membros:** Tela para o `admin` convidar e desativar usuários do tenant (hoje só por SQL/painel).
 
 ### 2.11.3. Envio da Outbox (Push)
 
 - [ ] **Outbox nos Cadastros Mestres:** Hoje o cadastro manual de produtos, preços (`itens_preco`), tabelas e representadas grava só no Dexie, sem registrar mutação na Outbox. Só a importação CSV e o reajuste em lote (2.9) registram. Registrar `criarMutacaoParaRegistro` na mesma transação nesses adaptadores antes de ligar o envio.
-- [ ] **Worker de Envio:** Enviar as mutações em ordem, com `idempotency_key`, novas tentativas com espera crescente e registro de `last_error`. Disparar ao abrir o app e ao voltar a conexão.
+- [ ] **Worker de Envio:** Enviar as mutações em ordem, com `idempotency_key`, **cada pedido junto com seus itens numa única transação** (função RPC: o servidor só aceita itens de pedido emitido na transação que gravou o pedido, PRD 3.2), novas tentativas com espera crescente e registro de `last_error`. Disparar ao abrir o app e ao voltar a conexão.
 
 ### 2.11.4. Recebimento e Conflitos (Pull)
 
