@@ -1033,7 +1033,7 @@ function OrcamentoForm({
 							{representadaAtiva &&
 								!carregandoPrecos &&
 								produtosCatalogoRepresentada.length > 0 && (
-									<ul className="max-h-[540px] divide-y divide-border overflow-y-auto">
+									<ul className="divide-y divide-border lg:max-h-[540px] lg:overflow-y-auto">
 										{listaCatalogo.visiveis.map((produto) => {
 											const preco = precosCatalogo.get(produto.id);
 											const qtdAtual =
@@ -1247,10 +1247,15 @@ function OrcamentoForm({
 												variant="secondary"
 												disabled={salvando}
 												onClick={() => void salvarOuEmitir("rascunho")}
+												className="max-lg:hidden"
 											>
 												{salvando ? "Salvando..." : "Salvar rascunho"}
 											</Button>
-											<Button type="submit" disabled={salvando}>
+											<Button
+												type="submit"
+												disabled={salvando}
+												className="max-lg:hidden"
+											>
 												{salvando ? "Emitindo..." : rotuloFechar}
 											</Button>
 										</>
@@ -1260,6 +1265,37 @@ function OrcamentoForm({
 						</div>
 					</div>
 				</div>
+				{/* Celular e tablet: total e ações sempre à mão, acima da barra inferior. */}
+				{!somenteLeitura && (
+					<div className="sticky bottom-[calc(3.5rem+env(safe-area-inset-bottom))] z-20 -mx-4 flex flex-col gap-2 border-t border-border bg-background px-4 py-2.5 sm:flex-row sm:items-center sm:justify-between lg:hidden">
+						<div className="flex items-baseline justify-between gap-3 sm:flex-col sm:items-start sm:gap-0">
+							<span className="text-xs text-muted-foreground">
+								{multiFabrica ? "Total geral" : "Total líquido"} ·{" "}
+								{quantidadeItens} {quantidadeItens === 1 ? "item" : "itens"}
+							</span>
+							<span className="font-mono text-base font-bold text-foreground tabular-nums">
+								{formatarCentavos(totaisGerais.valor_total_centavos)}
+							</span>
+						</div>
+						<div className="flex gap-2 sm:shrink-0">
+							<Button
+								variant="secondary"
+								disabled={salvando}
+								onClick={() => void salvarOuEmitir("rascunho")}
+								className="flex-1 sm:flex-none"
+							>
+								{salvando ? "Salvando…" : "Salvar rascunho"}
+							</Button>
+							<Button
+								type="submit"
+								disabled={salvando}
+								className="flex-1 sm:flex-none"
+							>
+								{salvando ? "Emitindo…" : rotuloFechar}
+							</Button>
+						</div>
+					</div>
+				)}
 			</form>
 
 			<ClienteQuickCreateDialog

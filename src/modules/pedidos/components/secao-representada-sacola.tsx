@@ -196,6 +196,83 @@ export function SecaoRepresentadaSacola({
 		limparErro(chaveErroItemPedido(localId, campo));
 	};
 
+	const ajustarQuantidade = (localId: string, delta: 1 | -1) => {
+		onAtualizar((g) => ({
+			...g,
+			itens: ajustarDeltaQuantidadeItemForm(g.itens, localId, delta),
+		}));
+		limparErro(chaveErroItemPedido(localId, "quantidade"));
+	};
+
+	const removerItem = (localId: string) =>
+		onAtualizar((g) => ({
+			...g,
+			itens: g.itens.filter((item) => item.localId !== localId),
+		}));
+
+	/** Dados de exibição e validação de um item da sacola. */
+	const descreverItem = (linha: ItemSacolaForm) => {
+		const produto = produtosPorId.get(linha.produto_id);
+		const descontoDigitado = parseDescontoFormParaCentesimos(
+			linha.percentual_desconto,
+		);
+		const teto =
+			precosPorProduto.get(linha.produto_id)?.desconto_maximo_permitido ?? 0;
+		return {
+			produto,
+			sku: produto?.sku ?? "item",
+			previa: calcularPreviaItemForm(linha),
+			erroQtd: erros[chaveErroItemPedido(linha.localId, "quantidade")],
+			erroDesc:
+				erros[chaveErroItemPedido(linha.localId, "percentual_desconto")],
+			teto,
+			acimaDoTeto:
+				teto > 0 && descontoDigitado !== null && descontoDigitado > teto,
+		};
+	};
+
+	const controlesItem = (linha: ItemSacolaForm) => {
+		const d = descreverItem(linha);
+		return {
+			...d,
+			quantidade: (
+				<ControleQuantidade
+					sku={d.sku}
+					nome={`quantidade_${linha.localId}`}
+					valor={linha.quantidade}
+					erro={d.erroQtd}
+					somenteLeitura={somenteLeitura}
+					onAlterar={(v) => alterarItem(linha.localId, "quantidade", v)}
+					onAjustar={(delta) => ajustarQuantidade(linha.localId, delta)}
+				/>
+			),
+			desconto: (
+				<CampoDesconto
+					sku={d.sku}
+					nome={`desconto_${linha.localId}`}
+					valor={linha.percentual_desconto}
+					erro={d.erroDesc}
+					teto={d.acimaDoTeto ? d.teto : null}
+					somenteLeitura={somenteLeitura}
+					onAlterar={(v) =>
+						alterarItem(linha.localId, "percentual_desconto", v)
+					}
+				/>
+			),
+			remover: somenteLeitura ? null : (
+				<Button
+					size="sm"
+					variant="ghost"
+					onClick={() => removerItem(linha.localId)}
+					aria-label={`Remover ${d.sku} do orçamento`}
+					className="px-1.5 text-subtle-foreground hover:text-destructive"
+				>
+					<Trash2 aria-hidden="true" className="size-3.5" />
+				</Button>
+			),
+		};
+	};
+
 	return (
 		<section
 			aria-labelledby={`${idBase}-titulo`}
@@ -358,250 +435,157 @@ export function SecaoRepresentadaSacola({
 					</span>
 				</div>
 			) : (
-				<div className="table-wrapper border-t border-border">
-					<table className="orcamento-itens-table text-left text-sm">
-						<caption className="sr-only">Itens de {nome}</caption>
-						<thead>
-							<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-								<th scope="col" className="px-3.5 py-2">
-									Produto
-								</th>
-								<th scope="col" className="px-2.5 py-2 text-right">
-									Tabela
-								</th>
-								<th scope="col" className="px-2.5 py-2 text-center">
-									Quantidade
-								</th>
-								<th scope="col" className="px-2.5 py-2 text-center">
-									Desc. (%)
-								</th>
-								<th scope="col" className="px-2.5 py-2 text-right">
-									Líq. Unit.
-								</th>
-								<th scope="col" className="px-3 py-2 text-right">
-									Subtotal
-								</th>
-								{!somenteLeitura && (
-									<th scope="col" className="w-9 px-2 py-2 text-right">
-										<span className="sr-only">Ações</span>
-									</th>
-								)}
-							</tr>
-						</thead>
-						<tbody className="divide-y divide-border">
-							{grupo.itens.map((linha) => {
-								const produto = produtosPorId.get(linha.produto_id);
-								const sku = produto?.sku ?? "item";
-								const previaItem = calcularPreviaItemForm(linha);
-								const erroQtd =
-									erros[chaveErroItemPedido(linha.localId, "quantidade")];
-								const erroDesc =
-									erros[
-										chaveErroItemPedido(linha.localId, "percentual_desconto")
-									];
-								const descontoDigitado = parseDescontoFormParaCentesimos(
-									linha.percentual_desconto,
-								);
-								const teto =
-									precosPorProduto.get(linha.produto_id)
-										?.desconto_maximo_permitido ?? 0;
-								const acimaDoTeto =
-									teto > 0 &&
-									descontoDigitado !== null &&
-									descontoDigitado > teto;
-
-								return (
-									<tr
-										key={linha.localId}
-										className="align-middle transition-colors hover:bg-muted/30"
-									>
-										<th
-											scope="row"
-											className="px-3.5 py-2.5 font-normal text-foreground"
-										>
-											<div className="flex flex-col">
-												<div className="flex items-center gap-1.5">
-													<span className="font-mono text-xs font-semibold">
-														{produto?.sku ?? "SKU"}
-													</span>
-													<span className="text-xs font-medium">
-														{produto?.descricao ?? "Produto"}
-													</span>
-												</div>
-												<span className="text-[11px] text-muted-foreground">
-													{produto
-														? `${produto.unidade_medida} · Múlt. ${produto.multiplo_embalagem}`
-														: ""}
+				<div className="@container border-t border-border">
+					{/* Pouco espaço (celular em pé): cada item em 3 linhas, sem rolagem lateral. */}
+					<ul
+						aria-label={`Itens de ${nome}`}
+						className="divide-y divide-border @2xl:hidden"
+					>
+						{grupo.itens.map((linha) => {
+							const c = controlesItem(linha);
+							return (
+								<li
+									key={linha.localId}
+									className="flex flex-col gap-2 px-4 py-3"
+								>
+									<div className="flex items-start justify-between gap-3">
+										<div className="min-w-0">
+											<p className="text-sm text-foreground">
+												<span className="font-mono text-xs font-semibold">
+													{c.produto?.sku ?? "SKU"}
+												</span>{" "}
+												<span className="font-medium">
+													{c.produto?.descricao ?? "Produto"}
 												</span>
-											</div>
+											</p>
+											<p className="font-mono text-[11px] text-muted-foreground tabular-nums">
+												{c.produto
+													? `${c.produto.unidade_medida} · Múlt. ${c.produto.multiplo_embalagem} · `
+													: ""}
+												Tab.{" "}
+												{formatarCentavos(linha.preco_unitario_tabela_centavos)}
+												{c.previa
+													? ` · Líq. ${formatarCentavos(c.previa.preco_liquido_unitario_centavos)}`
+													: ""}
+											</p>
+										</div>
+										<div className="flex shrink-0 items-center gap-1">
+											<span className="font-mono text-sm font-semibold text-foreground tabular-nums">
+												{c.previa
+													? formatarCentavos(c.previa.subtotal_centavos)
+													: "—"}
+											</span>
+											{c.remover}
+										</div>
+									</div>
+									<div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-2">
+										{c.quantidade}
+										<div className="flex items-start gap-1.5">
+											<span className="pt-2 text-xs text-muted-foreground">
+												Desc.
+											</span>
+											{c.desconto}
+											<span className="pt-2 text-xs text-muted-foreground">
+												%
+											</span>
+										</div>
+									</div>
+								</li>
+							);
+						})}
+					</ul>
+
+					{/* Espaço suficiente: tabela com todas as colunas. */}
+					<div className="dense-table-region hidden @2xl:block">
+						<table className="text-left text-sm">
+							<caption className="sr-only">Itens de {nome}</caption>
+							<thead>
+								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+									<th scope="col" className="px-3.5 py-2">
+										Produto
+									</th>
+									<th scope="col" className="px-2.5 py-2 text-right">
+										Tabela
+									</th>
+									<th scope="col" className="px-2.5 py-2 text-center">
+										Quantidade
+									</th>
+									<th scope="col" className="px-2.5 py-2 text-center">
+										Desc. (%)
+									</th>
+									<th scope="col" className="px-2.5 py-2 text-right">
+										Líq. Unit.
+									</th>
+									<th scope="col" className="px-3 py-2 text-right">
+										Subtotal
+									</th>
+									{!somenteLeitura && (
+										<th scope="col" className="w-9 px-2 py-2 text-right">
+											<span className="sr-only">Ações</span>
 										</th>
-
-										<td className="px-2.5 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap">
-											{formatarCentavos(linha.preco_unitario_tabela_centavos)}
-										</td>
-
-										<td className="px-2.5 py-2.5">
-											<div className="flex flex-col items-center gap-1">
-												<div className="flex items-center gap-1">
-													{!somenteLeitura && (
-														<Button
-															size="sm"
-															variant="secondary"
-															className="px-2"
-															onClick={() => {
-																onAtualizar((g) => ({
-																	...g,
-																	itens: ajustarDeltaQuantidadeItemForm(
-																		g.itens,
-																		linha.localId,
-																		-1,
-																	),
-																}));
-																limparErro(
-																	chaveErroItemPedido(
-																		linha.localId,
-																		"quantidade",
-																	),
-																);
-															}}
-															aria-label={`Diminuir quantidade de ${sku}`}
-														>
-															<Minus aria-hidden="true" />
-														</Button>
-													)}
-													<Input
-														aria-label={`Quantidade de ${sku}`}
-														name={`quantidade_${linha.localId}`}
-														inputMode="numeric"
-														autoComplete="off"
-														autoCorrect="off"
-														spellCheck={false}
-														disabled={somenteLeitura}
-														value={linha.quantidade}
-														onChange={(e) =>
-															alterarItem(
-																linha.localId,
-																"quantidade",
-																e.target.value,
-															)
-														}
-														hasError={Boolean(erroQtd)}
-														className="w-14 max-w-14 min-w-14 shrink-0 px-1.5 text-center font-mono tabular-nums"
-													/>
-													{!somenteLeitura && (
-														<Button
-															size="sm"
-															variant="secondary"
-															className="px-2"
-															onClick={() => {
-																onAtualizar((g) => ({
-																	...g,
-																	itens: ajustarDeltaQuantidadeItemForm(
-																		g.itens,
-																		linha.localId,
-																		1,
-																	),
-																}));
-																limparErro(
-																	chaveErroItemPedido(
-																		linha.localId,
-																		"quantidade",
-																	),
-																);
-															}}
-															aria-label={`Aumentar quantidade de ${sku}`}
-														>
-															<Plus aria-hidden="true" />
-														</Button>
-													)}
+									)}
+								</tr>
+							</thead>
+							<tbody className="divide-y divide-border">
+								{grupo.itens.map((linha) => {
+									const c = controlesItem(linha);
+									return (
+										<tr
+											key={linha.localId}
+											className="align-middle transition-colors hover:bg-muted/30"
+										>
+											<th
+												scope="row"
+												className="px-3.5 py-2.5 font-normal text-foreground"
+											>
+												<div className="flex flex-col">
+													<div className="flex items-center gap-1.5">
+														<span className="font-mono text-xs font-semibold">
+															{c.produto?.sku ?? "SKU"}
+														</span>
+														<span className="text-xs font-medium">
+															{c.produto?.descricao ?? "Produto"}
+														</span>
+													</div>
+													<span className="text-[11px] text-muted-foreground">
+														{c.produto
+															? `${c.produto.unidade_medida} · Múlt. ${c.produto.multiplo_embalagem}`
+															: ""}
+													</span>
 												</div>
-												{erroQtd && (
-													<span
-														role="alert"
-														className="text-[11px] text-destructive"
-													>
-														{erroQtd}
-													</span>
-												)}
-											</div>
-										</td>
-
-										<td className="px-2.5 py-2.5">
-											<div className="flex flex-col items-center gap-1">
-												<Input
-													aria-label={`Desconto percentual de ${sku}`}
-													name={`desconto_${linha.localId}`}
-													inputMode="decimal"
-													autoComplete="off"
-													autoCorrect="off"
-													spellCheck={false}
-													disabled={somenteLeitura}
-													placeholder="0,00"
-													value={linha.percentual_desconto}
-													onChange={(e) =>
-														alterarItem(
-															linha.localId,
-															"percentual_desconto",
-															e.target.value,
-														)
-													}
-													hasError={Boolean(erroDesc)}
-													className="w-18 max-w-18 min-w-18 shrink-0 px-2 text-right font-mono tabular-nums"
-												/>
-												{erroDesc ? (
-													<span
-														role="alert"
-														className="text-[11px] text-destructive"
-													>
-														{erroDesc}
-													</span>
-												) : acimaDoTeto ? (
-													<span className="text-[10px] text-warning">
-														Máx: {formatarCentesimosPercentual(teto)}
-													</span>
-												) : null}
-											</div>
-										</td>
-
-										<td className="px-2.5 py-2.5 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap">
-											{previaItem
-												? formatarCentavos(
-														previaItem.preco_liquido_unitario_centavos,
-													)
-												: "—"}
-										</td>
-
-										<td className="px-3 py-2.5 text-right font-mono text-xs font-semibold tabular-nums whitespace-nowrap">
-											{previaItem
-												? formatarCentavos(previaItem.subtotal_centavos)
-												: "—"}
-										</td>
-
-										{!somenteLeitura && (
-											<td className="px-2 py-2.5 text-right">
-												<Button
-													size="sm"
-													variant="ghost"
-													onClick={() =>
-														onAtualizar((g) => ({
-															...g,
-															itens: g.itens.filter(
-																(item) => item.localId !== linha.localId,
-															),
-														}))
-													}
-													aria-label={`Remover ${sku} do orçamento`}
-													className="px-1.5 text-subtle-foreground hover:text-destructive"
-												>
-													<Trash2 aria-hidden="true" className="size-3.5" />
-												</Button>
+											</th>
+											<td className="px-2.5 py-2.5 text-right font-mono text-xs text-muted-foreground tabular-nums whitespace-nowrap">
+												{formatarCentavos(linha.preco_unitario_tabela_centavos)}
 											</td>
-										)}
-									</tr>
-								);
-							})}
-						</tbody>
-					</table>
+											<td className="px-2.5 py-2.5">
+												<div className="flex justify-center">
+													{c.quantidade}
+												</div>
+											</td>
+											<td className="px-2.5 py-2.5">
+												<div className="flex justify-center">{c.desconto}</div>
+											</td>
+											<td className="px-2.5 py-2.5 text-right font-mono text-xs font-medium tabular-nums whitespace-nowrap">
+												{c.previa
+													? formatarCentavos(
+															c.previa.preco_liquido_unitario_centavos,
+														)
+													: "—"}
+											</td>
+											<td className="px-3 py-2.5 text-right font-mono text-xs font-semibold tabular-nums whitespace-nowrap">
+												{c.previa
+													? formatarCentavos(c.previa.subtotal_centavos)
+													: "—"}
+											</td>
+											{c.remover && (
+												<td className="px-2 py-2.5 text-right">{c.remover}</td>
+											)}
+										</tr>
+									);
+								})}
+							</tbody>
+						</table>
+					</div>
 				</div>
 			)}
 
@@ -623,5 +607,125 @@ export function SecaoRepresentadaSacola({
 				)}
 			</div>
 		</section>
+	);
+}
+
+type ItemSacolaForm = GrupoOrcamentoFormValues["itens"][number];
+
+interface ControleQuantidadeProps {
+	sku: string;
+	nome: string;
+	valor: string;
+	erro: string | undefined;
+	somenteLeitura: boolean;
+	onAlterar: (valor: string) => void;
+	onAjustar: (delta: 1 | -1) => void;
+}
+
+/** Quantidade do item com botões − / + (de 1 em 1). */
+function ControleQuantidade({
+	sku,
+	nome,
+	valor,
+	erro,
+	somenteLeitura,
+	onAlterar,
+	onAjustar,
+}: ControleQuantidadeProps) {
+	return (
+		<div className="flex flex-col items-center gap-1">
+			<div className="flex items-center gap-1">
+				{!somenteLeitura && (
+					<Button
+						size="sm"
+						variant="secondary"
+						className="px-2"
+						onClick={() => onAjustar(-1)}
+						aria-label={`Diminuir quantidade de ${sku}`}
+					>
+						<Minus aria-hidden="true" />
+					</Button>
+				)}
+				<Input
+					aria-label={`Quantidade de ${sku}`}
+					name={nome}
+					inputMode="numeric"
+					autoComplete="off"
+					autoCorrect="off"
+					spellCheck={false}
+					disabled={somenteLeitura}
+					value={valor}
+					onChange={(e) => onAlterar(e.target.value)}
+					hasError={Boolean(erro)}
+					className="w-14 max-w-14 min-w-14 shrink-0 px-1.5 text-center font-mono tabular-nums"
+				/>
+				{!somenteLeitura && (
+					<Button
+						size="sm"
+						variant="secondary"
+						className="px-2"
+						onClick={() => onAjustar(1)}
+						aria-label={`Aumentar quantidade de ${sku}`}
+					>
+						<Plus aria-hidden="true" />
+					</Button>
+				)}
+			</div>
+			{erro && (
+				<span role="alert" className="text-[11px] text-destructive">
+					{erro}
+				</span>
+			)}
+		</div>
+	);
+}
+
+interface CampoDescontoProps {
+	sku: string;
+	nome: string;
+	valor: string;
+	erro: string | undefined;
+	/** Desconto máximo do item quando o digitado passa dele (só aviso). */
+	teto: number | null;
+	somenteLeitura: boolean;
+	onAlterar: (valor: string) => void;
+}
+
+/** Desconto percentual do item, com aviso quando passa do máximo da tabela. */
+function CampoDesconto({
+	sku,
+	nome,
+	valor,
+	erro,
+	teto,
+	somenteLeitura,
+	onAlterar,
+}: CampoDescontoProps) {
+	return (
+		<div className="flex flex-col items-center gap-1">
+			<Input
+				aria-label={`Desconto percentual de ${sku}`}
+				name={nome}
+				inputMode="decimal"
+				autoComplete="off"
+				autoCorrect="off"
+				spellCheck={false}
+				disabled={somenteLeitura}
+				placeholder="0,00"
+				value={valor}
+				onChange={(e) => onAlterar(e.target.value)}
+				hasError={Boolean(erro)}
+				className="w-18 max-w-18 min-w-18 shrink-0 px-2 text-right font-mono tabular-nums"
+			/>
+			{erro ? (
+				<span role="alert" className="text-[11px] text-destructive">
+					{erro}
+				</span>
+			) : teto !== null ? (
+				<span className="text-[10px] text-warning">
+					Máx: {formatarCentesimosPercentual(teto)}
+				</span>
+			) : null}
+		</div>
 	);
 }

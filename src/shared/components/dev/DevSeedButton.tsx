@@ -31,9 +31,12 @@ export function DevSeedButton({ tenantId }: DevSeedButtonProps) {
 			type="button"
 			onClick={handleSeed}
 			disabled={isLoading}
-			className="fixed right-4 bottom-20 lg:bottom-4 bg-purple-600 hover:bg-purple-700 text-white font-bold py-2 px-4 rounded shadow-lg transition-colors z-50"
+			className="fixed top-14 right-2 z-50 rounded bg-purple-600 px-2 py-1 text-xs font-bold text-white shadow-lg transition-colors hover:bg-purple-700 lg:top-auto lg:right-4 lg:bottom-4 lg:px-4 lg:py-2 lg:text-sm"
 		>
-			{isLoading ? "Populando..." : "👾 Popular Banco de Dados"}
+			{isLoading ? "…" : "👾"}
+			<span className="max-lg:sr-only">
+				{isLoading ? " Populando..." : " Popular Banco de Dados"}
+			</span>
 		</button>
 	);
 }
