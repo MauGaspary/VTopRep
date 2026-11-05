@@ -47,6 +47,7 @@ import {
 	obterCorRepresentada,
 } from "../../representadas/domain/representada";
 import { useRepresentadas } from "../../representadas/hooks/use-representadas";
+import { descreverEmbalagem } from "../domain/produto";
 import type { Produto } from "../domain/produto.schema";
 import { descreverVigencia } from "../domain/tabela-preco";
 import {
@@ -503,9 +504,10 @@ export function CatalogoView({
 																	{produto.sku}
 																</span>
 																<span className="font-mono tabular-nums">
-																	{produto.unidade_medida}
-																	{produto.multiplo_embalagem > 1 &&
-																		` × ${produto.multiplo_embalagem}`}
+																	{descreverEmbalagem(
+																		produto.unidade_medida,
+																		produto.multiplo_embalagem,
+																	)}
 																</span>
 																{isInativo && (
 																	<Badge variant="secondary">Inativo</Badge>
@@ -628,22 +630,20 @@ export function CatalogoView({
 																)}
 															</div>
 															<div className="mt-0.5 flex items-center gap-2 text-xs text-muted-foreground @4xl:hidden">
-																<span>{produto.unidade_medida}</span>
-																{produto.multiplo_embalagem > 1 && (
-																	<span>
-																		· Múlt. {produto.multiplo_embalagem}
-																	</span>
-																)}
+																<span>
+																	{descreverEmbalagem(
+																		produto.unidade_medida,
+																		produto.multiplo_embalagem,
+																	)}
+																</span>
 															</div>
 														</td>
 
 														<td className="hidden px-3 py-2.5 align-middle whitespace-nowrap @4xl:table-cell">
 															<span className="inline-flex items-center gap-1 rounded-md border border-border bg-muted/40 px-2 py-0.5 font-mono text-xs text-muted-foreground tabular-nums">
-																<strong className="font-medium text-foreground">
-																	{produto.unidade_medida}
-																</strong>
-																{produto.multiplo_embalagem > 1 && (
-																	<span>× {produto.multiplo_embalagem}</span>
+																{descreverEmbalagem(
+																	produto.unidade_medida,
+																	produto.multiplo_embalagem,
 																)}
 															</span>
 														</td>

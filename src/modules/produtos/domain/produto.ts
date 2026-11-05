@@ -55,6 +55,20 @@ export class RepresentadaNaoVinculadaError extends Error {
 	}
 }
 
+/**
+ * Embalagem para exibição: "CX com 8" quando a embalagem tem várias peças,
+ * só "UN" quando tem uma. O múltiplo é informativo (quantas peças vêm na
+ * embalagem); quantidade e preço são sempre na unidade de venda.
+ */
+export function descreverEmbalagem(
+	unidadeMedida: string,
+	multiploEmbalagem: number,
+): string {
+	return multiploEmbalagem > 1
+		? `${unidadeMedida} com ${multiploEmbalagem}`
+		: unidadeMedida;
+}
+
 export function normalizarSku(sku: string): string {
 	return sku.trim().toUpperCase();
 }

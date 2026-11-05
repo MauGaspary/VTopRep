@@ -13,8 +13,8 @@ export const UNIDADES_MEDIDA_PADRAO = [
 
 const MultiploEmbalagemSchema = z
 	.number()
-	.int("Múltiplo de embalagem deve ser um número inteiro")
-	.positive("Múltiplo de embalagem deve ser maior que zero");
+	.int("Peças por embalagem deve ser um número inteiro")
+	.positive("Peças por embalagem deve ser maior que zero");
 
 export const ProdutoSchema = z
 	.object({

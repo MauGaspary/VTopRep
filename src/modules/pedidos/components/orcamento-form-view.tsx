@@ -54,7 +54,10 @@ import {
 	ROTULOS_TIPO_CLIENTE,
 } from "../../clientes/domain/cliente.schema";
 import { useCliente, useClientes } from "../../clientes/hooks/use-clientes";
-import { correspondeBuscaProduto } from "../../produtos/domain/produto";
+import {
+	correspondeBuscaProduto,
+	descreverEmbalagem,
+} from "../../produtos/domain/produto";
 import type { Produto } from "../../produtos/domain/produto.schema";
 import { usePrecosDaTabela } from "../../produtos/hooks/use-precos";
 import { useTodosProdutos } from "../../produtos/hooks/use-produtos";
@@ -691,7 +694,7 @@ function OrcamentoForm({
 			/>
 
 			{somenteLeitura && (
-				<Alert>
+				<Alert variant="info">
 					{valores.grupos.length > 1
 						? "Os pedidos desta cotação já foram emitidos e estão em modo somente leitura para preservar a integridade comercial."
 						: "Este pedido já foi emitido e encontra-se em modo somente leitura para preservar a integridade comercial."}
@@ -1052,10 +1055,10 @@ function OrcamentoForm({
 																{produto.sku}
 															</span>
 															<span className="text-[11px] text-muted-foreground">
-																{produto.unidade_medida}
-																{produto.multiplo_embalagem > 1
-																	? ` × ${produto.multiplo_embalagem}`
-																	: ""}
+																{descreverEmbalagem(
+																	produto.unidade_medida,
+																	produto.multiplo_embalagem,
+																)}
 															</span>
 															{qtdAtual > 0 && (
 																<Badge variant="success">

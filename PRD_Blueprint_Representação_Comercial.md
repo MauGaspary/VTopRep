@@ -150,7 +150,7 @@ Ao editar um cliente, a coleção de endereços/contatos enviada é reconciliada
 * `sku: text` (normalizado em maiúsculas; único por `tenant_id + representada_id`)
 * `descricao: text`
 * `unidade_medida: text` (Ex: `'UN'`, `'CX'`, `'KG'`)
-* `multiplo_embalagem: integer` (Ex: 6 = só vende em múltiplos de 6; padrão 1)
+* `multiplo_embalagem: integer` ("Peças por embalagem", **só informativo**: quantas peças vêm em cada unidade de venda, exibido como "CX com 8"; padrão 1. Quantidade e preço do pedido são sempre na unidade de venda. Regra de venda por múltiplo: `BACKLOG.md` 1.3)
 * `ativo: boolean`
 * `created_at: timestamptz`
 * `updated_at: timestamptz`
@@ -230,7 +230,7 @@ Cotação multi-representada: a sacola é gravada numa única transação como 1
 * `tenant_id: UUID` (FK)
 * `pedido_id: UUID` (FK)
 * `produto_id: UUID` (FK)
-* `quantidade: integer` (Validada contra `multiplo_embalagem`)
+* `quantidade: integer` (Na unidade de venda do produto, maior que zero; não é validada contra `multiplo_embalagem`)
 * `preco_unitario_tabela_centavos: integer`
 * `percentual_desconto: integer` (Centésimos de %, entre 0 e 10000. É a fonte da verdade do desconto)
 * `preco_liquido_unitario_centavos: integer` (Derivado: `preco_unitario_tabela_centavos` com `percentual_desconto` aplicado, arredondamento half-even)

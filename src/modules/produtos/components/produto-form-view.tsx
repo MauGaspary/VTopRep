@@ -370,9 +370,9 @@ function ProdutoForm({
 
 							<FormField
 								id="multiplo_embalagem"
-								label="Múltiplo de embalagem"
+								label="Peças por embalagem"
 								error={erros.multiplo_embalagem}
-								help="Quantidade mínima de venda por fardo/caixa (padrão: 1)"
+								help="Só informativo: quantas peças vêm em cada unidade de venda (ex.: CX com 8). Quantidade e preço do pedido são na unidade de venda. Padrão: 1"
 							>
 								<Input
 									id="multiplo_embalagem"

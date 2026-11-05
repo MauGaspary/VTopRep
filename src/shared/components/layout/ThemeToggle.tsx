@@ -14,21 +14,36 @@ const ICONES: Record<PreferenciaTema, LucideIcon> = {
 };
 
 interface ThemeToggleProps {
-	/** Só os ícones (barra superior do mobile); o rótulo fica no `title`. */
+	/** Um botão só que alterna o tema (barra superior do celular). */
 	compact?: boolean;
 }
 
-/** Seletor segmentado Claro / Escuro / Sistema (rádios nativos). */
+/** Seletor segmentado Claro / Escuro / Sistema (rádios nativos) ou, compacto, um botão que alterna. */
 export function ThemeToggle({ compact = false }: ThemeToggleProps) {
 	const { preferencia, definirPreferencia } = useTema();
 	const nome = useId();
 
+	if (compact) {
+		// Barra superior do celular: um botão só, que alterna Claro → Escuro → Sistema.
+		const opcoes = PreferenciaTemaSchema.options;
+		const proxima = opcoes[(opcoes.indexOf(preferencia) + 1) % opcoes.length];
+		const Icone = ICONES[preferencia];
+		const rotulo = ROTULOS_PREFERENCIA_TEMA[preferencia];
+		return (
+			<button
+				type="button"
+				onClick={() => definirPreferencia(proxima)}
+				aria-label={`Tema ${rotulo.toLowerCase()}. Tocar para usar ${ROTULOS_PREFERENCIA_TEMA[proxima].toLowerCase()}`}
+				title={`Tema ${rotulo.toLowerCase()}`}
+				className="flex size-9 items-center justify-center rounded-md text-muted-foreground transition-colors hover:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:outline-none"
+			>
+				<Icone aria-hidden="true" className="size-4" />
+			</button>
+		);
+	}
+
 	return (
-		<fieldset
-			className={`m-0 min-w-0 gap-0.5 rounded-lg border border-border bg-muted p-0.5 ${
-				compact ? "flex" : "grid grid-cols-3"
-			}`}
-		>
+		<fieldset className="m-0 grid min-w-0 grid-cols-3 gap-0.5 rounded-lg border border-border bg-muted p-0.5">
 			<legend className="sr-only">Tema</legend>
 			{PreferenciaTemaSchema.options.map((opcao) => {
 				const Icone = ICONES[opcao];
@@ -53,7 +68,7 @@ export function ThemeToggle({ compact = false }: ThemeToggleProps) {
 							className="sr-only"
 						/>
 						<Icone aria-hidden="true" className="size-3.5 shrink-0" />
-						<span className={compact ? "sr-only" : undefined}>{rotulo}</span>
+						<span>{rotulo}</span>
 					</label>
 				);
 			})}

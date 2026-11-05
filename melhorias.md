@@ -80,5 +80,8 @@ Motivo: numa tela de 360–412 px não cabem 5 ou 6 colunas. A tabela com rolage
 - [x] **Decisão do usuário: cards** (a lista em 2 linhas cortava demais a segunda linha). Aplicado em orçamentos, clientes, catálogo, histórico do cliente, fábricas e transportadoras com o componente `ListaResponsiva` (`src/shared/components/ui/ListaResponsiva.tsx`). Conferido com Playwright de 360 a 1440 px: nenhuma tabela rola para o lado.
 - [ ] Tabelas de prévia (importação de CSV, reajuste) continuam com rolagem própria: são conferência de dados, não listas de cadastro. Avaliar depois.
 - [x] **Sacola do orçamento:** itens em card compacto (nome e subtotal em cima, preços embaixo, quantidade e desconto numa linha) quando a sacola é estreita, tabela quando há espaço; sem rolagem interna (a sacola e o catálogo do orçamento rolam com a página abaixo de 1024 px). Total e botões "Salvar rascunho" / "Fechar pedido" numa barra fixa acima da barra inferior (uma linha só no celular deitado). Item com nome longo: de cerca de 300 px para 170–190 px em 360–412 px.
-- [ ] **Múltiplo de embalagem não é aplicado** (confirmado no código): os botões − / + mudam de 1 em 1, e incluir pelo catálogo começa em 1. Decisão de regra comercial pendente com o usuário.
+- [x] **Múltiplo de embalagem:** decisão do usuário, é só informativo (quantidade em embalagens). Exibido como "CX com 8" no catálogo, na sacola e no PDF; campo renomeado para "Peças por embalagem". Regra de múltiplo anotada no `BACKLOG.md` 1.3.
+- [x] **Pedido emitido:** aviso de somente leitura em estilo informativo (cinza), não mais de erro.
+- [x] **Barra superior no celular:** seletor de tema virou um botão só, que alterna Claro → Escuro → Sistema.
+- [ ] `touch-action` e `theme-color`: aguardando o usuário.
 

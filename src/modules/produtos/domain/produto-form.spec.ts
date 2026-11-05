@@ -71,7 +71,7 @@ describe("validarFormularioProduto", () => {
 		expect(resultado.success).toBe(false);
 		if (!resultado.success) {
 			expect(resultado.erros.multiplo_embalagem).toBe(
-				"Múltiplo de embalagem deve ser maior que zero",
+				"Peças por embalagem deve ser maior que zero",
 			);
 		}
 	});

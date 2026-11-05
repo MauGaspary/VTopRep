@@ -16,6 +16,7 @@ import {
 	Card,
 } from "../../../shared/components/ui";
 import { mensagemDeErro } from "../../../shared/domain/formulario";
+import { descreverEmbalagem } from "../../produtos/domain/produto";
 import {
 	type EspelhoCotacaoDados,
 	type EspelhoPedidoDados,
@@ -448,7 +449,7 @@ function TabelaItensPdf({ itens }: { itens: EspelhoPedidoDados["itens"] }) {
 					<Text style={styles.colSku}>{item.sku}</Text>
 					<Text style={styles.colDesc}>{item.descricao}</Text>
 					<Text style={styles.colUnid}>
-						{item.unidadeMedida} ({item.multiploEmbalagem})
+						{descreverEmbalagem(item.unidadeMedida, item.multiploEmbalagem)}
 					</Text>
 					<Text style={styles.colQtd}>{item.quantidade}</Text>
 					<Text style={styles.colPrecoTab}>{item.precoTabelaFormatado}</Text>

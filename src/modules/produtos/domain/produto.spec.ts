@@ -4,6 +4,7 @@ import {
 	atualizarProduto,
 	correspondeBuscaProduto,
 	criarProduto,
+	descreverEmbalagem,
 	detectarConflitoSku,
 	inativarProduto,
 	normalizarSku,
@@ -276,5 +277,15 @@ describe("Produto - Lógica Pura de Domínio", () => {
 				"Alumínio",
 			]);
 		});
+	});
+});
+
+describe("descreverEmbalagem", () => {
+	it("mostra o conteúdo da embalagem quando tem mais de uma peça", () => {
+		expect(descreverEmbalagem("CX", 8)).toBe("CX com 8");
+	});
+
+	it("mostra só a unidade quando a embalagem tem uma peça", () => {
+		expect(descreverEmbalagem("UN", 1)).toBe("UN");
 	});
 });

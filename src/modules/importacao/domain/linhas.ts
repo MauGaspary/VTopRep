@@ -114,7 +114,7 @@ export function extrairLinhasImportacao({
 			multiplo = parseInteiroPositivoCsv(multiploBruto);
 			if (multiplo === null) {
 				erros.push(
-					`Múltiplo de embalagem inválido: "${multiploBruto}" (use um inteiro maior que zero)`,
+					`Valor de peças por embalagem inválido: "${multiploBruto}" (use um inteiro maior que zero)`,
 				);
 			}
 		}

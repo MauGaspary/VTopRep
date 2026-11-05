@@ -16,7 +16,7 @@ export const ROTULOS_CAMPO_IMPORTACAO: Record<CampoImportacao, string> = {
 	sku: "SKU / código",
 	descricao: "Descrição",
 	unidade_medida: "Unidade",
-	multiplo_embalagem: "Múltiplo de embalagem",
+	multiplo_embalagem: "Peças por embalagem",
 	preco: "Preço",
 };
 

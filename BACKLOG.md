@@ -20,9 +20,10 @@ Este documento reúne regras de negócio, travas comerciais e módulos postergad
 
 ### 1.3. Regras Específicas de Fracionamento / Embalagem
 
-- **Contexto:** Conversão ou bloqueio de unidades fracionadas vs caixas fechadas.
-- **Definição Atual:** O input de quantidade representa o número de volumes/unidades vendidas diretamente, respeitando o múltiplo de embalagem.
-- **Implementação Futura:** Exibição opcional do totalizador de peças avulsas (`quantidade * multiplo_embalagem`) no espelho/PDF apenas para conferência logística.
+- **Definição atual (2026-11-05):** `multiplo_embalagem` ("Peças por embalagem") é **só informativo**. Quantidade e preço do pedido são sempre na unidade de venda (ex.: 3 caixas a R$ X a caixa), e a tela mostra "CX com 8". Nenhuma quantidade é arredondada ou bloqueada.
+- **Cuidado no cadastro:** se a fábrica informa o preço **por peça** mas só vende em caixa fechada, cadastre a unidade como "CX" e o preço da caixa. Caso contrário, 3 caixas viram 3 peças no orçamento.
+- **Ideia futura (se esse caso virar comum):** regra opcional por produto ou por fábrica para quem vende por peça em caixa fechada: incluir com o múltiplo, − / + de N em N e aviso ou arredondamento quando a quantidade digitada não for múltipla.
+- **Ideia futura:** totalizador de peças avulsas (`quantidade × multiplo_embalagem`) no espelho/PDF, só para conferência logística.
 
 ### 1.4. Importação de Tabelas de Preço em PDF e XLSX
 

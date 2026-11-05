@@ -73,7 +73,7 @@ describe("extrairLinhasImportacao", () => {
 				sku: "A3",
 				gravidade: "erro",
 				mensagem:
-					'Múltiplo de embalagem inválido: "1,5" (use um inteiro maior que zero)',
+					'Valor de peças por embalagem inválido: "1,5" (use um inteiro maior que zero)',
 			},
 		]);
 		// SKUs de linhas com erro continuam "presentes no arquivo"

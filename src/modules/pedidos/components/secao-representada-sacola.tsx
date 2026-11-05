@@ -17,6 +17,7 @@ import {
 } from "../../../shared/domain/decimal-br";
 import { ROTULOS_FRETE, TIPOS_FRETE } from "../../../shared/domain/frete";
 import { escolherTabelaSugerida } from "../../produtos/domain/preco";
+import { descreverEmbalagem } from "../../produtos/domain/produto";
 import type { Produto } from "../../produtos/domain/produto.schema";
 import { descreverVigencia } from "../../produtos/domain/tabela-preco";
 import {
@@ -460,7 +461,7 @@ export function SecaoRepresentadaSacola({
 											</p>
 											<p className="font-mono text-[11px] text-muted-foreground tabular-nums">
 												{c.produto
-													? `${c.produto.unidade_medida} · Múlt. ${c.produto.multiplo_embalagem} · `
+													? `${descreverEmbalagem(c.produto.unidade_medida, c.produto.multiplo_embalagem)} · `
 													: ""}
 												Tab.{" "}
 												{formatarCentavos(linha.preco_unitario_tabela_centavos)}
@@ -549,7 +550,10 @@ export function SecaoRepresentadaSacola({
 													</div>
 													<span className="text-[11px] text-muted-foreground">
 														{c.produto
-															? `${c.produto.unidade_medida} · Múlt. ${c.produto.multiplo_embalagem}`
+															? descreverEmbalagem(
+																	c.produto.unidade_medida,
+																	c.produto.multiplo_embalagem,
+																)
 															: ""}
 													</span>
 												</div>
