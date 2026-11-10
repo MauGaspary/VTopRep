@@ -4,12 +4,9 @@ Espaço para anotar ideias e dúvidas soltas. Quando uma nota vira tarefa, ela s
 
 ## Novas notas
 
-- Ao fazer um orçamento com produtos de duas representadas, é necessário que tenha pdfs gerados individualmente
 - Adicionalmente, seria interessante ter pdf diferentes para mandar para as fábricas e um para os clientes com a confirmação do pedido. Cada um deles teriam alguns dados diferentes, mas a mesma base. Vamos estudar isso mais pra frente.
 
 - Trocar o nome "representadas" por "fábricas"?
-
-- Adição no orçamento de campo de input pra dar desconto geral, não apenas individual por item
 
 ## Resolvidas
 
@@ -17,3 +14,5 @@ Espaço para anotar ideias e dúvidas soltas. Quando uma nota vira tarefa, ela s
 2. ~~Atualizar produtos e preços a partir de um arquivo da representada.~~ Importação por CSV e reajuste em lote (`TODO.md` 2.9). PDF e XLSX estão no `BACKLOG.md` 1.4; perguntas para as fábricas estão no `BACKLOG.md` 1.6.
 3. ~~Alternar entre modo claro e escuro.~~ Seletor Claro / Escuro / Sistema (`TODO.md` 2.6).
 4. ~~Histórico de pedidos do cliente com ordenação (padrão: mais recente primeiro).~~ Aba "Pedidos" no cliente, com repetir pedido (`TODO.md` 2.8).
+5. ~~Ao fazer um orçamento com produtos de duas representadas, é necessário que tenha pdfs gerados individualmente.~~ Botões de Baixar e Compartilhar PDF individual por fábrica na cotação (`TODO.md` 2.5.4 / `espelho-pedido-pdf.tsx`).
+6. ~~Adição no orçamento de campo de input pra dar desconto geral, não apenas individual por item.~~ Campo "Desconto em todos os itens (%)" na seção de cada representada na sacola (`secao-representada-sacola.tsx`).

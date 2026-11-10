@@ -992,31 +992,59 @@ export function EspelhoCotacaoActionsBar({
 				/>
 			</div>
 
-			<div className="flex flex-wrap items-center gap-1.5 border-t border-border pt-3">
+			<div className="flex flex-wrap items-center gap-2 border-t border-border pt-3">
 				<span className="mr-1 text-[11px] text-muted-foreground">
 					PDF individual por fábrica:
 				</span>
-				{espelho.secoes.map((secao) => (
-					<Button
-						key={secao.pedidoId}
-						size="sm"
-						variant="ghost"
-						disabled={gerando !== null}
-						onClick={() =>
-							void executar(
-								secao.pedidoId,
-								() => baixarEspelhoPedidoPdf(secao),
-								"Erro ao gerar o PDF da fábrica",
-							)
-						}
-						title={`Baixar o pedido #${secao.codigoCurto} de ${secao.representada.nomeFantasia}`}
-					>
-						<Download aria-hidden="true" className="size-3.5" />
-						{gerando === secao.pedidoId
-							? "Gerando..."
-							: `${secao.representada.nomeFantasia} · ${secao.totais.valorTotalFormatado}`}
-					</Button>
-				))}
+				{espelho.secoes.map((secao) => {
+					const chaveBaixar = `baixar-${secao.pedidoId}`;
+					const chaveCompartilhar = `compartilhar-${secao.pedidoId}`;
+					return (
+						<div
+							key={secao.pedidoId}
+							className="inline-flex flex-wrap items-center gap-1 rounded-lg border border-border bg-muted/20 px-2 py-1"
+						>
+							<span className="px-1 text-xs font-medium text-foreground">
+								{secao.representada.nomeFantasia}{" "}
+								<span className="font-mono text-muted-foreground tabular-nums">
+									({secao.totais.valorTotalFormatado})
+								</span>
+							</span>
+							<Button
+								size="sm"
+								variant="ghost"
+								disabled={gerando !== null}
+								onClick={() =>
+									void executar(
+										chaveBaixar,
+										() => baixarEspelhoPedidoPdf(secao),
+										"Erro ao gerar o PDF da fábrica",
+									)
+								}
+								title={`Baixar o pedido #${secao.codigoCurto} de ${secao.representada.nomeFantasia}`}
+							>
+								<Download aria-hidden="true" className="size-3.5" />
+								{gerando === chaveBaixar ? "Gerando..." : "Baixar"}
+							</Button>
+							<Button
+								size="sm"
+								variant="ghost"
+								disabled={gerando !== null}
+								onClick={() =>
+									void executar(
+										chaveCompartilhar,
+										() => compartilharOuBaixarEspelhoPedidoPdf(secao),
+										"Erro ao compartilhar o PDF da fábrica",
+									)
+								}
+								title={`Compartilhar o pedido #${secao.codigoCurto} de ${secao.representada.nomeFantasia}`}
+							>
+								<Share2 aria-hidden="true" className="size-3.5" />
+								{gerando === chaveCompartilhar ? "Gerando..." : "Compartilhar"}
+							</Button>
+						</div>
+					);
+				})}
 			</div>
 
 			{erro && <Alert variant="destructive">{erro}</Alert>}

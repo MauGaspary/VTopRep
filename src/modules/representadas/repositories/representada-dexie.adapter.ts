@@ -5,7 +5,11 @@ import {
 	criarTabelaPadrao,
 	sincronizarTabelasRepresentada,
 } from "../../produtos/domain/tabela-preco";
-import type { TabelaPrecoInput } from "../../produtos/domain/tabela-preco.schema";
+import type {
+	TabelaPreco,
+	TabelaPrecoInput,
+} from "../../produtos/domain/tabela-preco.schema";
+import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
 import {
 	atualizarRepresentada,
 	CnpjDuplicadoError,
@@ -110,13 +114,14 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 
 		await this.db.transaction(
 			"rw",
-			[this.db.representadas, this.db.tabelas_preco],
+			[this.db.representadas, this.db.tabelas_preco, this.db.outbox],
 			async () => {
 				await this.garantirCnpjUnico(tenant, nova, {
 					oferecerReativacao: true,
 				});
 				await this.db.representadas.add(nova);
 
+				let tabelasCriadas: TabelaPreco[] = [];
 				if (tabelasInput && tabelasInput.length > 0) {
 					const { gravar } = sincronizarTabelasRepresentada({
 						tenantId: tenant,
@@ -126,6 +131,7 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 						agora: instante,
 						gerarId: this.gerarId,
 					});
+					tabelasCriadas = gravar;
 					if (gravar.length > 0) {
 						await this.db.tabelas_preco.bulkPut(gravar);
 					}
@@ -137,8 +143,17 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 						hoje: dataLocal(new Date(instante)),
 						agora: instante,
 					});
+					tabelasCriadas = [padrao];
 					await this.db.tabelas_preco.add(padrao);
 				}
+
+				const mutacoesOutbox = [
+					this.mutacaoRepresentada(tenant, nova, false, instante),
+					...tabelasCriadas.map((tabela) =>
+						this.mutacaoTabela(tenant, tabela, false, instante),
+					),
+				];
+				await this.db.outbox.bulkAdd(mutacoesOutbox);
 			},
 		);
 
@@ -156,7 +171,7 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 
 		return this.db.transaction(
 			"rw",
-			[this.db.representadas, this.db.tabelas_preco],
+			[this.db.representadas, this.db.tabelas_preco, this.db.outbox],
 			async () => {
 				const existente = await this.obterAtivaOuFalhar(tenant, idValido);
 				const instante = this.agora();
@@ -173,11 +188,20 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 				}
 				await this.db.representadas.put(atualizada);
 
+				const mutacoesOutbox = [
+					this.mutacaoRepresentada(tenant, atualizada, true, instante),
+				];
+
 				if (tabelasInput !== undefined) {
 					const tabelasExistentes = await this.db.tabelas_preco
 						.where("[tenant_id+representada_id]")
 						.equals([tenant, idValido])
 						.toArray();
+					const idsExistentes = new Set(
+						tabelasExistentes
+							.filter((t) => t.deleted_at === null)
+							.map((t) => t.id),
+					);
 					const { gravar } = sincronizarTabelasRepresentada({
 						tenantId: tenant,
 						representadaId: idValido,
@@ -188,8 +212,20 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 					});
 					if (gravar.length > 0) {
 						await this.db.tabelas_preco.bulkPut(gravar);
+						for (const tabela of gravar) {
+							mutacoesOutbox.push(
+								this.mutacaoTabela(
+									tenant,
+									tabela,
+									idsExistentes.has(tabela.id),
+									instante,
+								),
+							);
+						}
 					}
 				}
+
+				await this.db.outbox.bulkAdd(mutacoesOutbox);
 
 				return atualizada;
 			},
@@ -200,29 +236,80 @@ export class RepresentadaDexieAdapter implements RepresentadaRepository {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const idValido = IdSchema.parse(id);
 
-		await this.db.transaction("rw", this.db.representadas, async () => {
-			const existente = await this.obterAtivaOuFalhar(tenant, idValido);
-			await this.db.representadas.put(
-				inativarRepresentada(existente, tenant, this.agora()),
-			);
-		});
+		await this.db.transaction(
+			"rw",
+			[this.db.representadas, this.db.outbox],
+			async () => {
+				const existente = await this.obterAtivaOuFalhar(tenant, idValido);
+				const agora = this.agora();
+				const inativada = inativarRepresentada(existente, tenant, agora);
+				await Promise.all([
+					this.db.representadas.put(inativada),
+					this.db.outbox.add(
+						this.mutacaoRepresentada(tenant, inativada, true, agora),
+					),
+				]);
+			},
+		);
 	}
 
 	async reativar(tenantId: string, id: string): Promise<void> {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const idValido = IdSchema.parse(id);
 
-		await this.db.transaction("rw", this.db.representadas, async () => {
-			const registro = await this.obterPorId(tenant, idValido, true);
-			if (!registro) {
-				throw new RepresentadaNaoEncontradaError(idValido);
-			}
-			const reativada = reativarRepresentada(registro, tenant, this.agora());
-			// Ao reativar, só importa o conflito com outra ATIVA de mesmo CNPJ.
-			await this.garantirCnpjUnico(tenant, reativada, {
-				oferecerReativacao: false,
-			});
-			await this.db.representadas.put(reativada);
+		await this.db.transaction(
+			"rw",
+			[this.db.representadas, this.db.outbox],
+			async () => {
+				const registro = await this.obterPorId(tenant, idValido, true);
+				if (!registro) {
+					throw new RepresentadaNaoEncontradaError(idValido);
+				}
+				const agora = this.agora();
+				const reativada = reativarRepresentada(registro, tenant, agora);
+				// Ao reativar, só importa o conflito com outra ATIVA de mesmo CNPJ.
+				await this.garantirCnpjUnico(tenant, reativada, {
+					oferecerReativacao: false,
+				});
+				await Promise.all([
+					this.db.representadas.put(reativada),
+					this.db.outbox.add(
+						this.mutacaoRepresentada(tenant, reativada, true, agora),
+					),
+				]);
+			},
+		);
+	}
+
+	private mutacaoRepresentada(
+		tenantId: string,
+		registro: Representada,
+		existiaAntes: boolean,
+		agora: string,
+	) {
+		return criarMutacaoParaRegistro({
+			tenantId,
+			entity: "representadas",
+			registro,
+			existiaAntes,
+			agora,
+			gerarId: this.gerarId,
+		});
+	}
+
+	private mutacaoTabela(
+		tenantId: string,
+		registro: TabelaPreco,
+		existiaAntes: boolean,
+		agora: string,
+	) {
+		return criarMutacaoParaRegistro({
+			tenantId,
+			entity: "tabelas_preco",
+			registro,
+			existiaAntes,
+			agora,
+			gerarId: this.gerarId,
 		});
 	}
 

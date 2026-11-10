@@ -35,6 +35,7 @@ import type { TotaisPedido } from "../domain/pedido";
 import { CONDICOES_PAGAMENTO_PADRAO } from "../domain/pedido.schema";
 import {
 	ajustarDeltaQuantidadeItemForm,
+	aplicarDescontoGeralItensForm,
 	calcularPreviaItemForm,
 	chaveErroItemPedido,
 	type PedidoFormErros,
@@ -93,6 +94,10 @@ export function SecaoRepresentadaSacola({
 	const repId = grupo.representada_id;
 	const idBase = `orcamento-${repId}`;
 	const [avisoTabela, setAvisoTabela] = useState<string | null>(null);
+	const [descontoGeral, setDescontoGeral] = useState("");
+	const [erroDescontoGeral, setErroDescontoGeral] = useState<string | null>(
+		null,
+	);
 	const onAtualizar = useCallback(
 		(alterar: (grupo: GrupoOrcamentoFormValues) => GrupoOrcamentoFormValues) =>
 			onAtualizarGrupo(repId, alterar),
@@ -210,6 +215,23 @@ export function SecaoRepresentadaSacola({
 			...g,
 			itens: g.itens.filter((item) => item.localId !== localId),
 		}));
+
+	const aplicarDescontoEmTodos = () => {
+		const resultado = aplicarDescontoGeralItensForm(grupo.itens, descontoGeral);
+		if (!resultado.ok) {
+			setErroDescontoGeral(resultado.erro);
+			return;
+		}
+		setErroDescontoGeral(null);
+		setDescontoGeral(resultado.descontoFormatado);
+		onAtualizar((g) => ({
+			...g,
+			itens: resultado.itens,
+		}));
+		for (const item of grupo.itens) {
+			limparErro(chaveErroItemPedido(item.localId, "percentual_desconto"));
+		}
+	};
 
 	/** Dados de exibição e validação de um item da sacola. */
 	const descreverItem = (linha: ItemSacolaForm) => {
@@ -437,6 +459,74 @@ export function SecaoRepresentadaSacola({
 				</div>
 			) : (
 				<div className="@container border-t border-border">
+					{!somenteLeitura && (
+						<div className="flex flex-wrap items-center justify-between gap-2 border-b border-border bg-muted/15 px-4 py-2">
+							<label
+								htmlFor={`${idBase}-desconto-geral`}
+								className="text-xs font-medium text-muted-foreground"
+							>
+								Desconto em todos os itens (%)
+							</label>
+							<div className="flex flex-col items-end gap-1">
+								<div className="flex items-center gap-1.5">
+									<Input
+										id={`${idBase}-desconto-geral`}
+										name={`desconto_geral_${repId}`}
+										inputMode="decimal"
+										autoComplete="off"
+										autoCorrect="off"
+										autoCapitalize="off"
+										spellCheck={false}
+										placeholder="0,00"
+										value={descontoGeral}
+										aria-describedby={
+											erroDescontoGeral
+												? `${idBase}-desconto-geral-erro`
+												: undefined
+										}
+										onChange={(e) => {
+											setDescontoGeral(e.target.value);
+											if (erroDescontoGeral) setErroDescontoGeral(null);
+										}}
+										onBlur={() => {
+											if (
+												descontoGeral.trim() !== "" &&
+												parseDescontoFormParaCentesimos(descontoGeral) === null
+											) {
+												setErroDescontoGeral(
+													"Informe um desconto entre 0,00% e 100,00%",
+												);
+											}
+										}}
+										onKeyDown={(e) => {
+											if (e.key === "Enter" && !e.nativeEvent.isComposing) {
+												e.preventDefault();
+												aplicarDescontoEmTodos();
+											}
+										}}
+										hasError={Boolean(erroDescontoGeral)}
+										className="w-20 max-w-20 min-w-20 shrink-0 px-2 text-right font-mono tabular-nums"
+									/>
+									<Button
+										size="sm"
+										variant="secondary"
+										onClick={aplicarDescontoEmTodos}
+									>
+										Aplicar
+									</Button>
+								</div>
+								{erroDescontoGeral && (
+									<span
+										id={`${idBase}-desconto-geral-erro`}
+										role="alert"
+										className="text-[11px] text-destructive"
+									>
+										{erroDescontoGeral}
+									</span>
+								)}
+							</div>
+						</div>
+					)}
 					{/* Pouco espaço (celular em pé): cada item em 3 linhas, sem rolagem lateral. */}
 					<ul
 						aria-label={`Itens de ${nome}`}

@@ -3,6 +3,7 @@ import { criarPedidoCompleto } from "./pedido";
 import {
 	adicionarOuIncrementarItemForm,
 	ajustarDeltaQuantidadeItemForm,
+	aplicarDescontoGeralItensForm,
 	calcularPreviaItemForm,
 	calcularPreviaTotaisForm,
 	chaveErroItemPedido,
@@ -176,6 +177,48 @@ describe("manipulação ágil de itens no formulário", () => {
 		expect(resultado.itens[0]?.preco_unitario_tabela_centavos).toBe(1200);
 		expect(resultado.itens[1]?.preco_unitario_tabela_centavos).toBe(2000);
 		expect(resultado.produtosSemPrecoIds).toEqual([PRODUTO_B]);
+	});
+
+	it("aplica desconto geral formatado em todos os itens e valida limites", () => {
+		const itens = [
+			{
+				localId: "local-1",
+				produto_id: PRODUTO_A,
+				preco_unitario_tabela_centavos: 1000,
+				quantidade: "2",
+				percentual_desconto: "3,00",
+			},
+			{
+				localId: "local-2",
+				produto_id: PRODUTO_B,
+				preco_unitario_tabela_centavos: 2000,
+				quantidade: "1",
+				percentual_desconto: "",
+			},
+		];
+
+		const aplicado = aplicarDescontoGeralItensForm(itens, "7,5");
+		expect(aplicado.ok).toBe(true);
+		if (aplicado.ok) {
+			expect(aplicado.descontoFormatado).toBe("7,50");
+			expect(aplicado.itens.map((i) => i.percentual_desconto)).toEqual([
+				"7,50",
+				"7,50",
+			]);
+		}
+
+		const zerado = aplicarDescontoGeralItensForm(itens, "0");
+		expect(zerado.ok).toBe(true);
+		if (zerado.ok) {
+			expect(zerado.descontoFormatado).toBe("");
+			expect(zerado.itens.map((i) => i.percentual_desconto)).toEqual(["", ""]);
+		}
+
+		const invalido = aplicarDescontoGeralItensForm(itens, "105");
+		expect(invalido).toEqual({
+			ok: false,
+			erro: "Informe um desconto entre 0,00% e 100,00%",
+		});
 	});
 });
 

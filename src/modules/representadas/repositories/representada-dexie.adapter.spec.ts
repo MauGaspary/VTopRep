@@ -32,6 +32,7 @@ describe("RepresentadaDexieAdapter", () => {
 	beforeEach(async () => {
 		await db.representadas.clear();
 		await db.tabelas_preco.clear();
+		await db.outbox.clear();
 		relogio = Date.UTC(2026, 9, 22, 12, 0, 0);
 		adapter = new RepresentadaDexieAdapter({
 			agora: () => {
@@ -457,6 +458,70 @@ describe("RepresentadaDexieAdapter", () => {
 				"Tabela Atacado Sul",
 				"Tabela Varejo",
 			]);
+		});
+
+		it("registra mutações de representada e tabelas_preco na outbox na mesma transação", async () => {
+			const criada = await adapter.criar(TENANT_1, input());
+			const mutacoesCriacao = await db.outbox
+				.where("tenant_id")
+				.equals(TENANT_1)
+				.toArray();
+			expect(
+				mutacoesCriacao.map((m) => `${m.entity}:${m.action}`).sort(),
+			).toEqual(["representadas:INSERT", "tabelas_preco:INSERT"]);
+
+			const [tabelaPadrao] = await db.tabelas_preco
+				.where("[tenant_id+representada_id]")
+				.equals([TENANT_1, criada.id])
+				.toArray();
+
+			await db.outbox.clear();
+			await adapter.atualizar(
+				TENANT_1,
+				criada.id,
+				input({ nome_fantasia: "Alfa Atualizada" }),
+				[
+					{
+						id: tabelaPadrao?.id,
+						nome_tabela: "Tabela Padrão 2026",
+						vigencia_inicio: "2026-01-01",
+						vigencia_fim: null,
+						ativo: true,
+					},
+					{
+						nome_tabela: "Tabela Nova",
+						vigencia_inicio: "2026-06-01",
+						vigencia_fim: null,
+						ativo: true,
+					},
+				],
+			);
+
+			const mutacoesAtualizacao = await db.outbox
+				.where("tenant_id")
+				.equals(TENANT_1)
+				.toArray();
+			expect(
+				mutacoesAtualizacao.map((m) => `${m.entity}:${m.action}`).sort(),
+			).toEqual([
+				"representadas:UPDATE",
+				"tabelas_preco:INSERT",
+				"tabelas_preco:UPDATE",
+			]);
+
+			await db.outbox.clear();
+			await adapter.inativar(TENANT_1, criada.id);
+			await adapter.reativar(TENANT_1, criada.id);
+			const mutacoesCiclo = await db.outbox
+				.where("tenant_id")
+				.equals(TENANT_1)
+				.toArray();
+			expect(mutacoesCiclo).toHaveLength(2);
+			expect(
+				mutacoesCiclo.every(
+					(m) => m.entity === "representadas" && m.action === "UPDATE",
+				),
+			).toBe(true);
 		});
 	});
 });

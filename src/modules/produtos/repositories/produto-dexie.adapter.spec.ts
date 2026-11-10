@@ -24,6 +24,7 @@ describe("ProdutoDexieAdapter", () => {
 		await db.representadas.clear();
 		await db.tabelas_preco.clear();
 		await db.itens_preco.clear();
+		await db.outbox.clear();
 
 		const repValida: Representada = {
 			id: repIdValida,
@@ -458,6 +459,39 @@ describe("ProdutoDexieAdapter", () => {
 				.equals([tenant1, criado.id])
 				.toArray();
 			expect(itensAposRemocao[0]?.deleted_at).not.toBeNull();
+
+			const mutacoes = await db.outbox
+				.where("tenant_id")
+				.equals(tenant1)
+				.toArray();
+			expect(mutacoes.map((m) => `${m.entity}:${m.action}`).sort()).toEqual([
+				"itens_preco:DELETE",
+				"itens_preco:INSERT",
+				"produtos:INSERT",
+				"produtos:UPDATE",
+			]);
+		});
+
+		it("registra mutações de inativação e reativação do produto na outbox", async () => {
+			const criado = await adapter.criar(tenant1, {
+				representada_id: repIdValida,
+				sku: "SKU-OUTBOX",
+				descricao: "Produto Outbox",
+				unidade_medida: "UN",
+			});
+
+			await db.outbox.clear();
+			await adapter.inativar(tenant1, criado.id);
+			await adapter.reativar(tenant1, criado.id);
+
+			const mutacoes = await db.outbox
+				.where("tenant_id")
+				.equals(tenant1)
+				.toArray();
+			expect(mutacoes).toHaveLength(2);
+			expect(
+				mutacoes.every((m) => m.entity === "produtos" && m.action === "UPDATE"),
+			).toBe(true);
 		});
 	});
 });

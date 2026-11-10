@@ -1,5 +1,7 @@
 import { z } from "zod";
 import { type AppDatabase, db as defaultDb } from "../../../db/database";
+import { criarMutacaoParaRegistro } from "../../sync/domain/outbox";
+import type { OutboxMutation } from "../../sync/domain/outbox.schema";
 import type { PrecoProdutoInput } from "../domain/item-preco.schema";
 import { sincronizarPrecosProduto } from "../domain/preco";
 import {
@@ -128,6 +130,7 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 				this.db.representadas,
 				this.db.tabelas_preco,
 				this.db.itens_preco,
+				this.db.outbox,
 			],
 			async () => {
 				await this.garantirRepresentadaValida(
@@ -139,14 +142,21 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 				});
 				await this.db.produtos.add(novoProduto);
 
+				const mutacoesOutbox: OutboxMutation[] = [
+					this.mutacaoProduto(tenant, novoProduto, false, instante),
+				];
+
 				if (precosInput && precosInput.length > 0) {
-					await this.sincronizarPrecos(
+					const mutacoesPrecos = await this.sincronizarPrecos(
 						tenant,
 						novoProduto,
 						precosInput,
 						instante,
 					);
+					mutacoesOutbox.push(...mutacoesPrecos);
 				}
+
+				await this.db.outbox.bulkAdd(mutacoesOutbox);
 			},
 		);
 
@@ -169,6 +179,7 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 				this.db.representadas,
 				this.db.tabelas_preco,
 				this.db.itens_preco,
+				this.db.outbox,
 			],
 			async () => {
 				const existente = await this.obterPorId(tenant, produtoId, true);
@@ -194,14 +205,21 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 
 				await this.db.produtos.put(atualizado);
 
+				const mutacoesOutbox: OutboxMutation[] = [
+					this.mutacaoProduto(tenant, atualizado, true, instante),
+				];
+
 				if (precosInput !== undefined || representadaAlterada) {
-					await this.sincronizarPrecos(
+					const mutacoesPrecos = await this.sincronizarPrecos(
 						tenant,
 						atualizado,
 						precosInput ?? [],
 						instante,
 					);
+					mutacoesOutbox.push(...mutacoesPrecos);
 				}
+
+				await this.db.outbox.bulkAdd(mutacoesOutbox);
 
 				return atualizado;
 			},
@@ -212,18 +230,28 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 		const tenant = TenantIdSchema.parse(tenantId);
 		const produtoId = IdSchema.parse(id);
 
-		return this.db.transaction("rw", this.db.produtos, async () => {
-			const existente = await this.obterPorId(tenant, produtoId, true);
-			if (!existente) {
-				throw new ProdutoNaoEncontradoError(produtoId);
-			}
+		return this.db.transaction(
+			"rw",
+			[this.db.produtos, this.db.outbox],
+			async () => {
+				const existente = await this.obterPorId(tenant, produtoId, true);
+				if (!existente) {
+					throw new ProdutoNaoEncontradoError(produtoId);
+				}
 
-			const inativado = inativarProduto(existente, tenant, this.agora());
-			if (inativado !== existente) {
-				await this.db.produtos.put(inativado);
-			}
-			return inativado;
-		});
+				const agora = this.agora();
+				const inativado = inativarProduto(existente, tenant, agora);
+				if (inativado !== existente) {
+					await Promise.all([
+						this.db.produtos.put(inativado),
+						this.db.outbox.add(
+							this.mutacaoProduto(tenant, inativado, true, agora),
+						),
+					]);
+				}
+				return inativado;
+			},
+		);
 	}
 
 	async reativar(tenantId: string, id: string): Promise<Produto> {
@@ -232,14 +260,15 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 
 		return this.db.transaction(
 			"rw",
-			[this.db.produtos, this.db.representadas],
+			[this.db.produtos, this.db.representadas, this.db.outbox],
 			async () => {
 				const existente = await this.obterPorId(tenant, produtoId, true);
 				if (!existente) {
 					throw new ProdutoNaoEncontradoError(produtoId);
 				}
 
-				const reativado = reativarProduto(existente, tenant, this.agora());
+				const agora = this.agora();
+				const reativado = reativarProduto(existente, tenant, agora);
 				if (reativado === existente) {
 					return existente;
 				}
@@ -254,7 +283,12 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 					oferecerReativacao: false,
 				});
 
-				await this.db.produtos.put(reativado);
+				await Promise.all([
+					this.db.produtos.put(reativado),
+					this.db.outbox.add(
+						this.mutacaoProduto(tenant, reativado, true, agora),
+					),
+				]);
 				return reativado;
 			},
 		);
@@ -335,12 +369,28 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 		}
 	}
 
+	private mutacaoProduto(
+		tenantId: string,
+		registro: Produto,
+		existiaAntes: boolean,
+		agora: string,
+	): OutboxMutation {
+		return criarMutacaoParaRegistro({
+			tenantId,
+			entity: "produtos",
+			registro,
+			existiaAntes,
+			agora,
+			gerarId: this.gerarId,
+		});
+	}
+
 	private async sincronizarPrecos(
 		tenantId: string,
 		produto: Produto,
 		inputs: readonly PrecoProdutoInput[],
 		agora: string,
-	): Promise<void> {
+	): Promise<OutboxMutation[]> {
 		const [tabelasDaRepresentada, existentes] = await Promise.all([
 			this.db.tabelas_preco
 				.where("[tenant_id+representada_id]")
@@ -352,6 +402,10 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 				.toArray(),
 		]);
 
+		const idsExistentes = new Set(
+			existentes.filter((i) => i.deleted_at === null).map((i) => i.id),
+		);
+
 		const { gravar } = sincronizarPrecosProduto({
 			tenantId,
 			produto,
@@ -362,9 +416,21 @@ export class ProdutoDexieAdapter implements ProdutoRepository {
 			gerarId: this.gerarId,
 		});
 
-		if (gravar.length > 0) {
-			await this.db.itens_preco.bulkPut(gravar);
+		if (gravar.length === 0) {
+			return [];
 		}
+
+		await this.db.itens_preco.bulkPut(gravar);
+		return gravar.map((item) =>
+			criarMutacaoParaRegistro({
+				tenantId,
+				entity: "itens_preco",
+				registro: item,
+				existiaAntes: idsExistentes.has(item.id),
+				agora,
+				gerarId: this.gerarId,
+			}),
+		);
 	}
 }
 

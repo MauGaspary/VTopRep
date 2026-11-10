@@ -34,7 +34,7 @@ Problemas já encontrados neste repositório. Leia antes de mexer em persistênc
 
 - **Prefira `toArray()` + filtro em JS a `.filter()` do Dexie.** O `.filter()` percorre um cursor registro a registro: no `fake-indexeddb` fica quadrático (5.000 produtos travaram um teste por mais de 60 s) e no navegador é bem mais lento que o `getAll`. Exemplos: `ProdutoDexieAdapter.consultar` e `ImportacaoDexieAdapter`.
 - **O `fake-indexeddb` é quadrático ao sobrescrever registros existentes** (`put`/`bulkPut` sobre chaves que já existem). Testes de atualização em massa devem ficar em cerca de 1.000 registros; inserções de 5.000 rodam em cerca de 1,5 s. A medição de desempenho real é feita no navegador (TODO 2.9.5).
-- **Outbox na mesma transação:** toda gravação sincronizável deve registrar a mutação com `criarMutacaoParaRegistro` dentro da mesma `db.transaction`, como fazem transportadoras, clientes, pedidos, importação CSV e reajuste. Os cadastros manuais de produtos, preços e representadas **ainda não** registram Outbox (pendência no TODO 2.11).
+- **Outbox na mesma transação:** toda gravação sincronizável deve registrar a mutação com `criarMutacaoParaRegistro` dentro da mesma `db.transaction`, como fazem transportadoras, clientes, pedidos, representadas, produtos, preços, importação CSV e reajuste.
 - **Dado só do aparelho** (preferências como o tema ou o mapeamento de colunas do CSV) não entra em `ENTIDADES_SINCRONIZAVEIS`.
 - **Tabela nova no Dexie entra no backup** (`TabelasBackupSchema` e `BackupDexieAdapter`); o teste do adaptador falha se alguma tabela ficar de fora. Subir a versão do Dexie torna incompatíveis os backups da versão anterior (a restauração exige `versao_banco` igual); se a mudança for só de índice, avalie aceitar a versão anterior.
 

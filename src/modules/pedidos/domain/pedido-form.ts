@@ -226,6 +226,44 @@ export function parseDescontoFormParaCentesimos(texto: string): number | null {
 	return parsed;
 }
 
+export type ResultadoAplicarDescontoGeral =
+	| {
+			ok: true;
+			itens: ItemOrcamentoFormValues[];
+			descontoFormatado: string;
+	  }
+	| { ok: false; erro: string };
+
+/**
+ * Aplica um desconto percentual único em todos os itens de uma seção da sacola,
+ * formatando o valor no padrão brasileiro (`"5"` => `"5,00"`, `"0"` / `""` => `""`).
+ */
+export function aplicarDescontoGeralItensForm(
+	itens: readonly ItemOrcamentoFormValues[],
+	textoDesconto: string,
+): ResultadoAplicarDescontoGeral {
+	const centesimos = parseDescontoFormParaCentesimos(textoDesconto);
+	if (centesimos === null) {
+		return {
+			ok: false,
+			erro: "Informe um desconto entre 0,00% e 100,00%",
+		};
+	}
+
+	const descontoFormatado =
+		centesimos > 0 ? formatarInteiroComoDecimalBr(centesimos) : "";
+
+	return {
+		ok: true,
+		descontoFormatado,
+		itens: itens.map((item) =>
+			item.percentual_desconto === descontoFormatado
+				? item
+				: { ...item, percentual_desconto: descontoFormatado },
+		),
+	};
+}
+
 /**
  * Calcula a prévia financeira de uma linha enquanto o usuário digita.
  * Retorna `null` caso a quantidade ou o desconto estejam em estado inválido.

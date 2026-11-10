@@ -7,10 +7,15 @@ import {
 	Alert,
 	Button,
 	buttonClassName,
+	CartaoLista,
+	CartaoListaTopo,
 	cardClassName,
 	EmptyState,
 	FormField,
 	Input,
+	ListaCards,
+	ListaResponsiva,
+	ListaTabela,
 	PageHeader,
 	Select,
 } from "../../../shared/components/ui";
@@ -392,46 +397,77 @@ function FormularioReajuste({
 						A tabela de origem não tem preços. A nova tabela será criada vazia.
 					</p>
 				) : (
-					<section
-						aria-label="Prévia dos preços reajustados"
-						className="dense-table-region max-h-[24rem] rounded-xl border border-border"
-					>
-						<table className="text-left text-sm">
-							<thead>
-								<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
-									<th className="px-3.5 py-2.5">SKU / Descrição</th>
-									<th className="px-3 py-2.5 text-right">Atual</th>
-									<th className="px-3.5 py-2.5 text-right">Novo</th>
-								</tr>
-							</thead>
-							<tbody className="divide-y divide-border">
+					<ListaResponsiva>
+						<div className="max-h-[24rem] overflow-y-auto pr-1 @2xl:hidden">
+							<ListaCards rotulo="Prévia dos preços reajustados">
 								{comparacao.slice(0, LIMITE_LINHAS).map((c) => (
-									<tr key={c.produtoId}>
-										<td className="px-3.5 py-2">
-											<span className="block font-mono text-xs text-foreground">
-												{c.produto?.sku ?? "—"}
-											</span>
-											<span className="text-muted-foreground">
-												{c.produto?.descricao ?? "Produto não encontrado"}
-											</span>
-										</td>
-										<td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground tabular-nums">
-											{formatarCentavos(c.anterior)}
-										</td>
-										<td className="px-3.5 py-2 text-right font-mono text-sm text-foreground tabular-nums">
-											{formatarCentavos(c.novo)}
-										</td>
-									</tr>
+									<CartaoLista key={c.produtoId}>
+										<CartaoListaTopo
+											titulo={
+												<>
+													<span className="font-mono text-xs font-semibold text-foreground">
+														{c.produto?.sku ?? "—"}
+													</span>
+													<span className="text-xs text-muted-foreground">
+														{c.produto?.descricao ?? "Produto não encontrado"}
+													</span>
+												</>
+											}
+											destaque={
+												<div className="flex flex-col items-end font-mono tabular-nums">
+													<span className="text-sm font-semibold text-foreground">
+														{formatarCentavos(c.novo)}
+													</span>
+													<span className="text-[11px] text-muted-foreground">
+														Atual: {formatarCentavos(c.anterior)}
+													</span>
+												</div>
+											}
+										/>
+									</CartaoLista>
 								))}
-							</tbody>
-						</table>
+							</ListaCards>
+						</div>
+						<ListaTabela rotulo="Prévia dos preços reajustados">
+							<div className="max-h-[24rem] overflow-y-auto">
+								<table className="text-left text-sm">
+									<thead>
+										<tr className="border-b border-border text-[11px] font-medium tracking-wider text-muted-foreground uppercase">
+											<th className="px-3.5 py-2.5">SKU / Descrição</th>
+											<th className="px-3 py-2.5 text-right">Atual</th>
+											<th className="px-3.5 py-2.5 text-right">Novo</th>
+										</tr>
+									</thead>
+									<tbody className="divide-y divide-border">
+										{comparacao.slice(0, LIMITE_LINHAS).map((c) => (
+											<tr key={c.produtoId}>
+												<td className="px-3.5 py-2">
+													<span className="block font-mono text-xs text-foreground">
+														{c.produto?.sku ?? "—"}
+													</span>
+													<span className="text-muted-foreground">
+														{c.produto?.descricao ?? "Produto não encontrado"}
+													</span>
+												</td>
+												<td className="px-3 py-2 text-right font-mono text-xs text-muted-foreground tabular-nums">
+													{formatarCentavos(c.anterior)}
+												</td>
+												<td className="px-3.5 py-2 text-right font-mono text-sm text-foreground tabular-nums">
+													{formatarCentavos(c.novo)}
+												</td>
+											</tr>
+										))}
+									</tbody>
+								</table>
+							</div>
+						</ListaTabela>
 						{comparacao.length > LIMITE_LINHAS && (
-							<p className="border-t border-border px-3.5 py-2 text-xs text-muted-foreground">
+							<p className="px-1 text-xs text-muted-foreground">
 								Mostrando {LIMITE_LINHAS} de {comparacao.length}; todos serão
 								reajustados.
 							</p>
 						)}
-					</section>
+					</ListaResponsiva>
 				)}
 
 				{erro && <Alert variant="destructive">{erro}</Alert>}
